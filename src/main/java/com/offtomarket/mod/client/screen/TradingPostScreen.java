@@ -532,6 +532,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         fill(ps, x + 6, y + 35, x + 186, y + 140, 0xFFD8C8A0);
         fill(ps, x + 7, y + 36, x + 185, y + 139, 0xFFF0E6C8);
 
+        // Header underline
+        fill(ps, x + 10, y + 48, x + 182, y + 49, 0xFFBBA878);
+
         // Town list row backgrounds (selection/hover highlights)
         List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
         int visibleTowns = 8;
@@ -542,8 +545,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (townIdx >= allTowns.size()) break;
             int rowY = listStartY + i * rowH;
             if (townIdx == townViewPage) {
-                // Selected
+                // Selected — dark bg with gold left accent
                 fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFF8B7355);
+                fill(ps, x + 8, rowY, x + 10, rowY + rowH, 0xFFFFD700);
             } else if (i == hoveredTownRow) {
                 // Hovered
                 fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFFBBA878);
@@ -555,6 +559,35 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Right page (parchment) — detail view
         fill(ps, x + 190, y + 35, x + 378, y + 140, 0xFFD8C8A0);
         fill(ps, x + 191, y + 36, x + 377, y + 139, 0xFFF0E6C8);
+
+        // Right page section dividers
+        fill(ps, x + 196, y + 57, x + 372, y + 58, 0xFFBBA878); // below name/meta
+        fill(ps, x + 196, y + 77, x + 372, y + 78, 0xFFBBA878); // below req/rep
+
+        // Reputation mini-bar background (rendered in Bg so labels draw over it)
+        TradingPostBlockEntity be = menu.getBlockEntity();
+        if (be != null && !allTowns.isEmpty()) {
+            int tvp = Math.min(townViewPage, allTowns.size() - 1);
+            TownData town = allTowns.get(tvp);
+            boolean unlocked = town.getMinTraderLevel() <= menu.getTraderLevel();
+            if (unlocked) {
+                int rep = be.getReputation(town.getId());
+                int repBarX = x + 260;
+                int repBarY = y + 70;
+                int repBarW = 60;
+                int repBarH = 5;
+                // Border + bg
+                fill(ps, repBarX - 1, repBarY - 1, repBarX + repBarW + 1, repBarY + repBarH + 1, 0xFFBBA878);
+                fill(ps, repBarX, repBarY, repBarX + repBarW, repBarY + repBarH, 0xFFD8C8A0);
+                // Fill (clamp at 200 = Exalted)
+                int maxRep = 200;
+                int fillW = Math.max(0, Math.min(repBarW, (int)(repBarW * (rep / (float) maxRep))));
+                if (fillW > 0) {
+                    int repColor = TradingPostBlockEntity.getReputationColor(rep);
+                    fill(ps, repBarX, repBarY, repBarX + fillW, repBarY + repBarH, repColor | 0xFF000000);
+                }
+            }
+        }
     }
 
     /**
@@ -1166,11 +1199,18 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         townListScroll = Math.min(townListScroll, maxListScroll);
 
         // ========== LEFT PAGE: Scrollable town list ==========
-        int leftX = 10;
+        int leftX = 12;
         int rightX = 196;
 
-        // Header
+        // Header with count
         this.font.draw(poseStack, "Towns", leftX, 38, 0x3B2A14);
+        int unlockCount = 0;
+        for (TownData t : allTowns) {
+            if (t.getMinTraderLevel() <= traderLevel) unlockCount++;
+        }
+        String countStr = unlockCount + "/" + allTowns.size();
+        int countW = this.font.width(countStr);
+        this.font.draw(poseStack, countStr, 180 - countW, 38, 0x8B7355);
 
         // Town list entries (8 visible rows, 11px each, starting at y=50)
         int visibleTowns = 8;
@@ -1183,10 +1223,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             boolean townUnlocked = t.getMinTraderLevel() <= traderLevel;
             boolean isSelected = (townIdx == townViewPage);
 
-            // Build display text: truncate name to fit with distance
-            String distSuffix = " \u00B7" + t.getDistance();
+            // Distance tag on right side
+            String distStr = String.valueOf(t.getDistance());
+            int distW = this.font.width(distStr);
+
+            // Truncate name to fit
             String name = t.getDisplayName();
-            int maxNameW = 160 - this.font.width(distSuffix);
+            int maxNameW = 155 - distW;
             if (this.font.width(name) > maxNameW) {
                 while (this.font.width(name + "..") > maxNameW && name.length() > 3)
                     name = name.substring(0, name.length() - 1);
@@ -1204,7 +1247,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
 
             int drawY = 50 + i * rowH;
-            this.font.draw(poseStack, prefix + name + distSuffix, leftX, drawY + 1, textColor);
+            this.font.draw(poseStack, prefix + name, leftX, drawY + 1, textColor);
+
+            // Distance right-aligned in muted color
+            int distColor = isSelected ? 0xBBA878 : 0x8B7355;
+            this.font.draw(poseStack, distStr, 180 - distW, drawY + 1, distColor);
+
+            // Reputation dot next to name (if unlocked and has rep)
+            if (townUnlocked && be != null) {
+                int rep = be.getReputation(t.getId());
+                if (rep > 0) {
+                    int dotColor = TradingPostBlockEntity.getReputationColor(rep);
+                    int dotX = leftX + this.font.width(prefix + name) + 2;
+                    this.font.draw(poseStack, "\u2022", dotX, drawY + 1, dotColor);
+                }
+            }
         }
 
         // Scroll indicators for town list
@@ -1219,39 +1276,69 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         TownData town = allTowns.get(townViewPage);
         boolean unlocked = town.getMinTraderLevel() <= traderLevel;
 
-        // Town name
+        // Town name (larger section above first divider, y=38-56)
         if (!unlocked) {
             this.font.draw(poseStack, "\u2716 " + town.getDisplayName(), rightX, 38, 0x664444);
         } else {
             this.font.draw(poseStack, town.getDisplayName(), rightX, 38, 0x3B2A14);
         }
 
-        // Type + distance
+        // Type + distance right of name
         String meta = town.getType().getDisplayName() + " \u00B7 Dist " + town.getDistance();
         this.font.draw(poseStack, meta, rightX, 48, 0x6B5A3E);
 
+        // --- Section below first divider (y=59-76): Level + Reputation ---
         // Level requirement
-        String lvlReq = "Requires Lvl " + town.getMinTraderLevel();
+        String lvlReq = "Req Lvl " + town.getMinTraderLevel();
         int lvlColor = unlocked ? 0x3B7A3B : 0x8B2222;
-        this.font.draw(poseStack, lvlReq, rightX, 58, lvlColor);
+        this.font.draw(poseStack, lvlReq, rightX, 60, lvlColor);
 
-        // Reputation
+        // Reputation (text + mini-bar drawn in Bg)
         if (be != null && unlocked) {
             int rep = be.getReputation(town.getId());
             String repLevel = TradingPostBlockEntity.getReputationLevel(rep);
             int repColor = TradingPostBlockEntity.getReputationColor(rep);
-            this.font.draw(poseStack, "Rep: " + repLevel + " (" + rep + ")", rightX, 68, repColor);
+            this.font.draw(poseStack, "\u2605 " + repLevel, rightX, 70, repColor);
+            // Rep number next to the bar
+            this.font.draw(poseStack, String.valueOf(rep), 324, 70, 0x8B7355);
         }
 
-        // Description (2 lines max)
+        // --- Section below second divider (y=79+): Description + Specialty + Needs ---
+        int sectionY = 80;
+
+        // Description (2 lines max, tight 9px spacing)
         List<FormattedCharSequence> descLines = this.font.split(
-                Component.literal(town.getDescription()), 170);
-        for (int i = 0; i < Math.min(descLines.size(), 2); i++) {
-            this.font.draw(poseStack, descLines.get(i), rightX, 80 + i * 10, 0x5C4A32);
+                Component.literal(town.getDescription()), 175);
+        int descLinesShown = Math.min(descLines.size(), 2);
+        for (int i = 0; i < descLinesShown; i++) {
+            this.font.draw(poseStack, descLines.get(i), rightX, sectionY + i * 9, 0x5C4A32);
+        }
+        sectionY += descLinesShown * 9 + 1;
+
+        // Specialty items (gold-highlighted)
+        if (!town.getSpecialtyItems().isEmpty()) {
+            StringBuilder specStr = new StringBuilder("\u2726 ");
+            boolean first = true;
+            for (ResourceLocation rl : town.getSpecialtyItems()) {
+                Item item = ForgeRegistries.ITEMS.getValue(rl);
+                if (item == null) continue;
+                String iname = new ItemStack(item).getHoverName().getString();
+                if (!first) specStr.append(", ");
+                specStr.append(iname);
+                first = false;
+            }
+            String specText = specStr.toString();
+            // Truncate if too wide
+            if (this.font.width(specText) > 170) {
+                while (this.font.width(specText + "..") > 170 && specText.length() > 5)
+                    specText = specText.substring(0, specText.length() - 1);
+                specText += "..";
+            }
+            this.font.draw(poseStack, specText, rightX, sectionY, 0xCCAA44);
+            sectionY += 9;
         }
 
         // ---- Needs & Surplus below description ----
-        // Build grouped line list
         List<String> lines = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
 
@@ -1266,8 +1353,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (item == null) continue;
             NeedLevel level = town.getNeedLevel(item);
             String iname = new ItemStack(item).getHoverName().getString();
-            if (this.font.width(iname) > 150) {
-                while (this.font.width(iname + "..") > 150 && iname.length() > 3)
+            if (this.font.width(iname) > 145) {
+                while (this.font.width(iname + "..") > 145 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
@@ -1284,8 +1371,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (item == null) continue;
             NeedLevel level = town.getNeedLevel(item);
             String iname = new ItemStack(item).getHoverName().getString();
-            if (this.font.width(iname) > 150) {
-                while (this.font.width(iname + "..") > 150 && iname.length() > 3)
+            if (this.font.width(iname) > 145) {
+                while (this.font.width(iname + "..") > 145 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
@@ -1321,9 +1408,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             for (String[] e : oversatItems) { lines.add("  \u2022 " + e[0] + " \u2716"); colors.add(NeedLevel.OVERSATURATED.getColor()); }
         }
 
-        // Scrollable needs/surplus area (y=100 to y=126, ~3 visible lines at 9px)
-        int needsStartY = 100;
-        int visibleLines = 3;
+        // Scrollable needs/surplus area — dynamic start Y, fit remaining space
+        int needsStartY = sectionY;
+        int availableH = 138 - needsStartY; // bottom of right page at y~138
+        int visibleLines = Math.max(2, availableH / 9);
         int maxScrollR = Math.max(0, lines.size() - visibleLines);
         townContentScroll = Math.min(townContentScroll, maxScrollR);
 
