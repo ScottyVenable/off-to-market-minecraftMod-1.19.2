@@ -69,7 +69,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             activeTab = 0; updateTabVisibility(); updateTabLabels();
         }));
         configTabButton = addRenderableWidget(new Button(x + 283, y + 4, 96, 12,
-                Component.literal("\u00A77Config"), btn -> {
+                Component.literal("\u00A77Fees"), btn -> {
             activeTab = 1; updateTabVisibility(); updateTabLabels();
         }));
 
@@ -96,11 +96,11 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             }
         }));
 
-        // ---- Config tab widgets (settings) ----
+        // ---- Fees tab widgets (settings) ----
         TradingBinBlockEntity be = menu.getBlockEntity();
 
         // Crafting Tax % input
-        taxInput = new EditBox(this.font, x + 258, y + 96, 42, 12,
+        taxInput = new EditBox(this.font, x + 260, y + 32, 42, 12,
                 Component.literal("Tax"));
         taxInput.setMaxLength(3);
         taxInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
@@ -108,7 +108,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         this.addWidget(taxInput);
 
         // Min Markup % input
-        markupInput = new EditBox(this.font, x + 258, y + 110, 42, 12,
+        markupInput = new EditBox(this.font, x + 260, y + 46, 42, 12,
                 Component.literal("Markup"));
         markupInput.setMaxLength(3);
         markupInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
@@ -117,7 +117,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         // Auto-Price Mode cycling button
         String modeLabel = be != null ? be.getAutoPriceMode().getDisplayName() : "Auto Fair";
-        autoPriceModeButton = addRenderableWidget(new Button(x + 186, y + 126, 106, 14,
+        autoPriceModeButton = addRenderableWidget(new Button(x + 184, y + 64, 106, 14,
                 Component.literal(modeLabel), btn -> {
             TradingBinBlockEntity blockEntity = menu.getBlockEntity();
             if (blockEntity != null) {
@@ -127,7 +127,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }));
 
         // Apply Settings button
-        applySettingsBtn = addRenderableWidget(new Button(x + 296, y + 126, 78, 14,
+        applySettingsBtn = addRenderableWidget(new Button(x + 294, y + 64, 80, 14,
                 Component.literal("Apply"), btn -> {
             sendSettingsToServer();
         }));
@@ -159,7 +159,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
      */
     private void updateTabLabels() {
         binTabButton.setMessage(Component.literal(activeTab == 0 ? "\u00A7e\u00A7lBin" : "\u00A77Bin"));
-        configTabButton.setMessage(Component.literal(activeTab == 1 ? "\u00A7e\u00A7lConfig" : "\u00A77Config"));
+        configTabButton.setMessage(Component.literal(activeTab == 1 ? "\u00A7e\u00A7lFees" : "\u00A77Fees"));
     }
 
     /**
@@ -259,8 +259,10 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         updateTabVisibility();
 
         if (activeTab == 1) {
-            // ---- Config tab background ----
-            drawDivider(poseStack, x, y + 92);  // between checkboxes and inputs
+            // ---- Fees tab background ----
+            drawDivider(poseStack, x, y + 62);   // below fee inputs
+            drawDivider(poseStack, x, y + 80);   // above modifiers
+            drawDivider(poseStack, x, y + 139);  // below modifiers
             taxInput.render(poseStack, mouseX, mouseY, partialTick);
             markupInput.render(poseStack, mouseX, mouseY, partialTick);
         } else {
@@ -297,37 +299,77 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
     private void renderConfigLabels(PoseStack poseStack) {
         // Header
-        drawCenteredString(poseStack, this.font, "\u00A7lConfig", 280, 21, 0xFFD700);
+        drawCenteredString(poseStack, this.font, "\u00A7lFees", 280, 21, 0xFFD700);
 
-        this.font.draw(poseStack, "Price Modifiers", 186, 34, 0xBBAAAA);
+        // Fee setting labels (inputs rendered in renderBg)
+        this.font.draw(poseStack, "Trading Tax:", 184, 35, 0xCCCCCC);
+        this.font.draw(poseStack, "%", 304, 35, 0x999999);
+        this.font.draw(poseStack, "Min Markup:", 184, 49, 0xCCCCCC);
+        this.font.draw(poseStack, "%", 304, 49, 0x999999);
 
         TradingBinBlockEntity cbe = menu.getBlockEntity();
-        if (cbe != null) {
-            int cbX = 186;
-            drawCheckbox(poseStack, cbX, 46, cbe.isEnchantedMarkupEnabled(),
-                    "Ench +" + cbe.getEnchantedMarkupPercent() + "%", 0xFF66DD66);
-            drawCheckbox(poseStack, cbX, 58, cbe.isUsedDiscountEnabled(),
-                    "Used -" + cbe.getUsedDiscountPercent() + "%", 0xFFCC9955);
-            drawCheckbox(poseStack, cbX, 70, cbe.isDamagedDiscountEnabled(),
-                    "Dmgd -" + cbe.getDamagedDiscountPercent() + "%", 0xFFDD5555);
-            drawCheckbox(poseStack, cbX, 82, cbe.isRareMarkupEnabled(),
-                    "Rare +" + cbe.getRareMarkupPercent() + "%", 0xFF8888FF);
+        if (cbe == null) return;
+
+        // Modifier section header with item context
+        ItemStack inspectStack = getSelectedItem();
+        boolean hasItem = !inspectStack.isEmpty();
+
+        this.font.draw(poseStack, "Modifiers", 184, 83, 0xBBAAAA);
+        if (hasItem) {
+            String itemName = inspectStack.getHoverName().getString();
+            int maxNameW = 130;
+            if (this.font.width(itemName) > maxNameW) {
+                while (this.font.width(itemName + "..") > maxNameW && itemName.length() > 3)
+                    itemName = itemName.substring(0, itemName.length() - 1);
+                itemName += "..";
+            }
+            this.font.draw(poseStack, "\u00A77(" + itemName + ")", 235, 83, 0x777777);
         }
 
-        this.font.draw(poseStack, "Tax %:", 186, 98, 0xCCCCCC);
-        this.font.draw(poseStack, "Markup %:", 186, 112, 0xCCCCCC);
+        // Modifier checkboxes with per-item applicability validation
+        int cbX = 184;
+        boolean enchApplicable = !hasItem || TradingBinBlockEntity.isEnchantmentApplicable(inspectStack);
+        boolean usedApplicable = !hasItem || TradingBinBlockEntity.isDurabilityApplicable(inspectStack);
+        boolean dmgdApplicable = !hasItem || (TradingBinBlockEntity.isDurabilityApplicable(inspectStack)
+                && TradingBinBlockEntity.isHeavilyDamaged(inspectStack));
+        boolean rareApplicable = !hasItem || TradingBinBlockEntity.isRarityApplicable(inspectStack);
 
-        // Estimated market time (if an item is present)
-        if (cbe != null) {
-            ItemStack inspectStack = getSelectedItem();
-            if (!inspectStack.isEmpty()) {
-                int baseValue = PriceCalculator.getBaseValue(inspectStack);
-                int modifiedPrice = cbe.applyPriceModifiers(inspectStack, baseValue);
-                int maxPrice = PriceCalculator.getMaxPrice(inspectStack);
-                String est = TradingBinBlockEntity.getEstimatedMarketTime(
-                        modifiedPrice, baseValue, maxPrice);
-                this.font.draw(poseStack, "Est: " + est, 186, 144, 0x888888);
-            }
+        drawCheckbox(poseStack, cbX, 94, cbe.isEnchantedMarkupEnabled(),
+                "Ench +" + cbe.getEnchantedMarkupPercent() + "%",
+                enchApplicable ? 0xFF66DD66 : 0xFF555555, enchApplicable);
+        drawCheckbox(poseStack, cbX, 105, cbe.isUsedDiscountEnabled(),
+                "Used -" + cbe.getUsedDiscountPercent() + "%",
+                usedApplicable ? 0xFFCC9955 : 0xFF555555, usedApplicable);
+        drawCheckbox(poseStack, cbX, 116, cbe.isDamagedDiscountEnabled(),
+                "Dmgd -" + cbe.getDamagedDiscountPercent() + "%",
+                dmgdApplicable ? 0xFFDD5555 : 0xFF555555, dmgdApplicable);
+        drawCheckbox(poseStack, cbX, 127, cbe.isRareMarkupEnabled(),
+                "Rare +" + cbe.getRareMarkupPercent() + "%",
+                rareApplicable ? 0xFF8888FF : 0xFF555555, rareApplicable);
+
+        // Applicability indicators when an item is selected
+        if (hasItem) {
+            int indX = 310;
+            this.font.draw(poseStack, enchApplicable ? "\u00A7a\u2713" : "\u00A78n/a", indX, 94, 0xFFFFFF);
+            this.font.draw(poseStack, usedApplicable ? "\u00A7a\u2713" : "\u00A78n/a", indX, 105, 0xFFFFFF);
+            this.font.draw(poseStack, dmgdApplicable ? "\u00A7a\u2713" : "\u00A78n/a", indX, 116, 0xFFFFFF);
+            this.font.draw(poseStack, rareApplicable ? "\u00A7a\u2713" : "\u00A78n/a", indX, 127, 0xFFFFFF);
+        }
+
+        // Summary section: price breakdown when an item is selected
+        if (hasItem) {
+            int baseValue = PriceCalculator.getBaseValue(inspectStack);
+            int modifiedPrice = cbe.applyPriceModifiers(inspectStack, baseValue);
+            int maxPrice = PriceCalculator.getMaxPrice(inspectStack);
+            String est = TradingBinBlockEntity.getEstimatedMarketTime(
+                    modifiedPrice, baseValue, maxPrice);
+
+            this.font.draw(poseStack, "Base: " + formatCoinText(baseValue), 184, 142, 0xAAAAAA);
+            this.font.draw(poseStack, "\u00A76\u2192 " + formatCoinText(modifiedPrice), 264, 142, 0xFFAA00);
+            this.font.draw(poseStack, "Sells: " + est, 184, 153, 0x888888);
+        } else {
+            this.font.draw(poseStack, "Select an item to", 184, 142, 0x666666);
+            this.font.draw(poseStack, "preview modifiers.", 184, 153, 0x666666);
         }
     }
 
@@ -472,6 +514,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                             case 2 -> be.setDamagedDiscountEnabled(!be.isDamagedDiscountEnabled());
                             case 3 -> be.setRareMarkupEnabled(!be.isRareMarkupEnabled());
                         }
+                        sendSettingsToServer(); // persist toggle immediately
                         return true;
                     }
                 }
@@ -633,14 +676,21 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     /**
      * Draw a custom checkbox with label, styled for the dark panel.
      */
-    private void drawCheckbox(PoseStack ps, int x, int y, boolean checked, String label, int color) {
+    private void drawCheckbox(PoseStack ps, int x, int y, boolean checked, String label, int color, boolean applicable) {
         // Outer border
         fill(ps, x, y, x + CB_SIZE, y + CB_SIZE, 0xFF1A1209);
-        // Inner fill: dark green when checked, dark neutral when unchecked
-        fill(ps, x + 1, y + 1, x + CB_SIZE - 1, y + CB_SIZE - 1, checked ? 0xFF336633 : 0xFF3E3226);
-        // Bright green indicator dot when checked
-        if (checked) {
-            fill(ps, x + 2, y + 2, x + CB_SIZE - 2, y + CB_SIZE - 2, 0xFF55FF55);
+        if (applicable) {
+            // Normal: dark green when checked, neutral when unchecked
+            fill(ps, x + 1, y + 1, x + CB_SIZE - 1, y + CB_SIZE - 1, checked ? 0xFF336633 : 0xFF3E3226);
+            if (checked) {
+                fill(ps, x + 2, y + 2, x + CB_SIZE - 2, y + CB_SIZE - 2, 0xFF55FF55);
+            }
+        } else {
+            // Dimmed: modifier does not apply to the current item
+            fill(ps, x + 1, y + 1, x + CB_SIZE - 1, y + CB_SIZE - 1, checked ? 0xFF333333 : 0xFF2A2A2A);
+            if (checked) {
+                fill(ps, x + 2, y + 2, x + CB_SIZE - 2, y + CB_SIZE - 2, 0xFF666666);
+            }
         }
         // Label text
         this.font.draw(ps, label, x + CB_SIZE + 3, y, color);
@@ -651,6 +701,6 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
      * Returns: [enchantedY, usedY, damagedY, rareY].
      */
     private static int[] getCheckboxYPositions() {
-        return new int[]{46, 58, 70, 82};
+        return new int[]{94, 105, 116, 127};
     }
 }

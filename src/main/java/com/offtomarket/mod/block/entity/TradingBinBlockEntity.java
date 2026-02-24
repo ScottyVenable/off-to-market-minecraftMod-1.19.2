@@ -201,6 +201,42 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     public int getRareMarkupPercent() { return rareMarkupPercent; }
     public void setRareMarkupPercent(int percent) { this.rareMarkupPercent = Math.max(0, Math.min(200, percent)); syncToClient(); }
 
+    // ==================== Modifier Validation ====================
+
+    /**
+     * Check if the enchantment modifier is applicable to this item.
+     * Only returns true if the item is actually enchanted.
+     */
+    public static boolean isEnchantmentApplicable(ItemStack stack) {
+        return !stack.isEmpty() && stack.isEnchanted();
+    }
+
+    /**
+     * Check if the rarity modifier is applicable to this item.
+     * Only RARE and EPIC trigger the rarity markup (UNCOMMON does not).
+     */
+    public static boolean isRarityApplicable(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        net.minecraft.world.item.Rarity rarity = stack.getRarity();
+        return rarity == net.minecraft.world.item.Rarity.RARE || rarity == net.minecraft.world.item.Rarity.EPIC;
+    }
+
+    /**
+     * Check if the damaged/used discount might apply (item is damageable and currently damaged).
+     */
+    public static boolean isDurabilityApplicable(ItemStack stack) {
+        return !stack.isEmpty() && stack.isDamageableItem() && stack.isDamaged();
+    }
+
+    /**
+     * Check if the item is heavily damaged (&lt;50% durability).
+     */
+    public static boolean isHeavilyDamaged(ItemStack stack) {
+        if (!isDurabilityApplicable(stack)) return false;
+        double ratio = 1.0 - (double) stack.getDamageValue() / stack.getMaxDamage();
+        return ratio < 0.5;
+    }
+
     /**
      * Calculate the modified price for an item based on enabled price modifiers.
      * Applies enchanted markup, used/damaged discounts, and rarity markup.
@@ -213,23 +249,19 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         if (stack.isEmpty() || basePrice <= 0) return basePrice;
         double price = basePrice;
 
-        // Enchantment markup
-        if (enchantedMarkupEnabled && stack.isEnchanted()) {
+        // Enchantment markup — only if item is actually enchanted
+        if (enchantedMarkupEnabled && isEnchantmentApplicable(stack)) {
             price *= (1.0 + enchantedMarkupPercent / 100.0);
         }
 
-        // Rarity markup (UNCOMMON+ means it's special)
-        if (rareMarkupEnabled) {
-            net.minecraft.world.item.Rarity rarity = stack.getRarity();
-            if (rarity == net.minecraft.world.item.Rarity.RARE || rarity == net.minecraft.world.item.Rarity.EPIC) {
-                price *= (1.0 + rareMarkupPercent / 100.0);
-            }
+        // Rarity markup — only if RARE or EPIC
+        if (rareMarkupEnabled && isRarityApplicable(stack)) {
+            price *= (1.0 + rareMarkupPercent / 100.0);
         }
 
-        // Durability-based discounts (only for damageable items)
-        if (stack.isDamageableItem() && stack.isDamaged()) {
-            double durabilityRatio = 1.0 - (double) stack.getDamageValue() / stack.getMaxDamage();
-            if (damagedDiscountEnabled && durabilityRatio < 0.5) {
+        // Durability-based discounts — only for damageable, damaged items
+        if (isDurabilityApplicable(stack)) {
+            if (damagedDiscountEnabled && isHeavilyDamaged(stack)) {
                 // Heavily damaged: apply damaged discount
                 price *= (1.0 - damagedDiscountPercent / 100.0);
             } else if (usedDiscountEnabled) {
