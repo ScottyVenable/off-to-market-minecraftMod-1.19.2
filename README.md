@@ -1,0 +1,187 @@
+# Off to Market - Trading Deluxe
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
+  <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
+  <img src="https://img.shields.io/badge/Version-0.1.4-blue" alt="Version 0.1.4">
+  <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
+</p>
+
+A comprehensive trading and economy mod for Minecraft that brings a complete merchant experience to your world. Build trading posts, establish trade routes with fictional towns, manage your merchant reputation, and grow your trading empire!
+
+## Features
+
+### Currency System
+- **Gold Coins** - High value currency (100 copper value)
+- **Silver Coins** - Medium value currency (10 copper value)  
+- **Copper Coins** - Base currency unit
+- **Coin Bag** - Store and manage your currency in one convenient item
+
+### Trading Blocks
+
+#### Trading Post
+The central hub for all your trading activities. Use it to:
+- Browse items from multiple towns and cities
+- Send shipments to distant markets
+- Accept diplomat requests for premium prices
+- Complete quests for reputation and rewards
+- Track your merchant level progression
+
+#### Trading Bin
+Your local storage for items to sell:
+- Set prices per item slot
+- Items are automatically valued when caravans come
+- Quick interface for managing inventory
+
+#### Market Board
+Wall-mounted board to view:
+- Current market prices
+- Available quests
+- Town information and your standing
+
+### Town System
+
+Trade with 10+ unique towns, each with their own personality:
+
+| Town | Type | Specialty |
+|------|------|-----------|
+| **Greenhollow Village** | Farming Village | Agricultural products, livestock |
+| **Irondeep Settlement** | Mining Village | Ores, metals, mining supplies |
+| **Mistwood Village** | Forest Village | Lumber, forestry products |
+| **Stonehaven** | Mountain Town | Stone, building materials |
+| **Silverbrook** | River Town | Fish, aquatic goods |
+| **Goldcrest City** | Capital City | Luxury goods, rare items |
+| **Redforge** | Industrial Town | Smithed goods, tools |
+| **Moonvale** | Mystical Town | Enchanting supplies, magic items |
+| **Sandport** | Coastal Town | Trade goods, exotic items |
+| **Frostholm** | Northern Outpost | Cold weather supplies |
+
+### Dynamic Mod Compatibility
+
+**Off to Market automatically integrates with your modpack!**
+
+When other mods are installed, the system:
+- **Discovers items** from all loaded mods at runtime
+- **Categorizes items** by type (ingots, gems, foods, weapons, armor, magic, etc.)
+- **Generates new towns** themed around popular mods
+
+#### Supported Mod Themes
+
+When these mods are detected, specialized markets are created:
+
+| Mod | Generated Town |
+|-----|---------------|
+| Farmer's Delight | Harvest Valley Market |
+| Alex's Mobs | Wanderer's Outpost |
+| Twilight Forest | Twilight Market |
+| Blue Skies | Sky Haven Trading Post |
+| The Aether | Aether Outpost |
+| Ars Nouveau | Arcane Emporium |
+| Iron's Spellbooks | Spellforge Market |
+| Apotheosis | Enchanter's Bazaar |
+| Aquaculture | Fisherman's Wharf |
+| MineColonies | Colonial Trading Co. |
+| Vinery | Vineyard Market |
+| Cataclysm | Dungeon Outpost |
+| Simply Swords | Bladeworks Market |
+| Supplementaries | Artisan's Market |
+| Quark | Oddities Emporium |
+| Oh The Biomes You'll Go | Explorer's Trading Post |
+| *And more...* | |
+
+### Trading Features
+
+- **Supply & Demand Pricing** - Prices fluctuate based on what towns need and have surplus of
+- **Merchant Reputation** - Build standing with towns for better deals
+- **Quests** - Accept delivery quests for bonus rewards
+  - Standard deliveries
+  - Bulk orders
+  - Rush deliveries (time-sensitive)
+  - Specialty requests
+  - Charity missions (high rep, lower pay)
+- **Diplomat System** - Negotiate premium prices for your goods
+- **Shipments** - Send goods to distant markets via caravan
+
+### Animal Trading
+
+Trade livestock with the **Animal Trade Slip** system:
+- Purchase slips for various animals from the Peenam Animal Market
+- Redeem slips to spawn tamed animals
+- Buy and sell: Cows, Pigs, Sheep, Chickens, Horses, Donkeys, Llamas, and more!
+
+### Items
+
+| Item | Description |
+|------|-------------|
+| **Ledger** | Track your trading history and finances |
+| **Shipment Note** | Proof of goods sent to market |
+| **Guide Book** | In-game documentation and tutorials |
+| **Animal Trade Slip** | Redeemable voucher for livestock |
+
+## Getting Started
+
+1. **Craft a Trading Post** - Your gateway to commerce
+2. **Craft a Trading Bin** - Store items you want to sell
+3. **Earn some coins** - Complete initial quests or sell goods
+4. **Build reputation** - Unlock access to more towns and better prices
+5. **Expand your empire** - Set up trade routes and grow wealth!
+
+## Crafting Recipes
+
+*Recipes are viewable in-game with JEI/REI*
+
+### Trading Post
+```
+[Plank] [Emerald] [Plank]
+[Plank] [Chest]   [Plank]
+[Plank] [Plank]   [Plank]
+```
+
+### Trading Bin
+```
+[Plank] [      ] [Plank]
+[Plank] [Chest]  [Plank]
+[Plank] [Plank]  [Plank]
+```
+
+## Configuration
+
+The mod is highly configurable through config files:
+
+- `offtomarket-common.toml` - General mod settings
+- `ModdedItemConfig` system - Add custom items to town inventories
+
+## Compatibility
+
+- **Minecraft**: 1.19.2
+- **Forge**: 43.x+
+- **Modpack Tested**: Cisco's Fantasy Medieval RPG [Ultimate] (300+ mods)
+
+Works alongside other economy mods and integrates automatically with item-adding mods.
+
+## Installation
+
+1. Install Minecraft Forge 1.19.2 (version 43.x or higher)
+2. Download `offtomarket-0.1.4.jar`
+3. Place in your `mods` folder
+4. Launch the game!
+
+## Roadmap
+
+- [ ] Custom town creation via datapacks
+- [ ] Multiplayer trading between players
+- [ ] Trading caravans as entities
+- [ ] More mod integrations
+- [ ] Seasonal market events
+
+## Credits
+
+**Author**: Scotty Venable
+
+## License
+
+All Rights Reserved © 2024-2026
+
+---
+
+*"May your coffers overflow and your trade routes prosper!"*

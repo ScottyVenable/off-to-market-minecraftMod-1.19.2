@@ -1,6 +1,54 @@
 # Off to Market (Trading Deluxe) - Changelog
 
-## Version 1.2.0 — Major Feature Update
+## Version 0.1.4 — Dynamic Mod Compatibility (Current Release)
+
+### New Features
+
+#### Dynamic Mod Integration
+- **Automatic Item Discovery** - Scans all loaded mods at runtime for tradeable items
+- **Intelligent Categorization** - Uses Forge Tags API to classify items (ingots, gems, foods, weapons, armor, magic, etc.)
+- **Auto-Generated Markets** - New themed towns appear based on installed mods
+
+#### Supported Mod Themes
+When these mods are detected, specialized markets are automatically created:
+- Farmer's Delight → Harvest Valley Market
+- Alex's Mobs → Wanderer's Outpost
+- Twilight Forest → Twilight Market
+- Blue Skies → Sky Haven Trading Post
+- The Aether → Aether Outpost
+- Ars Nouveau → Arcane Emporium
+- Iron's Spellbooks → Spellforge Market
+- Apotheosis → Enchanter's Bazaar
+- Aquaculture → Fisherman's Wharf
+- MineColonies → Colonial Trading Co.
+- Vinery → Vineyard Market
+- Cataclysm → Dungeon Outpost
+- Simply Swords → Bladeworks Market
+- Supplementaries → Artisan's Market
+- Quark → Oddities Emporium
+- Oh The Biomes You'll Go → Explorer's Trading Post
+- And more...
+
+#### Animal Trading System
+- **Animal Trade Slip** - New item for trading livestock
+- **Peenam Animal Market** - Specialized town for buying animals
+- Supports: Cows, Pigs, Sheep, Chickens, Horses, Donkeys, Llamas, and more
+
+#### New Town Types
+- **MARKET** - Trade hub with good variety
+- **OUTPOST** - Remote trading post
+
+### Bug Fixes
+- Trading Bin now uses click-to-select for setting prices
+- Yellow highlight shows selected slot in Trading Bin UI
+- Price book correctly displays selected item information
+
+### Technical
+- Quest/Diplomat reward multipliers adjusted for new town types
+
+---
+
+## Version 0.1.3 — Major Feature Update
 
 ### New Features
 
@@ -58,7 +106,7 @@
 
 ---
 
-## Version 1.1.0 — Pricing & Economy Update
+## Version 0.1.2 — Pricing & Economy Update
 
 ### Ingredient-Based Pricing Algorithm
 - Item prices now calculated based on crafting recipe ingredient costs
@@ -79,7 +127,7 @@
 
 ---
 
-## Version 1.0.0 — Initial Release
+## Version 0.1.1 — Initial Release
 
 ### Core Features
 - Trading Post block for sending shipments to towns
