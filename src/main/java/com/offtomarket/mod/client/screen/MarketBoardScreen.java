@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.data.MarketListing;
+import com.offtomarket.mod.data.NeedLevel;
 import com.offtomarket.mod.data.TownData;
 import com.offtomarket.mod.data.TownRegistry;
 import com.offtomarket.mod.debug.DebugConfig;
@@ -452,10 +453,10 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         // Sort column underline
         if (sortMode != SortMode.NONE) {
             int hlX1 = x + switch (sortMode) {
-                case NAME -> 5; case TOWN -> 88; case QTY -> 148; case PRICE -> 166; default -> 5;
+                case NAME -> 5; case TOWN -> 84; case QTY -> 148; case PRICE -> 166; default -> 5;
             };
             int hlX2 = x + switch (sortMode) {
-                case NAME -> 87; case TOWN -> 147; case QTY -> 165; case PRICE -> 213; default -> 87;
+                case NAME -> 83; case TOWN -> 147; case QTY -> 165; case PRICE -> 213; default -> 83;
             };
             fill(poseStack, hlX1, y + 29, hlX2, y + 30, 0xFFFFD700);
         }
@@ -558,7 +559,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // Sortable headers
         drawSortHeader(poseStack, "Item", 17, 22, SortMode.NAME);
-        drawSortHeader(poseStack, "Town", 88, 22, SortMode.TOWN);
+        drawSortHeader(poseStack, "Town", 84, 22, SortMode.TOWN);
         drawSortHeader(poseStack, "Qty", 148, 22, SortMode.QTY);
         drawSortHeader(poseStack, "Price Ea.", 166, 22, SortMode.PRICE);
 
@@ -586,8 +587,8 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 }
                 itemName += "..";
             }
-            if (this.font.width(townName) > 56) {
-                while (this.font.width(townName + "..") > 56 && townName.length() > 3) {
+            if (this.font.width(townName) > 48) {
+                while (this.font.width(townName + "..") > 48 && townName.length() > 3) {
                     townName = townName.substring(0, townName.length() - 1);
                 }
                 townName += "..";
@@ -599,7 +600,27 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 nameColor = canAfford ? 0xFFD700 : 0xCC8844;
             }
             this.font.draw(poseStack, itemName, 17, yOff, nameColor);
-            this.font.draw(poseStack, townName, 88, yOff, 0xAAAAAA);
+
+            // Need level indicator dot before town name
+            Item listingItem = ForgeRegistries.ITEMS.getValue(listing.getItemId());
+            if (town != null && listingItem != null) {
+                NeedLevel need = town.getNeedLevel(listingItem);
+                int dotColor = 0xFF000000 | need.getColor();
+                this.font.draw(poseStack, "\u25CF", 84, yOff, dotColor); // filled circle
+
+                // Supply trend arrow
+                String itemKey = listing.getItemId().toString();
+                TownData.SupplyTrend trend = town.getTrend(itemKey);
+                if (trend == TownData.SupplyTrend.FALLING) {
+                    // Supply falling = demand rising → green up arrow
+                    this.font.draw(poseStack, "\u25B2", 88, yOff, 0xFF44CC44);
+                } else if (trend == TownData.SupplyTrend.RISING) {
+                    // Supply rising = demand falling → red down arrow
+                    this.font.draw(poseStack, "\u25BC", 88, yOff, 0xFFCC4444);
+                }
+            }
+
+            this.font.draw(poseStack, townName, 96, yOff, 0xAAAAAA);
             this.font.draw(poseStack, String.valueOf(listing.getCount()), 148, yOff, 0xCCCCCC);
             CoinRenderer.renderCompactCoinValue(poseStack, this.font, 166, yOff, priceEach);
 
@@ -801,6 +822,37 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                     .withStyle(ChatFormatting.GOLD));
             tooltip.add(Component.literal("Distance: " + town.getDistance())
                     .withStyle(ChatFormatting.GRAY));
+
+            // Show need level for this item in the town
+            net.minecraft.world.item.Item tooltipItem = ForgeRegistries.ITEMS.getValue(listing.getItemId());
+            if (tooltipItem != null) {
+                NeedLevel need = town.getNeedLevel(tooltipItem);
+                ChatFormatting needColor = switch (need) {
+                    case DESPERATE -> ChatFormatting.RED;
+                    case HIGH_NEED -> ChatFormatting.GOLD;
+                    case MODERATE_NEED -> ChatFormatting.YELLOW;
+                    case BALANCED -> ChatFormatting.GREEN;
+                    case SURPLUS -> ChatFormatting.AQUA;
+                    case OVERSATURATED -> ChatFormatting.GRAY;
+                };
+                String arrow = need.isInDemand() ? "\u25B2" : need.isOversupplied() ? "\u25BC" : "\u25CF";
+                tooltip.add(Component.literal(arrow + " Demand: " + need.getDisplayName() + " (" + String.format("%.0f", need.getPriceMultiplier() * 100) + "%)")
+                        .withStyle(needColor));
+
+                // Supply trend
+                String itemKey = listing.getItemId().toString();
+                TownData.SupplyTrend trend = town.getTrend(itemKey);
+                if (trend == TownData.SupplyTrend.FALLING) {
+                    tooltip.add(Component.literal("\u25B2 Demand trending UP")
+                            .withStyle(ChatFormatting.GREEN));
+                } else if (trend == TownData.SupplyTrend.RISING) {
+                    tooltip.add(Component.literal("\u25BC Demand trending DOWN")
+                            .withStyle(ChatFormatting.RED));
+                } else {
+                    tooltip.add(Component.literal("\u25CF Demand stable")
+                            .withStyle(ChatFormatting.DARK_GRAY));
+                }
+            }
         }
 
         renderComponentTooltip(ps, tooltip, mouseX, mouseY);
@@ -859,7 +911,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 // Listing view: header click for sorting
                 if (relY >= 20 && relY <= 30 && relX >= 5 && relX <= 235) {
                     SortMode clickedMode = SortMode.NONE;
-                    if (relX < 88) clickedMode = SortMode.NAME;
+                    if (relX < 84) clickedMode = SortMode.NAME;
                     else if (relX < 148) clickedMode = SortMode.TOWN;
                     else if (relX < 166) clickedMode = SortMode.QTY;
                     else if (relX < 214) clickedMode = SortMode.PRICE;

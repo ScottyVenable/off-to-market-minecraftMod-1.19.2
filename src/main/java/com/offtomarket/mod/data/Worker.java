@@ -94,8 +94,8 @@ public class Worker {
      */
     public int getHireCost() {
         return switch (type) {
-            case NEGOTIATOR -> 500;   // 5 gold
-            case TRADING_CART -> 300;  // 3 gold
+            case NEGOTIATOR -> 1300;   // 1 GP 3 SP
+            case TRADING_CART -> 780;  // 7 SP 8 CP
         };
     }
 
@@ -105,8 +105,8 @@ public class Worker {
      */
     public int getPerTripCost() {
         return switch (type) {
-            case NEGOTIATOR -> 10 + level * 2;    // 12-30 CP per trip
-            case TRADING_CART -> 5 + level;        // 6-15 CP per trip
+            case NEGOTIATOR -> 26 + level * 5;    // 31-76 CP per trip
+            case TRADING_CART -> 13 + level * 3;   // 16-43 CP per trip
         };
     }
 

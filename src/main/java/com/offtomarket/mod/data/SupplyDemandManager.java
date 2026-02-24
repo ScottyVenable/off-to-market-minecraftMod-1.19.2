@@ -70,10 +70,14 @@ public class SupplyDemandManager {
 
     /**
      * Drift supply levels for a single town toward BALANCED (60).
+     * Snapshots supply levels first so trend arrows can compare before/after.
      */
     private static void refreshTown(TownData town) {
         Map<String, Integer> supplyLevels = town.getSupplyLevels();
         if (supplyLevels.isEmpty()) return;
+
+        // Snapshot before applying drift so we can show trend arrows
+        town.snapshotSupplyLevels();
 
         for (Map.Entry<String, Integer> entry : supplyLevels.entrySet()) {
             if (RANDOM.nextDouble() < dailyRefreshChance) {

@@ -26,6 +26,8 @@ public class Quest {
         AVAILABLE,
         /** Player has accepted this quest. */
         ACCEPTED,
+        /** Items fully delivered, rewards traveling back from town. */
+        DELIVERING,
         /** Quest has been fulfilled and rewards collected. */
         COMPLETED,
         /** Quest expired before completion. */
@@ -65,6 +67,7 @@ public class Quest {
     private final String questDescription; // flavor text for the quest
     private Status status;
     private int deliveredCount;        // how many items delivered so far
+    private long rewardArrivalTime;    // game tick when rewards arrive (DELIVERING→COMPLETED)
 
     public Quest(UUID id, String townId, ResourceLocation requiredItemId,
                  String itemDisplayName, int requiredCount, int rewardCoins,
@@ -113,6 +116,16 @@ public class Quest {
 
     public void setStatus(Status status) { this.status = status; }
     public void setDeliveredCount(int count) { this.deliveredCount = count; }
+    public long getRewardArrivalTime() { return rewardArrivalTime; }
+    public void setRewardArrivalTime(long time) { this.rewardArrivalTime = time; }
+
+    /**
+     * Get ticks remaining until reward arrives (when in DELIVERING status).
+     */
+    public long getRewardTicksRemaining(long currentTime) {
+        if (status != Status.DELIVERING) return 0;
+        return Math.max(0, rewardArrivalTime - currentTime);
+    }
 
     /**
      * Get remaining items needed to complete this quest.
@@ -142,7 +155,7 @@ public class Quest {
         deliveredCount += count;
         if (deliveredCount >= requiredCount) {
             deliveredCount = requiredCount;
-            status = Status.COMPLETED;
+            status = Status.DELIVERING; // rewards travel back from town
             return true;
         }
         return false;
@@ -332,15 +345,15 @@ public class Quest {
     }
     
     private static int calculateBaseQuantity(int itemBaseValue, Random rand) {
-        if (itemBaseValue <= 3) {
+        if (itemBaseValue <= 8) {
             return 16 + rand.nextInt(33);      // 16-48 for junk/basic
-        } else if (itemBaseValue <= 8) {
+        } else if (itemBaseValue <= 20) {
             return 8 + rand.nextInt(17);       // 8-24 for common items
-        } else if (itemBaseValue <= 25) {
+        } else if (itemBaseValue <= 65) {
             return 4 + rand.nextInt(9);        // 4-12 for useful items
-        } else if (itemBaseValue <= 80) {
+        } else if (itemBaseValue <= 210) {
             return 2 + rand.nextInt(5);        // 2-6 for valuable items
-        } else if (itemBaseValue <= 250) {
+        } else if (itemBaseValue <= 650) {
             return 1 + rand.nextInt(3);        // 1-3 for expensive items
         } else {
             return 1;                          // 1 for treasure-tier
@@ -363,6 +376,7 @@ public class Quest {
         tag.putLong("Expiry", expiryTime);
         tag.putString("Status", status.name());
         tag.putInt("Delivered", deliveredCount);
+        tag.putLong("RewardArrival", rewardArrivalTime);
         tag.putString("QuestType", questType.name());
         tag.putString("Desc", questDescription);
         return tag;
@@ -396,6 +410,11 @@ public class Quest {
         );
         quest.status = Status.valueOf(tag.getString("Status"));
         quest.deliveredCount = tag.getInt("Delivered");
+        quest.rewardArrivalTime = tag.contains("RewardArrival") ? tag.getLong("RewardArrival") : 0;
+        // Backward compat: legacy DELIVERING quests without arrival time complete instantly
+        if (quest.status == Status.DELIVERING && quest.rewardArrivalTime == 0) {
+            quest.status = Status.COMPLETED;
+        }
         return quest;
     }
 }

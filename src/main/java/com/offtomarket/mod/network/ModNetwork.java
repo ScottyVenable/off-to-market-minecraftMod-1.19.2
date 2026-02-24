@@ -135,6 +135,16 @@ public class ModNetwork {
                 CollectReturnedItemsPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
 
+        CHANNEL.registerMessage(id++, AdjustShipmentPricePacket.class,
+                AdjustShipmentPricePacket::encode, AdjustShipmentPricePacket::decode,
+                AdjustShipmentPricePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, CreateRequestPacket.class,
+                CreateRequestPacket::encode, CreateRequestPacket::decode,
+                CreateRequestPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
         CHANNEL.registerMessage(id++, ShowToastPacket.class,
                 ShowToastPacket::encode, ShowToastPacket::new,
                 ShowToastPacket::handle,

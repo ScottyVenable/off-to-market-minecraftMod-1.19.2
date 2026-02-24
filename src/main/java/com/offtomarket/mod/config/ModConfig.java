@@ -28,8 +28,8 @@ public class ModConfig {
             .defineInRange("saleCheckInterval", 100, 20, 2400);
 
     private static final ForgeConfigSpec.IntValue MAX_MARKET_TIME_TICKS = BUILDER
-            .comment("Maximum ticks items stay at market before auto-selling at 75% price (6000 = 5 minutes)")
-            .defineInRange("maxMarketTimeTicks", 6000, 600, 72000);
+            .comment("Maximum ticks items stay at market before auto-cancel returns unsold items (9600 = 8 minutes)")
+            .defineInRange("maxMarketTimeTicks", 9600, 600, 72000);
 
     static { BUILDER.pop(); }
 
@@ -136,11 +136,11 @@ public class ModConfig {
 
     private static final ForgeConfigSpec.IntValue NEGOTIATOR_HIRE_COST = BUILDER
             .comment("Cost in copper to hire a Negotiator")
-            .defineInRange("negotiatorHireCost", 500, 0, 10000);
+            .defineInRange("negotiatorHireCost", 1300, 0, 50000);
 
     private static final ForgeConfigSpec.IntValue CART_HIRE_COST = BUILDER
             .comment("Cost in copper to hire a Trading Cart")
-            .defineInRange("cartHireCost", 300, 0, 10000);
+            .defineInRange("cartHireCost", 780, 0, 50000);
 
     private static final ForgeConfigSpec.IntValue MAX_WORKER_LEVEL = BUILDER
             .comment("Maximum level workers can reach")
@@ -269,7 +269,7 @@ public class ModConfig {
     public static int pickupDelayTicks = 600;
     public static int ticksPerDistance = 1200;
     public static int saleCheckInterval = 100;
-    public static int maxMarketTimeTicks = 6000;
+    public static int maxMarketTimeTicks = 9600;
 
     // Pricing
     public static double baseSaleChance = 0.2;
@@ -297,8 +297,8 @@ public class ModConfig {
     public static int questExpiryDays = 3;
 
     // Workers
-    public static int negotiatorHireCost = 500;
-    public static int cartHireCost = 300;
+    public static int negotiatorHireCost = 1300;
+    public static int cartHireCost = 780;
     public static int maxWorkerLevel = 10;
     public static double negotiatorMaxBonus = 0.25;
     public static double cartMaxSpeedBonus = 0.4;

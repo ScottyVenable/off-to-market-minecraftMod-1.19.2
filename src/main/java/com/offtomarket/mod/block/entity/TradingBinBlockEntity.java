@@ -70,6 +70,27 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     private int minMarkupPercent = 0;      // minimum markup % over fair value
     private AutoPriceMode autoPriceMode = AutoPriceMode.AUTO_FAIR;
 
+    // ==================== Price Modifiers ====================
+    /** Whether to apply enchantment markup when pricing enchanted items. */
+    private boolean enchantedMarkupEnabled = true;
+    /** Percent markup for enchanted items (default 50%). */
+    private int enchantedMarkupPercent = 50;
+
+    /** Whether to apply a discount for used (partially damaged) items. */
+    private boolean usedDiscountEnabled = true;
+    /** Percent discount for used items (default 20%). */
+    private int usedDiscountPercent = 20;
+
+    /** Whether to apply a larger discount for heavily damaged items. */
+    private boolean damagedDiscountEnabled = true;
+    /** Percent discount for damaged items below 50% durability (default 40%). */
+    private int damagedDiscountPercent = 40;
+
+    /** Whether to apply a rarity markup. */
+    private boolean rareMarkupEnabled = true;
+    /** Percent markup for rare+ rarity items (default 30%). */
+    private int rareMarkupPercent = 30;
+
     public TradingBinBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.TRADING_BIN.get(), pos, state);
     }
@@ -156,6 +177,84 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     public void setAutoPriceMode(AutoPriceMode mode) {
         this.autoPriceMode = mode;
         syncToClient();
+    }
+
+    // ==================== Price Modifier Accessors ====================
+
+    public boolean isEnchantedMarkupEnabled() { return enchantedMarkupEnabled; }
+    public void setEnchantedMarkupEnabled(boolean enabled) { this.enchantedMarkupEnabled = enabled; syncToClient(); }
+    public int getEnchantedMarkupPercent() { return enchantedMarkupPercent; }
+    public void setEnchantedMarkupPercent(int percent) { this.enchantedMarkupPercent = Math.max(0, Math.min(200, percent)); syncToClient(); }
+
+    public boolean isUsedDiscountEnabled() { return usedDiscountEnabled; }
+    public void setUsedDiscountEnabled(boolean enabled) { this.usedDiscountEnabled = enabled; syncToClient(); }
+    public int getUsedDiscountPercent() { return usedDiscountPercent; }
+    public void setUsedDiscountPercent(int percent) { this.usedDiscountPercent = Math.max(0, Math.min(100, percent)); syncToClient(); }
+
+    public boolean isDamagedDiscountEnabled() { return damagedDiscountEnabled; }
+    public void setDamagedDiscountEnabled(boolean enabled) { this.damagedDiscountEnabled = enabled; syncToClient(); }
+    public int getDamagedDiscountPercent() { return damagedDiscountPercent; }
+    public void setDamagedDiscountPercent(int percent) { this.damagedDiscountPercent = Math.max(0, Math.min(100, percent)); syncToClient(); }
+
+    public boolean isRareMarkupEnabled() { return rareMarkupEnabled; }
+    public void setRareMarkupEnabled(boolean enabled) { this.rareMarkupEnabled = enabled; syncToClient(); }
+    public int getRareMarkupPercent() { return rareMarkupPercent; }
+    public void setRareMarkupPercent(int percent) { this.rareMarkupPercent = Math.max(0, Math.min(200, percent)); syncToClient(); }
+
+    /**
+     * Calculate the modified price for an item based on enabled price modifiers.
+     * Applies enchanted markup, used/damaged discounts, and rarity markup.
+     *
+     * @param stack the item to price
+     * @param basePrice the base fair value in CP
+     * @return the modified price in CP
+     */
+    public int applyPriceModifiers(ItemStack stack, int basePrice) {
+        if (stack.isEmpty() || basePrice <= 0) return basePrice;
+        double price = basePrice;
+
+        // Enchantment markup
+        if (enchantedMarkupEnabled && stack.isEnchanted()) {
+            price *= (1.0 + enchantedMarkupPercent / 100.0);
+        }
+
+        // Rarity markup (UNCOMMON+ means it's special)
+        if (rareMarkupEnabled) {
+            net.minecraft.world.item.Rarity rarity = stack.getRarity();
+            if (rarity == net.minecraft.world.item.Rarity.RARE || rarity == net.minecraft.world.item.Rarity.EPIC) {
+                price *= (1.0 + rareMarkupPercent / 100.0);
+            }
+        }
+
+        // Durability-based discounts (only for damageable items)
+        if (stack.isDamageableItem() && stack.isDamaged()) {
+            double durabilityRatio = 1.0 - (double) stack.getDamageValue() / stack.getMaxDamage();
+            if (damagedDiscountEnabled && durabilityRatio < 0.5) {
+                // Heavily damaged: apply damaged discount
+                price *= (1.0 - damagedDiscountPercent / 100.0);
+            } else if (usedDiscountEnabled) {
+                // Partially used: apply used discount
+                price *= (1.0 - usedDiscountPercent / 100.0);
+            }
+        }
+
+        return Math.max(1, (int) price);
+    }
+
+    /**
+     * Get the estimated market time label for a given price.
+     * Based on how the price compares to fair value.
+     */
+    public static String getEstimatedMarketTime(int price, int fairValue, int maxPrice) {
+        if (price <= 0 || fairValue <= 0) return "—";
+        double ratio = (double) price / fairValue;
+        if (ratio <= 0.7) return "§aInstant";
+        if (ratio <= 1.0) return "§a< 1 min";
+        if (ratio <= 1.3) return "§e1-3 min";
+        if (ratio <= 1.6) return "§63-5 min";
+        if (ratio <= 2.0) return "§c5-8 min";
+        if (price > maxPrice) return "§4Won't sell";
+        return "§c6+ min";
     }
 
     /**
@@ -309,14 +408,17 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         int baseValue = PriceCalculator.getBaseValue(stack);
         if (baseValue <= 0) baseValue = 1;
 
+        // Apply item-specific modifiers (enchantment markup, durability discount, etc.)
+        int modifiedValue = applyPriceModifiers(stack, baseValue);
+
         if (autoPriceMode == AutoPriceMode.AUTO_FAIR) {
-            // Fair value + crafting tax
-            int tax = (int) (baseValue * (craftingTaxPercent / 100.0));
-            return baseValue + tax;
+            // Modified value + crafting tax
+            int tax = (int) (modifiedValue * (craftingTaxPercent / 100.0));
+            return modifiedValue + tax;
         } else if (autoPriceMode == AutoPriceMode.AUTO_MARKUP) {
-            // Fair value + crafting tax + minimum markup
-            int tax = (int) (baseValue * (craftingTaxPercent / 100.0));
-            int subtotal = baseValue + tax;
+            // Modified value + crafting tax + minimum markup
+            int tax = (int) (modifiedValue * (craftingTaxPercent / 100.0));
+            int subtotal = modifiedValue + tax;
             int markup = (int) (subtotal * (minMarkupPercent / 100.0));
             return subtotal + markup;
         }
@@ -398,6 +500,16 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         tag.putInt("MinMarkupPercent", minMarkupPercent);
         tag.putString("AutoPriceMode", autoPriceMode.name());
 
+        // Price modifiers
+        tag.putBoolean("EnchantedMarkupEnabled", enchantedMarkupEnabled);
+        tag.putInt("EnchantedMarkupPercent", enchantedMarkupPercent);
+        tag.putBoolean("UsedDiscountEnabled", usedDiscountEnabled);
+        tag.putInt("UsedDiscountPercent", usedDiscountPercent);
+        tag.putBoolean("DamagedDiscountEnabled", damagedDiscountEnabled);
+        tag.putInt("DamagedDiscountPercent", damagedDiscountPercent);
+        tag.putBoolean("RareMarkupEnabled", rareMarkupEnabled);
+        tag.putInt("RareMarkupPercent", rareMarkupPercent);
+
         if (!inspectionItem.isEmpty()) {
             tag.put("InspectionItem", inspectionItem.save(new CompoundTag()));
         }
@@ -429,6 +541,16 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
             try { autoPriceMode = AutoPriceMode.valueOf(tag.getString("AutoPriceMode")); }
             catch (IllegalArgumentException e) { autoPriceMode = AutoPriceMode.AUTO_FAIR; }
         }
+
+        // Price modifiers
+        enchantedMarkupEnabled = !tag.contains("EnchantedMarkupEnabled") || tag.getBoolean("EnchantedMarkupEnabled");
+        enchantedMarkupPercent = tag.contains("EnchantedMarkupPercent") ? tag.getInt("EnchantedMarkupPercent") : 50;
+        usedDiscountEnabled = !tag.contains("UsedDiscountEnabled") || tag.getBoolean("UsedDiscountEnabled");
+        usedDiscountPercent = tag.contains("UsedDiscountPercent") ? tag.getInt("UsedDiscountPercent") : 20;
+        damagedDiscountEnabled = !tag.contains("DamagedDiscountEnabled") || tag.getBoolean("DamagedDiscountEnabled");
+        damagedDiscountPercent = tag.contains("DamagedDiscountPercent") ? tag.getInt("DamagedDiscountPercent") : 40;
+        rareMarkupEnabled = !tag.contains("RareMarkupEnabled") || tag.getBoolean("RareMarkupEnabled");
+        rareMarkupPercent = tag.contains("RareMarkupPercent") ? tag.getInt("RareMarkupPercent") : 30;
 
         priceMemory.clear();
         if (tag.contains("PriceMemory")) {

@@ -132,17 +132,46 @@ Trade livestock with the **Animal Trade Slip** system:
 
 ### Trading Post
 ```
-[Plank] [Emerald] [Plank]
-[Plank] [Chest]   [Plank]
-[Plank] [Plank]   [Plank]
+[Oak Log] [Oak Log] [Oak Log]
+[Oak Log] [Emerald] [Oak Log]
+[Oak Log] [Oak Log] [Oak Log]
 ```
 
 ### Trading Bin
 ```
-[Plank] [      ] [Plank]
-[Plank] [Chest]  [Plank]
-[Plank] [Plank]  [Plank]
+[Oak Planks] [Oak Planks] [Oak Planks]
+[Oak Planks] [Chest]      [Oak Planks]
+[Oak Planks] [Oak Planks] [Oak Planks]
 ```
+
+### Market Board
+```
+[Oak Sign] [Oak Sign] [Oak Sign]
+[Oak Sign] [Paper]    [Oak Sign]
+[Oak Sign] [Oak Sign] [Oak Sign]
+```
+
+### Ledger
+```
+[Leather] [Ink Sac] [Leather]
+[Ink Sac] [Paper]   [Ink Sac]
+[Leather] [Ink Sac] [Leather]
+```
+
+### Coin Bag
+```
+[Leather] [String]  [Leather]
+[Leather] [       ] [Leather]
+[Leather] [Leather] [Leather]
+```
+
+### Guide Book
+*Shapeless recipe:*
+- Book + Emerald
+
+### Animal Trade Slip
+*Shapeless recipe (yields 3):*
+- 3× Paper + Ink Sac
 
 ## Configuration
 

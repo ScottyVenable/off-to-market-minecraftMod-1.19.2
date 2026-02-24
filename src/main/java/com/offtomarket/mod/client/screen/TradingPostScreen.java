@@ -11,6 +11,7 @@ import com.offtomarket.mod.network.*;
 import com.offtomarket.mod.util.SoundHelper;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
@@ -56,6 +57,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private boolean showingEconomyDashboard = false;
     private int townViewPage = 0;
     private int townContentScroll = 0; // scroll offset for town needs/surplus content
+    private int townListScroll = 0;    // scroll offset for town list (left page)
     private int questScrollOffset = 0;
     private int diplomatScrollOffset = 0;
     private static final int VISIBLE_ACTIVITY = 7;
@@ -67,11 +69,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private int hoveredQuestRow = -1;
     private int hoveredDiplomatRow = -1;
 
-    // Diplomat selection from Towns tab
-    private boolean selectingDiplomatItem = false;
-    private int hoveredSurplusRow = -1;
-    private List<net.minecraft.resources.ResourceLocation> currentSurplusList = new ArrayList<>();
-    private int diplomatQuantity = 1; // quantity for diplomat requests
+    private int hoveredTownRow = -1; // hover index for town list on left page
+
+    // Request creation mode (Requests tab)
+    private boolean creatingRequest = false;
+    private EditBox requestSearchBox;
+    private List<ResourceLocation> requestFilteredItems = new ArrayList<>();
+    private int requestListScroll = 0;
+    private int hoveredRequestItem = -1;
+    private ResourceLocation requestSelectedItem = null;
+    private int requestQuantity = 1;
+    private static final int VISIBLE_REQUEST_ITEMS = 6;
 
     // Shipment cancel confirmation
     private UUID confirmCancelShipmentId = null; // shipment ID awaiting cancel confirmation
@@ -85,13 +93,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private Button economyToggleBtn;
     // Towns tab
     private Button prevTownPageBtn, nextTownPageBtn;
-    private Button sendDiplomatBtn, cancelDiplomatBtn;
+    // sendDiplomatBtn/cancelDiplomatBtn removed — request creation moved to Requests tab
     // Quests tab
     private Button questScrollUpBtn, questScrollDownBtn;
     // Workers tab
     private Button hireNegotiatorBtn, hireCartBtn;
     // Diplomat tab
     private Button diplomatScrollUpBtn, diplomatScrollDownBtn;
+    private Button newRequestBtn, sendRequestBtn, cancelRequestBtn;
 
     public TradingPostScreen(TradingPostMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -174,43 +183,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             updateButtonVisibility();
         }));
 
-        // ==== Towns tab buttons ====
-
-        prevTownPageBtn = addRenderableWidget(new Button(x + 8, y + 128, 55, 14,
-                Component.literal("\u25C0 Prev"), btn -> {
-            if (townViewPage > 0) { townViewPage--; townContentScroll = 0; }
-        }));
-
-        nextTownPageBtn = addRenderableWidget(new Button(x + 68, y + 128, 55, 14,
-                Component.literal("Next \u25B6"), btn -> {
-            Collection<TownData> allTowns = TownRegistry.getAllTowns();
-            if (townViewPage < allTowns.size() - 1) { townViewPage++; townContentScroll = 0; }
-        }));
-
-        // Send Request button — appears on Towns tab left page, below buttons
-        sendDiplomatBtn = addRenderableWidget(new Button(x + 8, y + 112, 115, 14,
-                Component.literal("\u270D Request Item"), btn -> {
-            selectingDiplomatItem = true;
-            hoveredSurplusRow = -1;
-            townContentScroll = 0;
-            diplomatQuantity = 1; // reset quantity when starting selection
-            // Build the surplus list for the currently viewed town
-            List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
-            if (townViewPage < allTowns.size()) {
-                currentSurplusList = new ArrayList<>(allTowns.get(townViewPage).getSurplus());
-            } else {
-                currentSurplusList = new ArrayList<>();
-            }
-            updateButtonVisibility();
-        }));
-
-        // Cancel diplomat selection
-        cancelDiplomatBtn = addRenderableWidget(new Button(x + 8, y + 128, 80, 14,
-                Component.literal("\u2718 Cancel"), btn -> {
-            selectingDiplomatItem = false;
-            hoveredSurplusRow = -1;
-            updateButtonVisibility();
-        }));
+        // Towns tab: diplomat selection buttons removed — request creation moved to Requests tab
 
         // ==== Quests tab buttons ====
 
@@ -254,6 +227,53 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         diplomatScrollDownBtn = addRenderableWidget(new Button(x + 236, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> diplomatScrollOffset++));
 
+        // "New Request" button — opens request creation mode on Requests tab
+        newRequestBtn = addRenderableWidget(new Button(x + 170, y + 33, 65, 12,
+                Component.literal("+ New Request"), btn -> {
+            creatingRequest = true;
+            requestSelectedItem = null;
+            requestQuantity = 1;
+            requestListScroll = 0;
+            hoveredRequestItem = -1;
+            requestSearchBox.setValue("");
+            requestSearchBox.setFocus(true);
+            updateRequestFilteredItems();
+            updateButtonVisibility();
+        }));
+
+        // "Send" button — confirms and sends the new request
+        sendRequestBtn = addRenderableWidget(new Button(x + 5, y + 127, 80, 12,
+                Component.literal("\u2714 Send Request"), btn -> {
+            if (requestSelectedItem != null) {
+                TradingPostBlockEntity tpbe = menu.getBlockEntity();
+                if (tpbe != null) {
+                    ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                            new CreateRequestPacket(tpbe.getBlockPos(), requestSelectedItem, requestQuantity));
+                    creatingRequest = false;
+                    requestSelectedItem = null;
+                    updateButtonVisibility();
+                }
+            }
+        }));
+
+        // "Cancel" button — exits request creation mode
+        cancelRequestBtn = addRenderableWidget(new Button(x + 90, y + 127, 60, 12,
+                Component.literal("\u2718 Cancel"), btn -> {
+            creatingRequest = false;
+            requestSelectedItem = null;
+            requestSearchBox.setValue("");
+            updateButtonVisibility();
+        }));
+
+        // Search box for request creation
+        requestSearchBox = new EditBox(this.font, x + 5, y + 48, 145, 12,
+                Component.literal("Search items..."));
+        requestSearchBox.setMaxLength(50);
+        requestSearchBox.setBordered(true);
+        requestSearchBox.setVisible(false);
+        requestSearchBox.setResponder(text -> updateRequestFilteredItems());
+        addRenderableWidget(requestSearchBox);
+
         updateButtonVisibility();
     }
 
@@ -262,8 +282,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             SoundHelper.playTabSwitch();
         }
         currentTab = tab;
-        selectingDiplomatItem = false;
-        hoveredSurplusRow = -1;
+        creatingRequest = false;
         showingEconomyDashboard = false;
         if (economyToggleBtn != null) {
             economyToggleBtn.setMessage(Component.literal("\uD83D\uDCCA Stats"));
@@ -291,19 +310,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Hide coin exchange slots (no longer have a coins tab)
         updateCoinSlotPositions(false);
 
-        prevTownPageBtn.visible = towns && !selectingDiplomatItem;
-        nextTownPageBtn.visible = towns && !selectingDiplomatItem;
+        prevTownPageBtn.visible = false; // deprecated, replaced by list clicks
+        nextTownPageBtn.visible = false; // deprecated, replaced by list clicks
 
-        // Send Diplomat button: visible on Towns tab (not already selecting), when town is unlocked
-        boolean townUnlocked = false;
-        if (towns) {
-            List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
-            if (townViewPage < allTowns.size()) {
-                townUnlocked = allTowns.get(townViewPage).getMinTraderLevel() <= menu.getTraderLevel();
-            }
-        }
-        sendDiplomatBtn.visible = towns && !selectingDiplomatItem && townUnlocked;
-        cancelDiplomatBtn.visible = towns && selectingDiplomatItem;
+        // Towns tab diplomat buttons removed — request creation moved to Requests tab
 
         questScrollUpBtn.visible = quests;
         questScrollDownBtn.visible = quests;
@@ -312,8 +322,38 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         hireNegotiatorBtn.visible = workers && (be == null || !be.getNegotiator().isHired());
         hireCartBtn.visible = workers && (be == null || !be.getTradingCart().isHired());
 
-        diplomatScrollUpBtn.visible = diplomat;
-        diplomatScrollDownBtn.visible = diplomat;
+        diplomatScrollUpBtn.visible = diplomat && !creatingRequest;
+        diplomatScrollDownBtn.visible = diplomat && !creatingRequest;
+        newRequestBtn.visible = diplomat && !creatingRequest;
+        sendRequestBtn.visible = diplomat && creatingRequest && requestSelectedItem != null;
+        cancelRequestBtn.visible = diplomat && creatingRequest;
+        if (requestSearchBox != null) {
+            requestSearchBox.setVisible(diplomat && creatingRequest);
+            requestSearchBox.active = diplomat && creatingRequest;
+        }
+    }
+
+    /**
+     * Update the filtered item list based on the search box text.
+     * Searches all registered items by display name.
+     */
+    private void updateRequestFilteredItems() {
+        requestFilteredItems.clear();
+        requestListScroll = 0;
+        hoveredRequestItem = -1;
+
+        String query = requestSearchBox != null ? requestSearchBox.getValue().toLowerCase().trim() : "";
+        if (query.isEmpty()) return; // don't show anything with empty search
+
+        for (Item item : ForgeRegistries.ITEMS) {
+            ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
+            if (rl == null) continue;
+            String name = new ItemStack(item).getHoverName().getString().toLowerCase();
+            if (name.contains(query)) {
+                requestFilteredItems.add(rl);
+                if (requestFilteredItems.size() >= 100) break; // cap results
+            }
+        }
     }
 
     private List<TownData> getAvailableTowns() {
@@ -480,34 +520,58 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private void renderTownsBg(PoseStack ps, int x, int y) {
         // Book-style page panel
-        // Left page (parchment)
+        // Left page (parchment) — town list
         fill(ps, x + 6, y + 35, x + 126, y + 140, 0xFFD8C8A0);
         fill(ps, x + 7, y + 36, x + 125, y + 139, 0xFFF0E6C8);
+
+        // Town list row backgrounds (selection/hover highlights)
+        List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
+        int visibleTowns = 8;
+        int rowH = 11;
+        int listStartY = y + 50;
+        for (int i = 0; i < visibleTowns; i++) {
+            int townIdx = townListScroll + i;
+            if (townIdx >= allTowns.size()) break;
+            int rowY = listStartY + i * rowH;
+            if (townIdx == townViewPage) {
+                // Selected
+                fill(ps, x + 8, rowY, x + 124, rowY + rowH, 0xFF8B7355);
+            } else if (i == hoveredTownRow) {
+                // Hovered
+                fill(ps, x + 8, rowY, x + 124, rowY + rowH, 0xFFBBA878);
+            }
+        }
+
         // Center spine
         fill(ps, x + 126, y + 35, x + 130, y + 140, 0xFF6B5A3E);
-        // Right page (parchment)
+        // Right page (parchment) — detail view
         fill(ps, x + 130, y + 35, x + 250, y + 140, 0xFFD8C8A0);
         fill(ps, x + 131, y + 36, x + 249, y + 139, 0xFFF0E6C8);
     }
 
     /**
-     * Compute hover row for diplomat item selection on the Towns tab right page.
-     * Called from renderBg to update hoveredSurplusRow.
+     * Compute hover row for the Towns tab left-page town list.
      */
     private void updateTownsDiplomatHover(int x, int y, int mouseX, int mouseY) {
-        hoveredSurplusRow = -1;
-        if (!selectingDiplomatItem || currentSurplusList.isEmpty()) return;
-
-        int rightPageLeft = x + 131;
-        int rightPageRight = x + 249;
-        int firstRowY = y + 72; // drawY=72 in local coords
-        int rowHeight = 9;
-        int visibleItems = 7;
-        int itemCount = Math.min(visibleItems, currentSurplusList.size() - townContentScroll);
-
-        if (mouseX >= rightPageLeft && mouseX <= rightPageRight
-                && mouseY >= firstRowY && mouseY < firstRowY + itemCount * rowHeight) {
-            hoveredSurplusRow = (mouseY - firstRowY) / rowHeight;
+        // Town list hover (left page)
+        hoveredTownRow = -1;
+        {
+            int leftPageLeft = x + 8;
+            int leftPageRight = x + 124;
+            int listStartY = y + 50;
+            int rowH = 11;
+            int visibleTowns = 8;
+            List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
+            int itemCount = Math.min(visibleTowns, allTowns.size() - townListScroll);
+            if (mouseX >= leftPageLeft && mouseX <= leftPageRight
+                    && mouseY >= listStartY && mouseY < listStartY + itemCount * rowH) {
+                int row = (mouseY - listStartY) / rowH;
+                int townIdx = townListScroll + row;
+                // Don't hover on the already-selected town
+                if (townIdx != townViewPage) {
+                    hoveredTownRow = row;
+                }
+            }
         }
     }
 
@@ -549,7 +613,39 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     }
 
     private void renderDiplomatBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
-        // Header row
+        if (creatingRequest) {
+            // Request creation mode backgrounds
+            hoveredRequestItem = -1;
+            if (requestSelectedItem == null) {
+                // Search results list background
+                for (int i = 0; i < VISIBLE_REQUEST_ITEMS; i++) {
+                    int rowY = y + 64 + i * 10;
+                    int itemIdx = requestListScroll + i;
+                    boolean validRow = itemIdx < requestFilteredItems.size();
+
+                    boolean isHovered = false;
+                    if (validRow && mouseX >= x + 5 && mouseX <= x + 155
+                            && mouseY >= rowY && mouseY < rowY + 10) {
+                        hoveredRequestItem = i;
+                        isHovered = true;
+                    }
+
+                    if (isHovered) {
+                        fill(ps, x + 5, rowY, x + 155, rowY + 10, 0xFF5A4A30);
+                        fill(ps, x + 5, rowY, x + 6, rowY + 10, 0xFFFFD700);
+                    } else if (validRow) {
+                        int rowColor = (i % 2 == 0) ? 0xFF4A3D2B : 0xFF3E3226;
+                        fill(ps, x + 5, rowY, x + 155, rowY + 10, rowColor);
+                    }
+                }
+            } else {
+                // Selected item confirmation panel
+                drawInsetPanel(ps, x + 5, y + 48, 228, 75);
+            }
+            return;
+        }
+
+        // Normal diplomat list — header row
         fill(ps, x + 5, y + 46, x + 233, y + 56, 0xFF2C2318);
 
         // Diplomat request rows with hover
@@ -748,7 +844,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     long elapsed = s.getTimeAtMarket(be.getLevel().getGameTime());
                     int maxTime = DebugConfig.getMaxMarketTime();
                     long remaining = Math.max(0, maxTime - elapsed);
-                    status = "Market (" + ticksToTime(remaining) + ")";
+                    // Show sold count if any items have sold
+                    int soldCount = 0;
+                    int totalCount = s.getItems().size();
+                    for (Shipment.ShipmentItem si : s.getItems()) {
+                        if (si.isSold()) soldCount++;
+                    }
+                    if (soldCount > 0) {
+                        status = soldCount + "/" + totalCount + " (" + ticksToTime(remaining) + ")";
+                    } else {
+                        status = "Market (" + ticksToTime(remaining) + ")";
+                    }
                     statusColor = 0xFFCC44;
                 }
                 case SOLD -> {
@@ -766,7 +872,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     statusColor = 0x55FF55;
                 }
                 case RETURNED -> {
-                    status = "\u2714 Collect Items";
+                    if (s.getTotalEarnings() > 0) {
+                        status = "\u2714 Collect All";
+                    } else {
+                        status = "\u2714 Collect Items";
+                    }
                     statusColor = 0xFFDD55;
                 }
                 default -> {
@@ -937,6 +1047,51 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
+        // Supply/Demand Trends section
+        Collection<TownData> allTowns = TownRegistry.getAllTowns();
+        boolean hasTrends = false;
+        for (TownData t : allTowns) {
+            if (!t.getSupplyLevels().isEmpty() && !t.getPreviousSupplyLevels().isEmpty()) {
+                hasTrends = true;
+                break;
+            }
+        }
+        if (hasTrends) {
+            drawY += 6;
+            this.font.draw(ps, "Market Trends", 8, drawY, 0xFFD700);
+            drawY += 10;
+            for (TownData t : allTowns) {
+                Map<String, Integer> supplies = t.getSupplyLevels();
+                if (supplies.isEmpty()) continue;
+                // Count rising/falling/stable items
+                int rising = 0, falling = 0;
+                for (String key : supplies.keySet()) {
+                    TownData.SupplyTrend trend = t.getTrend(key);
+                    if (trend == TownData.SupplyTrend.RISING) rising++;
+                    else if (trend == TownData.SupplyTrend.FALLING) falling++;
+                }
+                if (rising == 0 && falling == 0) continue; // all stable, skip
+
+                String tName = t.getDisplayName();
+                if (this.font.width(tName) > 60) {
+                    while (this.font.width(tName + "..") > 60 && tName.length() > 2) {
+                        tName = tName.substring(0, tName.length() - 1);
+                    }
+                    tName += "..";
+                }
+                this.font.draw(ps, tName, 10, drawY, 0xCCCCCC);
+                // Show trend counts
+                if (falling > 0) {
+                    this.font.draw(ps, "\u25B2" + falling, 80, drawY, 0x44CC44); // demand rising
+                }
+                if (rising > 0) {
+                    this.font.draw(ps, "\u25BC" + rising, 105, drawY, 0xCC4444); // demand falling
+                }
+                drawY += 9;
+                if (drawY > 165) break; // don't overflow
+            }
+        }
+
         // Hint
         if (lifetime == 0) {
             this.font.draw(ps, "Send shipments to see", 10, 80, 0x888888);
@@ -962,79 +1117,110 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
         if (allTowns.isEmpty()) return;
 
-        townViewPage = Math.min(townViewPage, allTowns.size() - 1);
-        TownData town = allTowns.get(townViewPage);
         int traderLevel = menu.getTraderLevel();
-        boolean unlocked = town.getMinTraderLevel() <= traderLevel;
-
         TradingPostBlockEntity be = menu.getBlockEntity();
 
-        // LEFT PAGE: town info
-        int leftX = 12;
+        // Clamp selections
+        townViewPage = Math.min(townViewPage, allTowns.size() - 1);
+        int maxListScroll = Math.max(0, allTowns.size() - 8);
+        townListScroll = Math.min(townListScroll, maxListScroll);
+
+        // ========== LEFT PAGE: Scrollable town list ==========
+        int leftX = 10;
         int rightX = 136;
 
-        // Page indicator (top of left page)
-        String pageInfo = (townViewPage + 1) + " / " + allTowns.size();
-        this.font.draw(poseStack, pageInfo, leftX, 38, 0x6B5A3E);
+        // Header
+        this.font.draw(poseStack, "Towns", leftX, 38, 0x3B2A14);
+
+        // Town list entries (8 visible rows, 11px each, starting at y=50)
+        int visibleTowns = 8;
+        int rowH = 11;
+        for (int i = 0; i < visibleTowns; i++) {
+            int townIdx = townListScroll + i;
+            if (townIdx >= allTowns.size()) break;
+
+            TownData t = allTowns.get(townIdx);
+            boolean townUnlocked = t.getMinTraderLevel() <= traderLevel;
+            boolean isSelected = (townIdx == townViewPage);
+
+            // Build display text: truncate name to fit with distance
+            String distSuffix = " \u00B7" + t.getDistance();
+            String name = t.getDisplayName();
+            int maxNameW = 100 - this.font.width(distSuffix);
+            if (this.font.width(name) > maxNameW) {
+                while (this.font.width(name + "..") > maxNameW && name.length() > 3)
+                    name = name.substring(0, name.length() - 1);
+                name += "..";
+            }
+
+            String prefix = townUnlocked ? "" : "\u2716 ";
+            int textColor;
+            if (isSelected) {
+                textColor = 0xFFF0E6; // bright cream on dark bg
+            } else if (!townUnlocked) {
+                textColor = 0x664444; // red-gray for locked
+            } else {
+                textColor = 0x3B2A14; // normal brown
+            }
+
+            int drawY = 50 + i * rowH;
+            this.font.draw(poseStack, prefix + name + distSuffix, leftX, drawY + 1, textColor);
+        }
+
+        // Scroll indicators for town list
+        if (townListScroll > 0) {
+            this.font.draw(poseStack, "\u25B2", 114, 42, 0x6B5A3E);
+        }
+        if (townListScroll < maxListScroll) {
+            this.font.draw(poseStack, "\u25BC", 114, 134, 0x6B5A3E);
+        }
+
+        // ========== RIGHT PAGE: Detail view of selected town ==========
+        TownData town = allTowns.get(townViewPage);
+        boolean unlocked = town.getMinTraderLevel() <= traderLevel;
 
         // Town name
         if (!unlocked) {
-            this.font.draw(poseStack, "\u2716 " + town.getDisplayName(), leftX, 50, 0x664444);
+            this.font.draw(poseStack, "\u2716 " + town.getDisplayName(), rightX, 38, 0x664444);
         } else {
-            this.font.draw(poseStack, town.getDisplayName(), leftX, 50, 0x3B2A14);
+            this.font.draw(poseStack, town.getDisplayName(), rightX, 38, 0x3B2A14);
         }
 
         // Type + distance
-        String meta = town.getType().getDisplayName() + " | Dist " + town.getDistance();
-        this.font.draw(poseStack, meta, leftX, 62, 0x6B5A3E);
+        String meta = town.getType().getDisplayName() + " \u00B7 Dist " + town.getDistance();
+        this.font.draw(poseStack, meta, rightX, 48, 0x6B5A3E);
 
-        // Min level
+        // Level requirement
         String lvlReq = "Requires Lvl " + town.getMinTraderLevel();
         int lvlColor = unlocked ? 0x3B7A3B : 0x8B2222;
-        this.font.draw(poseStack, lvlReq, leftX, 72, lvlColor);
-        
-        // Reputation with this town (on separate line)
+        this.font.draw(poseStack, lvlReq, rightX, 58, lvlColor);
+
+        // Reputation
         if (be != null && unlocked) {
             int rep = be.getReputation(town.getId());
             String repLevel = TradingPostBlockEntity.getReputationLevel(rep);
             int repColor = TradingPostBlockEntity.getReputationColor(rep);
-            this.font.draw(poseStack, "Rep: " + repLevel + " (" + rep + ")", leftX, 82, repColor);
+            this.font.draw(poseStack, "Rep: " + repLevel + " (" + rep + ")", rightX, 68, repColor);
         }
 
-        // Description (wrap 2 lines to fit)
+        // Description (2 lines max)
         List<FormattedCharSequence> descLines = this.font.split(
                 Component.literal(town.getDescription()), 108);
         for (int i = 0; i < Math.min(descLines.size(), 2); i++) {
-            this.font.draw(poseStack, descLines.get(i), leftX, 94 + i * 10, 0x5C4A32);
+            this.font.draw(poseStack, descLines.get(i), rightX, 80 + i * 10, 0x5C4A32);
         }
 
-        // Demand level
-        if (be != null && !selectingDiplomatItem) {
-            double demand = be.getDemandTracker().getTownDemandLevel(town.getId());
-            int pct = (int) (demand * 100);
-            String demandStr = "Demand: " + pct + "%";
-            int demandColor = pct >= 80 ? 0x3B7A3B : (pct >= 50 ? 0x8B7355 : 0x8B2222);
-            // Draw on left page, at bottom (but above buttons)
-        }
+        // ---- Needs & Surplus below description ----
+        // Build grouped line list
+        List<String> lines = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
 
-        // RIGHT PAGE: changes based on diplomat selection mode
-        if (selectingDiplomatItem) {
-            renderDiplomatSelectionPage(poseStack, rightX, town);
-        } else {
-        // Normal mode: needs & surplus with NeedLevel indicators (scrollable)
-        // Build a list of all lines, then render visible ones based on scroll
-        List<String> rightLines = new ArrayList<>();
-        List<Integer> rightColors = new ArrayList<>();
-
-        // Group items by NeedLevel for a clearer display
-        // Desperate & High Need items first (things the town wants)
         List<String[]> desperateItems = new ArrayList<>();
         List<String[]> highNeedItems = new ArrayList<>();
         List<String[]> moderateItems = new ArrayList<>();
         List<String[]> surplusItems = new ArrayList<>();
         List<String[]> oversatItems = new ArrayList<>();
 
-        // Check all needs items for their actual NeedLevel
         for (ResourceLocation rl : town.getNeeds()) {
             Item item = ForgeRegistries.ITEMS.getValue(rl);
             if (item == null) continue;
@@ -1046,14 +1232,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 iname += "..";
             }
             switch (level) {
-                case DESPERATE -> desperateItems.add(new String[]{iname, level.getDisplayName()});
-                case HIGH_NEED -> highNeedItems.add(new String[]{iname, level.getDisplayName()});
-                case MODERATE_NEED -> moderateItems.add(new String[]{iname, level.getDisplayName()});
-                default -> highNeedItems.add(new String[]{iname, "Needed"}); // legacy fallback
+                case DESPERATE -> desperateItems.add(new String[]{iname});
+                case HIGH_NEED -> highNeedItems.add(new String[]{iname});
+                case MODERATE_NEED -> moderateItems.add(new String[]{iname});
+                default -> highNeedItems.add(new String[]{iname});
             }
         }
 
-        // Check all surplus items for their actual NeedLevel
         for (ResourceLocation rl : town.getSurplus()) {
             Item item = ForgeRegistries.ITEMS.getValue(rl);
             if (item == null) continue;
@@ -1065,124 +1250,55 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 iname += "..";
             }
             switch (level) {
-                case OVERSATURATED -> oversatItems.add(new String[]{iname, level.getDisplayName()});
-                case SURPLUS -> surplusItems.add(new String[]{iname, level.getDisplayName()});
-                default -> surplusItems.add(new String[]{iname, "Surplus"}); // legacy fallback
+                case OVERSATURATED -> oversatItems.add(new String[]{iname});
+                case SURPLUS -> surplusItems.add(new String[]{iname});
+                default -> surplusItems.add(new String[]{iname});
             }
         }
 
-        // Render grouped by urgency
         if (!desperateItems.isEmpty()) {
-            rightLines.add("\u2757 Desperate:");
-            rightColors.add(NeedLevel.DESPERATE.getColor());
-            for (String[] entry : desperateItems) {
-                rightLines.add("  \u2022 " + entry[0]);
-                rightColors.add(NeedLevel.DESPERATE.getColor());
-            }
+            lines.add("\u2757 Desperate:");
+            colors.add(NeedLevel.DESPERATE.getColor());
+            for (String[] e : desperateItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.DESPERATE.getColor()); }
         }
-
         if (!highNeedItems.isEmpty()) {
-            if (!rightLines.isEmpty()) { rightLines.add(""); rightColors.add(0); }
-            rightLines.add("\u26A0 High Need:");
-            rightColors.add(NeedLevel.HIGH_NEED.getColor());
-            for (String[] entry : highNeedItems) {
-                rightLines.add("  \u2022 " + entry[0]);
-                rightColors.add(NeedLevel.HIGH_NEED.getColor());
-            }
+            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
+            lines.add("\u26A0 High Need:");
+            colors.add(NeedLevel.HIGH_NEED.getColor());
+            for (String[] e : highNeedItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.HIGH_NEED.getColor()); }
         }
-
         if (!moderateItems.isEmpty()) {
-            if (!rightLines.isEmpty()) { rightLines.add(""); rightColors.add(0); }
-            rightLines.add("Moderate:");
-            rightColors.add(NeedLevel.MODERATE_NEED.getColor());
-            for (String[] entry : moderateItems) {
-                rightLines.add("  \u2022 " + entry[0]);
-                rightColors.add(NeedLevel.MODERATE_NEED.getColor());
-            }
+            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
+            lines.add("Moderate:");
+            colors.add(NeedLevel.MODERATE_NEED.getColor());
+            for (String[] e : moderateItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.MODERATE_NEED.getColor()); }
         }
-
         if (!surplusItems.isEmpty() || !oversatItems.isEmpty()) {
-            if (!rightLines.isEmpty()) { rightLines.add(""); rightColors.add(0); }
-            rightLines.add("\u25BC Surplus:");
-            rightColors.add(NeedLevel.SURPLUS.getColor());
-            for (String[] entry : surplusItems) {
-                rightLines.add("  \u2022 " + entry[0]);
-                rightColors.add(NeedLevel.SURPLUS.getColor());
-            }
-            for (String[] entry : oversatItems) {
-                rightLines.add("  \u2022 " + entry[0] + " \u2716");
-                rightColors.add(NeedLevel.OVERSATURATED.getColor());
-            }
+            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
+            lines.add("\u25BC Surplus:");
+            colors.add(NeedLevel.SURPLUS.getColor());
+            for (String[] e : surplusItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.SURPLUS.getColor()); }
+            for (String[] e : oversatItems) { lines.add("  \u2022 " + e[0] + " \u2716"); colors.add(NeedLevel.OVERSATURATED.getColor()); }
         }
 
-        int visibleLines = 9; // ~82px at 9px each, leaving room at bottom
-        int maxScrollR = Math.max(0, rightLines.size() - visibleLines);
+        // Scrollable needs/surplus area (y=100 to y=126, ~3 visible lines at 9px)
+        int needsStartY = 100;
+        int visibleLines = 3;
+        int maxScrollR = Math.max(0, lines.size() - visibleLines);
         townContentScroll = Math.min(townContentScroll, maxScrollR);
 
-        int drawY = 50; // Start below the parchment header area
-        for (int li = townContentScroll; li < rightLines.size() && (li - townContentScroll) < visibleLines; li++) {
-            this.font.draw(poseStack, rightLines.get(li), rightX, drawY, rightColors.get(li));
+        int drawY = needsStartY;
+        for (int li = townContentScroll; li < lines.size() && (li - townContentScroll) < visibleLines; li++) {
+            this.font.draw(poseStack, lines.get(li), rightX, drawY, colors.get(li));
             drawY += 9;
         }
 
-        // Scroll indicators
+        // Scroll indicators for needs/surplus
         if (townContentScroll > 0) {
-            this.font.draw(poseStack, "\u25B2", rightX + 104, 50, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25B2", rightX + 104, needsStartY, 0x6B5A3E);
         }
         if (townContentScroll < maxScrollR) {
-            this.font.draw(poseStack, "\u25BC", rightX + 104, 125, 0x6B5A3E);
-        }
-        } // close else (normal right page mode)
-    }
-
-    /**
-     * Renders the right page in diplomat selection mode — showing clickable surplus items.
-     */
-    private void renderDiplomatSelectionPage(PoseStack poseStack, int rightX, TownData town) {
-        this.font.draw(poseStack, "\u270D Request Item", rightX, 50, 0xFFD700);
-        this.font.draw(poseStack, "from " + town.getDisplayName(), rightX, 60, 0x6B5A3E);
-        
-        // Quantity selector
-        String qtyLabel = "Qty: [-] " + diplomatQuantity + " [+]";
-        this.font.draw(poseStack, qtyLabel, rightX, 134, 0xAABBFF);
-
-        if (currentSurplusList.isEmpty()) {
-            this.font.draw(poseStack, "No surplus items", rightX, 76, 0x888888);
-            this.font.draw(poseStack, "available.", rightX, 86, 0x888888);
-            return;
-        }
-
-        int visibleItems = 6; // reduced by 1 to make room for quantity selector
-        int maxScroll = Math.max(0, currentSurplusList.size() - visibleItems);
-        townContentScroll = Math.min(townContentScroll, maxScroll);
-
-        int drawY = 72;
-        int displayed = 0;
-        for (int i = townContentScroll; i < currentSurplusList.size() && displayed < visibleItems; i++, displayed++) {
-            ResourceLocation rl = currentSurplusList.get(i);
-            Item item = ForgeRegistries.ITEMS.getValue(rl);
-            if (item == null) continue;
-
-            String iname = new ItemStack(item).getHoverName().getString();
-            if (this.font.width(iname) > 86) {
-                while (this.font.width(iname + "..") > 86 && iname.length() > 3)
-                    iname = iname.substring(0, iname.length() - 1);
-                iname += "..";
-            }
-
-            boolean isHovered = (displayed == hoveredSurplusRow);
-            int color = isHovered ? 0x55FF55 : 0xBBBBBB;
-            String prefix = isHovered ? "\u25B6 " : "  \u2022 ";
-            this.font.draw(poseStack, prefix + iname, rightX, drawY, color);
-            drawY += 9;
-        }
-
-        // Scroll indicators
-        if (townContentScroll > 0) {
-            this.font.draw(poseStack, "\u25B2", rightX + 104, 72, 0x6B5A3E);
-        }
-        if (townContentScroll < maxScroll) {
-            this.font.draw(poseStack, "\u25BC", rightX + 104, 118, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25BC", rightX + 104, needsStartY + (visibleLines - 1) * 9, 0x6B5A3E);
         }
     }
 
@@ -1269,8 +1385,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                         statusColor = 0xFFCC44;
                     }
                 }
+                case DELIVERING -> {
+                    long remaining = quest.getRewardTicksRemaining(be.getLevel().getGameTime());
+                    status = "\u21E8 " + ticksToTime(remaining);
+                    statusColor = 0xFFAA44;
+                }
                 case COMPLETED -> {
-                    status = "\u2714";
+                    status = "\u2714 Done";
                     statusColor = 0x55FF55;
                 }
                 default -> {
@@ -1353,6 +1474,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // ==================== Diplomat Tab ====================
 
     private void renderDiplomatLabels(PoseStack poseStack) {
+        if (creatingRequest) {
+            renderRequestCreationLabels(poseStack);
+            return;
+        }
+
         this.font.draw(poseStack, "Trade Requests", 8, 36, 0xFFD700);
 
         TradingPostBlockEntity be = menu.getBlockEntity();
@@ -1364,8 +1490,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         if (requests.isEmpty()) {
             this.font.draw(poseStack, "No active requests.", 10, 60, 0x888888);
-            this.font.draw(poseStack, "Request items from the", 10, 72, 0x888888);
-            this.font.draw(poseStack, "Towns tab.", 10, 84, 0x888888);
+            this.font.draw(poseStack, "Click '+ New Request' to", 10, 72, 0x888888);
+            this.font.draw(poseStack, "request items from towns.", 10, 84, 0x888888);
             return;
         }
 
@@ -1487,6 +1613,122 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
 
             yOff += 14;
+        }
+    }
+
+    /**
+     * Render the request creation mode UI.
+     * Two sub-states: searching (no item selected) and confirming (item selected).
+     */
+    private void renderRequestCreationLabels(PoseStack poseStack) {
+        this.font.draw(poseStack, "New Request", 8, 36, 0xFFD700);
+
+        if (requestSelectedItem == null) {
+            // ---- Searching state: search box + filtered item list ----
+            // Search box renders itself as a widget (EditBox)
+
+            // Filtered item list below search box
+            int maxScroll = Math.max(0, requestFilteredItems.size() - VISIBLE_REQUEST_ITEMS);
+            requestListScroll = Math.min(requestListScroll, maxScroll);
+
+            if (requestFilteredItems.isEmpty() && requestSearchBox != null
+                    && !requestSearchBox.getValue().isEmpty()) {
+                this.font.draw(poseStack, "No items found.", 8, 66, 0x888888);
+            } else if (requestFilteredItems.isEmpty()) {
+                this.font.draw(poseStack, "Type to search for items...", 8, 66, 0x888888);
+            }
+
+            for (int i = 0; i < VISIBLE_REQUEST_ITEMS; i++) {
+                int itemIdx = requestListScroll + i;
+                if (itemIdx >= requestFilteredItems.size()) break;
+
+                ResourceLocation rl = requestFilteredItems.get(itemIdx);
+                Item item = ForgeRegistries.ITEMS.getValue(rl);
+                if (item == null) continue;
+
+                String name = new ItemStack(item).getHoverName().getString();
+                if (this.font.width(name) > 145) {
+                    while (this.font.width(name + "..") > 145 && name.length() > 3) {
+                        name = name.substring(0, name.length() - 1);
+                    }
+                    name += "..";
+                }
+
+                int rowY = 65 + i * 10;
+                int color = (hoveredRequestItem == i) ? 0xFFFFDD : 0xCCCCCC;
+                this.font.draw(poseStack, name, 8, rowY, color);
+            }
+
+            // Scroll indicators
+            if (requestListScroll > 0) {
+                this.font.draw(poseStack, "\u25B2", 148, 64, 0x888888);
+            }
+            if (requestListScroll < maxScroll) {
+                this.font.draw(poseStack, "\u25BC", 148, 65 + (VISIBLE_REQUEST_ITEMS - 1) * 10, 0x888888);
+            }
+
+            // Result count
+            if (!requestFilteredItems.isEmpty()) {
+                String count = requestFilteredItems.size() + " results";
+                int cw = this.font.width(count);
+                this.font.draw(poseStack, count, 230 - cw, 36, 0x666666);
+            }
+        } else {
+            // ---- Confirmation state: selected item + quantity + cost estimate ----
+            Item item = ForgeRegistries.ITEMS.getValue(requestSelectedItem);
+            if (item == null) return;
+
+            String itemName = new ItemStack(item).getHoverName().getString();
+
+            // Item name (large, gold)
+            this.font.draw(poseStack, itemName, 10, 52, 0xFFD700);
+
+            // Quantity selector: "Qty:  [-]  N  [+]"
+            this.font.draw(poseStack, "Qty:", 10, 68, 0xAAAAAA);
+            this.font.draw(poseStack, "[-]", 32, 68, 0xFF8888);
+            this.font.draw(poseStack, String.valueOf(requestQuantity), 50, 68, 0xFFFFFF);
+            this.font.draw(poseStack, "[+]", 64, 68, 0x88FF88);
+
+            // Estimate cost and find best town (client-side preview)
+            int basePrice = PriceCalculator.getBaseValue(new ItemStack(item));
+            int traderLevel = menu.getTraderLevel();
+            List<TownData> towns = TownRegistry.getAvailableTowns(Math.max(1, traderLevel));
+
+            TownData bestTown = null;
+            int bestScore = 0;
+            for (TownData t : towns) {
+                if (t.getMinTraderLevel() > traderLevel) continue;
+                int score = DiplomatRequest.getSupplyScore(t, requestSelectedItem);
+                if (score > bestScore || (score == bestScore && bestTown != null
+                        && t.getDistance() < bestTown.getDistance())) {
+                    bestScore = score;
+                    bestTown = t;
+                }
+            }
+
+            if (bestTown != null) {
+                // Town info
+                this.font.draw(poseStack, "Best Town: " + bestTown.getDisplayName(), 10, 82, 0xAAAAAA);
+
+                // Estimated cost
+                double premium = DiplomatRequest.getScoreBasedPremium(bestScore, bestTown);
+                int estCostPerUnit = Math.max(1, (int) (basePrice * premium));
+                int estTotal = estCostPerUnit * requestQuantity;
+                this.font.draw(poseStack, "Est. Cost: " + formatCoinText(estTotal), 10, 94, 0xCCBB88);
+                if (requestQuantity > 1) {
+                    this.font.draw(poseStack, "(" + formatCoinText(estCostPerUnit) + " each)", 10, 104, 0x888888);
+                }
+
+                // Fulfillment chance
+                int chance = (int) (DiplomatRequest.getFulfillmentChance(bestScore) * 100);
+                int chanceColor = chance >= 80 ? 0x55FF55 : chance >= 50 ? 0xFFCC44 : 0xFF6644;
+                this.font.draw(poseStack, "Fulfillment: " + chance + "%", 10, 114, chanceColor);
+            } else {
+                this.font.draw(poseStack, "No town available!", 10, 82, 0xFF4444);
+            }
+
+            // Hint
+            this.font.draw(poseStack, "(Click item name to change)", 160, 52, 0x555555);
         }
     }
 
@@ -1672,6 +1914,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 tooltip.add(Component.literal("Click to deliver items from inventory")
                         .withStyle(ChatFormatting.GRAY));
             }
+        } else if (quest.getStatus() == Quest.Status.DELIVERING) {
+            tooltip.add(Component.literal(""));
+            long remaining = quest.getRewardTicksRemaining(be.getLevel().getGameTime());
+            tooltip.add(Component.literal("\u21E8 Rewards en route: " + ticksToTime(remaining))
+                    .withStyle(ChatFormatting.GOLD));
+            tooltip.add(Component.literal("Rewards will arrive automatically.")
+                    .withStyle(ChatFormatting.GRAY));
+        } else if (quest.getStatus() == Quest.Status.COMPLETED) {
+            tooltip.add(Component.literal(""));
+            tooltip.add(Component.literal("\u2714 Quest completed! Rewards collected.")
+                    .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD));
         } else if (quest.getStatus() == Quest.Status.AVAILABLE) {
             tooltip.add(Component.literal(""));
             long ticks = quest.getTicksRemaining(be.getLevel().getGameTime());
@@ -1759,6 +2012,54 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     && mouseY >= ty && mouseY < ty + TAB_H) {
                 switchTab(Tab.values()[i]);
                 return true;
+            }
+        }
+
+        // Diplomat tab: request creation mode click handling
+        if (currentTab == Tab.DIPLOMAT && creatingRequest && button == 0) {
+            double localX = mouseX - x;
+            double localY = mouseY - y;
+
+            if (requestSelectedItem == null) {
+                // Searching state: click on a filtered item to select it
+                if (hoveredRequestItem >= 0) {
+                    int itemIdx = requestListScroll + hoveredRequestItem;
+                    if (itemIdx < requestFilteredItems.size()) {
+                        requestSelectedItem = requestFilteredItems.get(itemIdx);
+                        requestQuantity = 1;
+                        updateButtonVisibility();
+                        SoundHelper.playUIClick();
+                        return true;
+                    }
+                }
+            } else {
+                // Confirmation state: quantity +/- or click item name to change
+                // "[-]" at localX ~32-44, localY ~68-78
+                if (localY >= 66 && localY <= 78) {
+                    if (localX >= 30 && localX <= 46) {
+                        // [-] button
+                        if (requestQuantity > 1) requestQuantity--;
+                        return true;
+                    }
+                    if (localX >= 62 && localX <= 78) {
+                        // [+] button
+                        if (requestQuantity < 64) requestQuantity++;
+                        return true;
+                    }
+                }
+                // Click on item name area (localY ~50-60) to go back to search
+                if (localY >= 50 && localY <= 60 && localX >= 8 && localX <= 230) {
+                    requestSelectedItem = null;
+                    requestQuantity = 1;
+                    if (requestSearchBox != null) requestSearchBox.setFocus(true);
+                    updateButtonVisibility();
+                    return true;
+                }
+            }
+
+            // Let the EditBox handle its own clicks
+            if (requestSearchBox != null && requestSelectedItem == null) {
+                requestSearchBox.mouseClicked(mouseX, mouseY, button);
             }
         }
 
@@ -1889,44 +2190,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
-        // Towns tab: diplomat item selection — click a surplus item to send diplomat
-        if (currentTab == Tab.TOWNS && selectingDiplomatItem && hoveredSurplusRow >= 0) {
-            int idx = townContentScroll + hoveredSurplusRow;
-            if (idx < currentSurplusList.size()) {
-                TradingPostBlockEntity be = menu.getBlockEntity();
-                if (be != null) {
-                    List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
-                    if (townViewPage < allTowns.size()) {
-                        TownData town = allTowns.get(townViewPage);
-                        ResourceLocation itemId = currentSurplusList.get(idx);
-                        ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                                new SendDiplomatPacket(be.getBlockPos(), town.getId(), itemId, diplomatQuantity));
-                        selectingDiplomatItem = false;
-                        hoveredSurplusRow = -1;
-                        updateButtonVisibility();
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        // Towns tab: diplomat quantity +/- buttons
-        if (currentTab == Tab.TOWNS && selectingDiplomatItem) {
-            double localX = mouseX - this.leftPos;
-            double localY = mouseY - this.topPos;
-            // Quantity row is at rightX (128) + 5px for "Qty: " offset, y=134
-            // "Qty: [-] X [+]" — [-] at ~30px, [+] at ~50px from rightX
-            if (localY >= 132 && localY <= 144) {
-                // [-] button area (around "[-]" text)
-                if (localX >= 153 && localX <= 168) {
-                    if (diplomatQuantity > 1) diplomatQuantity--;
-                    return true;
-                }
-                // [+] button area (around "[+]" text)
-                if (localX >= 178 && localX <= 193) {
-                    if (diplomatQuantity < 64) diplomatQuantity++;
-                    return true;
-                }
+        // Towns tab: click town in list to select it (left page)
+        if (currentTab == Tab.TOWNS && hoveredTownRow >= 0) {
+            int townIdx = townListScroll + hoveredTownRow;
+            List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
+            if (townIdx < allTowns.size() && townIdx != townViewPage) {
+                townViewPage = townIdx;
+                townContentScroll = 0; // reset right page scroll
+                updateButtonVisibility();
+                return true;
             }
         }
 
@@ -1949,7 +2221,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 }
             }
         } else if (currentTab == Tab.TOWNS) {
-            // Right page area (x >= leftPos + 130): scroll content
+            // Right page area (x >= leftPos + 130): scroll needs/surplus content
             if (mouseX >= this.leftPos + 130) {
                 if (delta > 0 && townContentScroll > 0) {
                     townContentScroll--;
@@ -1959,16 +2231,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     return true;
                 }
             } else {
-                // Left page area: page between towns
+                // Left page area: scroll town list
                 List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
-                int maxPage = Math.max(0, allTowns.size() - 1);
-                if (delta > 0 && townViewPage > 0) {
-                    townViewPage--;
-                    townContentScroll = 0;
+                int maxScroll = Math.max(0, allTowns.size() - 8);
+                if (delta > 0 && townListScroll > 0) {
+                    townListScroll--;
                     return true;
-                } else if (delta < 0 && townViewPage < maxPage) {
-                    townViewPage++;
-                    townContentScroll = 0;
+                } else if (delta < 0 && townListScroll < maxScroll) {
+                    townListScroll++;
                     return true;
                 }
             }
@@ -1985,18 +2255,63 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 }
             }
         } else if (currentTab == Tab.DIPLOMAT) {
-            TradingPostBlockEntity be = menu.getBlockEntity();
-            if (be != null) {
-                int maxScroll = Math.max(0, be.getActiveDiplomatRequests().size() - VISIBLE_DIPLOMAT);
-                if (delta > 0 && diplomatScrollOffset > 0) {
-                    diplomatScrollOffset--;
+            if (creatingRequest && requestSelectedItem == null) {
+                // Scroll the filtered item list
+                int maxScroll = Math.max(0, requestFilteredItems.size() - VISIBLE_REQUEST_ITEMS);
+                if (delta > 0 && requestListScroll > 0) {
+                    requestListScroll--;
                     return true;
-                } else if (delta < 0 && diplomatScrollOffset < maxScroll) {
-                    diplomatScrollOffset++;
+                } else if (delta < 0 && requestListScroll < maxScroll) {
+                    requestListScroll++;
                     return true;
+                }
+            } else if (!creatingRequest) {
+                // Scroll the normal diplomat request list
+                TradingPostBlockEntity be = menu.getBlockEntity();
+                if (be != null) {
+                    int maxScroll = Math.max(0, be.getActiveDiplomatRequests().size() - VISIBLE_DIPLOMAT);
+                    if (delta > 0 && diplomatScrollOffset > 0) {
+                        diplomatScrollOffset--;
+                        return true;
+                    } else if (delta < 0 && diplomatScrollOffset < maxScroll) {
+                        diplomatScrollOffset++;
+                        return true;
+                    }
                 }
             }
         }
         return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (creatingRequest && requestSearchBox != null && requestSelectedItem == null) {
+            if (requestSearchBox.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            // Don't let Escape close the screen if we're in creation mode — exit creation instead
+            if (keyCode == 256) { // GLFW_KEY_ESCAPE
+                creatingRequest = false;
+                requestSelectedItem = null;
+                requestSearchBox.setValue("");
+                updateButtonVisibility();
+                return true;
+            }
+            // Prevent 'E' (inventory key) from closing screen while typing
+            if (requestSearchBox.isFocused()) {
+                return true;
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (creatingRequest && requestSearchBox != null && requestSelectedItem == null) {
+            if (requestSearchBox.charTyped(codePoint, modifiers)) {
+                return true;
+            }
+        }
+        return super.charTyped(codePoint, modifiers);
     }
 }

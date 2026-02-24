@@ -1,6 +1,103 @@
 # Off to Market (Trading Deluxe) - Changelog
 
-## Version 0.1.4 — Dynamic Mod Compatibility (Current Release)
+## Version 0.2.0 — Economy Overhaul & Requests System
+
+### Economy Rebalance
+- **Material-Cost-Based Pricing** — Item prices now derive from actual crafting ingredient costs with recursive resolution, replacing the old flat value tiers.
+- **PriceCalculator Overhaul** — Complete rewrite of the pricing engine using `MaterialValues.java` as the single source of truth for raw material prices.
+- **Crafting Tax & Shipping Fees** — Players can set crafting tax and shipping fees per Trading Bin through the new Config tab.
+- **Town Need Multipliers** — Dynamic price scaling based on town demand levels (Desperate → Oversaturated).
+
+### Trading Bin Price Config Tab
+- **New Config Tab** — Trading Bins now have a Bin/Config tab system for managing price modifiers.
+- **8 Modifier Fields** — Crafting Tax, Shipping Fee, Tool Modifier, Armor Modifier, Weapon Modifier, Food Modifier, Potion Modifier, and Enchanted Modifier.
+- **Checkbox Toggles** — Enable/disable individual modifiers with visual checkboxes.
+- **Live Preview** — Price calculations update in real-time as settings are adjusted.
+- **Per-Bin Settings** — Each Trading Bin stores its own config in NBT via the extended `UpdateBinSettingsPacket` (now 12 fields).
+
+### Shipment & Order Improvements
+- **Order Cancel & Return** — Players can cancel active shipments; unsold items are returned instead of force-sold.
+- **Auto-Return After Market Time** — Unsold items automatically return after max market time (8 minutes) instead of being force-sold at a loss.
+- **Partial Sales** — Items can sell partially at market; earnings are tracked per-item with the new `ShipmentItem.pricePerItem` field.
+- **Price Adjustment** — `AdjustShipmentPricePacket` allows in-flight price changes on active shipments.
+- **Earnings in Returns** — Activity tab shows partial sale earnings alongside returned items.
+
+### Towns Tab Redesign
+- **List + Detail View** — Towns tab now shows a scrollable town list on the left page and detailed town info on the right page.
+- **Interactive Town List** — Hover highlighting and click-to-select for browsing towns.
+- **Scrollable Navigation** — Mouse wheel scrolling through the town list when there are more towns than visible rows.
+- **Town Detail Panel** — Right page shows town name, type, distance, reputation, and key trade info for the selected town.
+- **Diplomat Selection Removed** — Item selection for diplomat requests has been moved to the Requests tab (see below).
+
+### Requests System Overhaul (formerly Diplomat)
+The old diplomat item selection (limited to town surplus) has been completely replaced with a universal item request system.
+
+#### Backend
+- **Request Any Item** — Players can now request ANY item in any quantity, not just items from a town's surplus.
+- **Supply Scoring** — `DiplomatRequest.getSupplyScore()` evaluates each town's ability to fulfill a request (surplus=95, specialty=80, neutral=45, needs=25).
+- **Auto-Town Selection** — `findBestTownForItem()` automatically picks the best town based on supply score.
+- **Fulfillment Chance** — Towns have a percentage chance to successfully fulfill requests based on their supply score tier (95%/85%/60%/35%).
+- **Score-Based Premium** — Price premium scales with how difficult the request is for the selected town (1.0x–1.8x).
+- **CreateRequestPacket** — New network packet for submitting item requests from the UI.
+
+#### UI (Requests Tab)
+- **Item Search** — Type to search/filter through all registered items using the new `EditBox` search field.
+- **Scrollable Results** — Browse filtered items in a 6-row list with mouse wheel scrolling.
+- **Confirmation View** — After selecting an item, see the item name, quantity selector ([-] / [+]), estimated cost, best town, and fulfillment chance percentage (color-coded green/yellow/red).
+- **New Request Button** — Click "+ New Request" to enter creation mode; Send/Cancel buttons for confirmation.
+- **Keyboard Support** — Full keyboard input for search, Escape to exit creation mode, prevents accidental screen close while typing.
+
+### Travel Time for Quest Rewards
+- **DELIVERING Status** — Quests now have a new `DELIVERING` phase after all items are delivered: rewards travel back from the town before being collected.
+- **Travel Time Calculation** — Reward travel time is based on town distance × trading cart speed multiplier, matching the shipment travel system.
+- **Automatic Reward Payout** — When the travel timer expires, rewards (bonus coins, trader XP, reputation) are automatically paid out with a notification.
+- **UI Indicators** — Quests in DELIVERING status show a "⇨ Xm Ys" countdown in the status column with an orange color.
+- **Tooltip Details** — Hovering DELIVERING quests shows "Rewards en route" with remaining time and "Rewards will arrive automatically."
+- **Backward Compatibility** — Legacy save data with DELIVERING quests that lack arrival time are auto-completed on load.
+
+### Technical Changes
+- `Quest.java`: Added `DELIVERING` status enum, `rewardArrivalTime` field with NBT save/load, `getRewardTicksRemaining()`, `deliver()` now transitions to DELIVERING instead of COMPLETED
+- `TradingPostBlockEntity.java`: Added `formatTravelTime()` helper, DELIVERING→COMPLETED tick processing with reward payout, modified `deliverQuestItems()` for deferred rewards
+- `TradingPostScreen.java`: Requests creation UI (~300 lines), Towns tab cleanup (~100 lines removed), quest DELIVERING status rendering and tooltips
+- `DiplomatRequest.java`: Added `supplyScore` field, `getSupplyScore()`, `getScoreBasedPremium()`, `getFulfillmentChance()`
+- `CreateRequestPacket.java`: New network packet for item request submission
+- `ModNetwork.java`: Registered `CreateRequestPacket`
+- `UpdateBinSettingsPacket`: Extended from 4 to 12 fields for Trading Bin config
+
+---
+
+## Version 0.1.5 — Market Intelligence
+
+### UX Improvements
+
+#### Trading Bin
+- **Click-to-Pickup Fix** — Clicking an already-selected Trading Bin slot now picks up the item instead of re-selecting it. First click selects a slot for pricing; clicking the same slot again deselects and lets you pick up the item normally.
+
+### New Features
+
+#### Need Level Indicators (Market Board)
+- **Colored Demand Dots** — Each listing row now shows a colored dot (●) before the town name indicating the item's demand level in that town (red = desperate, gold = high need, yellow = moderate, green = balanced, aqua = surplus, gray = oversaturated).
+- **Demand Tooltip Info** — Hovering over a listing now shows the demand level name, price multiplier percentage, and a trend arrow in the tooltip.
+
+#### Supply/Demand Trend Arrows (Market Board)
+- **Trend Tracking** — The economy system now tracks previous supply levels across daily refreshes to compute trends.
+- **Visual Trend Arrows** — Listing rows show a green ▲ when demand is rising (supply falling) or a red ▼ when demand is dropping (supply rising) next to the need level dot.
+- **Trend Tooltips** — Hovering over a listing shows "Demand trending UP/DOWN" or "Demand stable" in the tooltip.
+- **Persistent Trend Data** — Previous supply levels are saved/loaded with town data so trends survive server restarts.
+
+#### Economy Dashboard Enhancements
+- **Market Trends Section** — The Stats panel on the Activity tab now includes a "Market Trends" section showing per-town summaries of how many items have rising vs. falling demand, with color-coded arrows and counts.
+
+### Technical Changes
+- Added `previousSupplyLevels` field and `SupplyTrend` enum to `TownData`
+- Added `snapshotSupplyLevels()` and `getTrend()` methods to `TownData`
+- `SupplyDemandManager.refreshTown()` now snapshots supply levels before applying daily drift
+- Town data NBT save/load updated to persist previous supply levels (`PrevSupplyLevels` tag)
+- Market Board listing layout adjusted: need dot at x=84, trend arrow at x=88, town name at x=96
+
+---
+
+## Version 0.1.4 — Dynamic Mod Compatibility
 
 ### New Features
 

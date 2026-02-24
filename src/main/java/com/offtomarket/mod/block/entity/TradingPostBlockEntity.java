@@ -561,6 +561,26 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
+     * Adjust the price of a specific item in an AT_MARKET shipment.
+     * Allows the player to change listing prices to improve sale chances.
+     */
+    public void adjustShipmentPrice(UUID shipmentId, int itemIndex, int newPrice) {
+        for (Shipment shipment : activeShipments) {
+            if (shipment.getId().equals(shipmentId) && shipment.getStatus() == Shipment.Status.AT_MARKET) {
+                List<Shipment.ShipmentItem> items = shipment.getItems();
+                if (itemIndex >= 0 && itemIndex < items.size()) {
+                    Shipment.ShipmentItem item = items.get(itemIndex);
+                    if (!item.isSold()) { // Can only adjust unsold items
+                        item.setPricePerItem(newPrice);
+                        syncToClient();
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /**
      * Cancel a shipment, setting it to return. Only works for IN_TRANSIT or AT_MARKET.
      */
     public void cancelShipment(UUID shipmentId) {
@@ -581,12 +601,14 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
-     * Collect returned items from a cancelled shipment.
+     * Collect returned items from a cancelled/auto-returned shipment.
+     * Also gives coins for any items that sold before the return.
      */
     public void collectReturnedItems(UUID shipmentId, Player player) {
         Shipment toRemove = null;
         for (Shipment shipment : activeShipments) {
             if (shipment.getId().equals(shipmentId) && shipment.getStatus() == Shipment.Status.RETURNED) {
+                // Give back unsold items
                 for (Shipment.ShipmentItem si : shipment.getItems()) {
                     if (!si.isSold()) {
                         ItemStack returnStack = si.createStack();
@@ -594,6 +616,18 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                             player.drop(returnStack, false);
                         }
                     }
+                }
+                // Give coins for any items that sold before the return (partial sales)
+                int earnings = shipment.getTotalEarnings();
+                if (earnings > 0) {
+                    List<ItemStack> coins = convertToCoins(earnings);
+                    for (ItemStack stack : coins) {
+                        if (!player.getInventory().add(stack)) {
+                            player.drop(stack, false);
+                        }
+                    }
+                    int xpToAward = Math.max(1, earnings / 10);
+                    awardMinecraftXp(player, xpToAward);
                 }
                 toRemove = shipment;
                 break;
@@ -684,21 +718,19 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 if (delivered > 0) {
                     boolean completed = quest.deliver(delivered);
                     if (completed) {
-                        // Award rewards
-                        pendingCoins += quest.getRewardCoins();
-                        addTraderXp(quest.getRewardXp());
-                        // Award reputation with the town
-                        addReputation(quest.getTownId(), quest.getRewardReputation());
-                        // Award Minecraft XP for quest completion
-                        int xpToAward = Math.max(5, quest.getRewardXp() * 2);
-                        awardMinecraftXp(player, xpToAward);
-                        // Build notification message
-                        String repText = " +" + quest.getRewardReputation() + " Rep";
+                        // Set travel time for rewards — items were delivered, rewards travel back
+                        TownData town = TownRegistry.getTown(quest.getTownId());
+                        int baseTravelTicks = town != null
+                                ? town.getTravelTimeTicks(DebugConfig.getTicksPerDistance())
+                                : 1200; // fallback ~1 minute
+                        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier());
+                        long currentTime = level != null ? level.getGameTime() : 0;
+                        quest.setRewardArrivalTime(currentTime + travelTicks);
+                        
                         notifyNearbyPlayers(level, worldPosition,
-                                Component.literal("\u2714 Quest completed! Earned " +
-                                        formatCoins(quest.getRewardCoins()) + " bonus + " +
-                                        quest.getRewardXp() + " XP" + repText + "!")
-                                        .withStyle(ChatFormatting.GREEN));
+                                Component.literal("\u2714 All items delivered! Rewards arriving in " +
+                                        formatTravelTime(travelTicks) + "...")
+                                        .withStyle(ChatFormatting.YELLOW));
                     }
                     syncToClient();
                 }
@@ -818,26 +850,81 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (town == null || town.getMinTraderLevel() > traderLevel) return false;
         if (!DiplomatRequest.canTownSupply(town, itemId)) return false;
 
+        return sendDiplomatWithScore(player, townId, itemId, count);
+    }
+
+    /**
+     * Create an item request from the Requests tab — auto-selects the best town.
+     * Any item can be requested; the town's supply score affects price and fulfillment chance.
+     */
+    public boolean createRequest(Player player, net.minecraft.resources.ResourceLocation itemId, int count) {
+        net.minecraft.world.item.Item item =
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
+        if (item == null) return false;
+        if (count < 1 || count > 64) return false;
+
+        // Find the best unlocked town to fulfill this request
+        TownData bestTown = findBestTownForItem(itemId);
+        if (bestTown == null) {
+            // No available town — notify player
+            if (player instanceof net.minecraft.server.level.ServerPlayer sp) {
+                sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "\u00A7cNo town available to fulfill this request."));
+            }
+            return false;
+        }
+
+        // Delegate to sendDiplomat with the auto-selected town
+        return sendDiplomatWithScore(player, bestTown.getId(), itemId, count);
+    }
+
+    /**
+     * Find the best unlocked town to supply the given item.
+     * Returns null if no town is available.
+     */
+    private TownData findBestTownForItem(net.minecraft.resources.ResourceLocation itemId) {
+        TownData bestTown = null;
+        int bestScore = -1;
+
+        for (TownData town : TownRegistry.getAllTowns()) {
+            if (town.getMinTraderLevel() > traderLevel) continue; // locked
+            int score = DiplomatRequest.getSupplyScore(town, itemId);
+            // Tiebreak: prefer closer towns (within same score tier)
+            if (score > bestScore || (score == bestScore && bestTown != null
+                    && town.getDistance() < bestTown.getDistance())) {
+                bestScore = score;
+                bestTown = town;
+            }
+        }
+        return bestTown;
+    }
+
+    /**
+     * Internal: sends a diplomat request with supply score tracking.
+     * Used by both sendDiplomat (legacy) and createRequest (new).
+     */
+    private boolean sendDiplomatWithScore(Player player, String townId,
+                                           net.minecraft.resources.ResourceLocation itemId, int count) {
+        TownData town = TownRegistry.getTown(townId);
+        if (town == null || town.getMinTraderLevel() > traderLevel) return false;
+
         net.minecraft.world.item.Item item =
                 net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
         if (item == null) return false;
 
-        // Calculate base price for validation (we'll finalize price during DISCUSSING)
+        int supplyScore = DiplomatRequest.getSupplyScore(town, itemId);
+
+        // Calculate base price
         int basePrice = PriceCalculator.getBaseValue(new ItemStack(item)) * count;
-        
+
         // Calculate timing milestones
         long gameTime = level.getGameTime();
-        int baseTravelTicks = (int) (town.getTravelTimeTicks(DebugConfig.getTicksPerDistance()) 
+        int baseTravelTicks = (int) (town.getTravelTimeTicks(DebugConfig.getTicksPerDistance())
                 * getTravelTimeMultiplier());
-        
-        // Stage durations:
-        // - TRAVELING_TO: full one-way trip
-        // - DISCUSSING: 30 seconds (600 ticks) to accept/decline
-        // - WAITING_FOR_GOODS: 15 seconds (300 ticks)
-        // - TRAVELING_BACK: full one-way trip
+
         long travelToEnd = gameTime + baseTravelTicks;
-        long discussingEnd = travelToEnd + 600;  // 30 seconds to decide
-        long waitingEnd = discussingEnd + 300;   // 15 seconds to prepare
+        long discussingEnd = travelToEnd + 600;
+        long waitingEnd = discussingEnd + 300;
         long returnEnd = waitingEnd + baseTravelTicks;
 
         String displayName = new ItemStack(item).getHoverName().getString();
@@ -845,12 +932,16 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 UUID.randomUUID(), townId, itemId, displayName, count, gameTime
         );
         request.setTimings(travelToEnd, discussingEnd, waitingEnd, returnEnd);
-        
-        // Calculate proposed price with random variance
-        int proposedPrice = DiplomatRequest.calculateNegotiatedPrice(basePrice, town, negotiationRandom);
-        int premium = proposedPrice - basePrice;
-        request.setPricing(proposedPrice, premium);
-        
+        request.setSupplyScore(supplyScore);
+
+        // Calculate proposed price using score-based premium
+        double premium = DiplomatRequest.getScoreBasedPremium(supplyScore, town);
+        double variance = 0.8 + negotiationRandom.nextDouble() * 0.4;
+        double finalMult = 1.0 + (premium - 1.0) * variance;
+        int proposedPrice = (int) (basePrice * finalMult);
+        int premiumAmount = proposedPrice - basePrice;
+        request.setPricing(proposedPrice, premiumAmount);
+
         activeDiplomatRequests.add(request);
         syncToClient();
         return true;
@@ -1076,14 +1167,26 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 case TRAVELING_TO -> {
                     // Diplomat traveling to town
                     if (gameTime >= req.getTravelToEndTime()) {
-                        req.setStatus(DiplomatRequest.Status.DISCUSSING);
                         TownData reqTown = TownRegistry.getTown(req.getTownId());
                         String townName = reqTown != null ? reqTown.getDisplayName() : req.getTownId();
-                        notifyNearbyPlayers(level, pos,
-                                Component.literal("\u2709 Diplomat arrived at " + townName + "! Accept or decline the proposal.")
-                                        .withStyle(ChatFormatting.YELLOW));
-                        SoundHelper.playDiplomatProposal(level, pos);
-                        ToastHelper.notifyDiplomatProposal(level, pos, townName);
+
+                        // Check if town accepts based on supply score
+                        double chance = DiplomatRequest.getFulfillmentChance(req.getSupplyScore());
+                        if (be.negotiationRandom.nextDouble() < chance) {
+                            // Town accepts negotiation
+                            req.setStatus(DiplomatRequest.Status.DISCUSSING);
+                            notifyNearbyPlayers(level, pos,
+                                    Component.literal("\u2709 Diplomat arrived at " + townName + "! Accept or decline the proposal.")
+                                            .withStyle(ChatFormatting.YELLOW));
+                            SoundHelper.playDiplomatProposal(level, pos);
+                            ToastHelper.notifyDiplomatProposal(level, pos, townName);
+                        } else {
+                            // Town rejected — can't supply
+                            req.setStatus(DiplomatRequest.Status.FAILED);
+                            notifyNearbyPlayers(level, pos,
+                                    Component.literal("\u2718 " + townName + " couldn't fulfill your request for " + req.getItemDisplayName() + ".")
+                                            .withStyle(ChatFormatting.RED));
+                        }
                         changed = true;
                     }
                 }
@@ -1130,6 +1233,25 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             }
         }
         be.activeDiplomatRequests.removeAll(failedRequests);
+
+        // Quest reward arrival check — DELIVERING quests whose rewards have arrived
+        for (Quest quest : be.activeQuests) {
+            if (quest.getStatus() == Quest.Status.DELIVERING
+                    && quest.getRewardArrivalTime() > 0
+                    && gameTime >= quest.getRewardArrivalTime()) {
+                quest.setStatus(Quest.Status.COMPLETED);
+                // Pay out quest rewards
+                be.pendingCoins += quest.getRewardCoins();
+                be.addTraderXp(quest.getRewardXp());
+                be.addReputation(quest.getTownId(), quest.getRewardReputation());
+                notifyNearbyPlayers(level, pos,
+                        Component.literal("\u2714 Quest complete! +" + formatCoins(quest.getRewardCoins())
+                                + " bonus, +" + quest.getRewardXp() + " XP, +"
+                                + quest.getRewardReputation() + " rep")
+                                .withStyle(ChatFormatting.GREEN));
+                changed = true;
+            }
+        }
 
         // Quest expiry check (every ~200 ticks)
         if (gameTime % 200 == 0) {
@@ -1178,6 +1300,33 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Escalation: sale chance increases as items approach max market time
         double escalation = 1.0 + (DebugConfig.getSaleChanceEscalation() - 1.0) * timeRatio;
 
+        // Auto-return: when max market time expires, return unsold items instead of force-selling
+        if (forceAutoSell) {
+            boolean anyUnsold = false;
+            for (Shipment.ShipmentItem item : shipment.getItems()) {
+                if (!item.isSold()) {
+                    anyUnsold = true;
+                }
+            }
+            if (anyUnsold) {
+                // Initiate return — unsold items travel back, sold items' earnings are preserved
+                long travelTime = shipment.getArrivalTime() - shipment.getDepartureTime();
+                long currentTime = level != null ? level.getGameTime() : 0;
+                shipment.setReturnArrivalTime(currentTime + travelTime);
+                shipment.setStatus(Shipment.Status.RETURNING);
+                notifyNearbyPlayers(level, worldPosition, Component.literal(
+                        "\u00A7e[Market] \u00A77Shipment to " + shipment.getTownId()
+                        + " auto-returning after " + (maxMarketTime / 20 / 60) + " minutes"));
+                syncToClient();
+            } else {
+                // All items were already sold naturally
+                shipment.setSoldTime(gameTime);
+                shipment.setStatus(Shipment.Status.SOLD);
+                syncToClient();
+            }
+            return;
+        }
+
         for (Shipment.ShipmentItem item : shipment.getItems()) {
             if (item.isSold()) continue;
 
@@ -1192,23 +1341,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     DebugConfig.getOverpriceThreshold());
 
             if (saleSpeed <= 0.0) {
-                // Price exceeds max ceiling - this item WILL NOT sell, even at auto-sell time
+                // Price exceeds max ceiling - this item will not sell
                 allSold = false;
                 continue;
             }
 
             double demandMult = demandTracker.getDemandMultiplier(
                     shipment.getTownId(), item.getItemId().toString());
-
-            if (forceAutoSell) {
-                // Auto-sell at 75% of set price when max market time is reached
-                item.setSold(true);
-                int discountedPrice = Math.max(1, (int) (item.getTotalPrice() * 0.75 * demandMult));
-                earnings += discountedPrice;
-                // Record the auto-sale in global supply/demand tracking
-                SupplyDemandManager.recordSale(town, item.getItemId().toString(), item.getCount());
-                continue;
-            }
 
             double saleChance = DebugConfig.getBaseSaleChance() * saleSpeed * escalation * demandMult;
             saleChance = Math.min(saleChance, 0.95); // cap at 95%
@@ -1264,6 +1403,18 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append(sp).append("s"); }
         if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append(cp).append("c"); }
         return sb.toString();
+    }
+
+    /**
+     * Format ticks as a human-readable travel time string (e.g., "2m 30s").
+     */
+    private static String formatTravelTime(int ticks) {
+        int totalSeconds = ticks / 20;
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        if (minutes > 0 && seconds > 0) return minutes + "m " + seconds + "s";
+        if (minutes > 0) return minutes + "m";
+        return seconds + "s";
     }
 
     // ==================== Client Sync ====================

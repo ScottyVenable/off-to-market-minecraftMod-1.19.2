@@ -138,7 +138,7 @@ public class Shipment {
     public static class ShipmentItem {
         private final ResourceLocation itemId;
         private final int count;
-        private final int pricePerItem; // in copper pieces
+        private int pricePerItem; // in copper pieces (mutable for price adjustments)
         private final String displayName;
         private boolean sold;
 
@@ -153,6 +153,7 @@ public class Shipment {
         public ResourceLocation getItemId() { return itemId; }
         public int getCount() { return count; }
         public int getPricePerItem() { return pricePerItem; }
+        public void setPricePerItem(int price) { this.pricePerItem = Math.max(1, price); }
         public int getTotalPrice() { return pricePerItem * count; }
         public String getDisplayName() { return displayName; }
         public boolean isSold() { return sold; }

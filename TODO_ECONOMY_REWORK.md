@@ -314,12 +314,12 @@ Final Price:    5 SP 5 CP
 
 ### 4.2 — Economy Dashboard (Ledger Enhancement)
 
-- [ ] Add an economy overview page to the Ledger:
+- [x] Add an economy overview page to the Ledger:
   - Total lifetime earnings
   - Most profitable items (top 5)
   - Best/worst towns by profit margin
   - Current supply/demand trends per town
-- [ ] Could be a new tab in Trading Post or a separate page in the Guide Book
+- [x] Could be a new tab in Trading Post or a separate page in the Guide Book
 
 ### 4.3 — Balance Testing
 
@@ -347,7 +347,7 @@ Final Price:    5 SP 5 CP
 | 8 | Phase 2.3 — Town specializations | #5, #6 | Medium | ✅ |
 | 9 | Phase 3.2 — Global config options | #6, #7 | Small | ✅ |
 | 10 | Phase 4.1 — Price breakdown tooltip | #4, #7 | Medium | ✅ |
-| 11 | Phase 4.2 — Economy dashboard | #6 | Large | ❌ |
+| 11 | Phase 4.2 — Economy dashboard | #6 | Large | ✅ |
 | 12 | Phase 4.3 — Balance testing | All above | Ongoing | ❌ |
 
 ---
@@ -364,7 +364,7 @@ Final Price:    5 SP 5 CP
 - [x] **Phase 3.1** — Trading Bin settings tab — COMPLETE (UI, network packet, NBT persistence)
 - [x] **Phase 3.2** — Global config options — COMPLETE (4 new entries: dailyRefreshChance, supplyDriftAmount, defaultCraftingTaxPercent, defaultMinMarkupPercent)
 - [x] **Phase 4.1** — Price breakdown tooltip — COMPLETE (PriceBreakdown record, getBreakdown(), book panel rendering)
-- [ ] **Phase 4.2** — Economy dashboard
+- [x] **Phase 4.2** — Economy dashboard
 - [ ] **Phase 4.3** — Balance testing
 
 ---
