@@ -30,6 +30,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.server.level.ServerLevel;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -102,6 +103,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // Dawn-based market refresh tracking
     private long lastRefreshDay = -1;
 
+    // Prevents recursive propagation when syncing linked posts
+    private boolean isSyncing = false;
+
     public TradingPostBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.TRADING_POST.get(), pos, state);
     }
@@ -144,7 +148,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public void addReputation(String townId, int amount) {
         int current = townReputation.getOrDefault(townId, 0);
         townReputation.put(townId, Math.max(0, current + amount));
-        setChanged();
+        syncToClient();
     }
     
     /**
@@ -197,6 +201,231 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     public int getXpForNextLevel() {
         return DebugConfig.getBaseXpToLevel() * traderLevel;
+    }
+
+    // ==================== Linked Post Sync ====================
+
+    /**
+     * Save all shared (global) trader state to a CompoundTag.
+     * This is pushed to TradingData so all posts stay in sync.
+     */
+    public CompoundTag saveSharedState() {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("TraderLevel", traderLevel);
+        tag.putInt("TraderXp", traderXp);
+        tag.putInt("PendingCoins", pendingCoins);
+        tag.putInt("SaleTimer", saleCheckTimer);
+        tag.putLong("LastRefreshDay", lastRefreshDay);
+
+        ListTag shipmentList = new ListTag();
+        for (Shipment s : activeShipments) shipmentList.add(s.save());
+        tag.put("Shipments", shipmentList);
+
+        ListTag listingsList = new ListTag();
+        for (MarketListing ml : marketListings) listingsList.add(ml.save());
+        tag.put("Listings", listingsList);
+
+        ListTag historyList = new ListTag();
+        for (CompoundTag h : shipmentHistory) historyList.add(h.copy());
+        tag.put("History", historyList);
+
+        tag.put("Demand", demandTracker.save());
+
+        ListTag buyOrderList = new ListTag();
+        for (BuyOrder bo : activeBuyOrders) buyOrderList.add(bo.save());
+        tag.put("BuyOrders", buyOrderList);
+
+        ListTag questList = new ListTag();
+        for (Quest q : activeQuests) questList.add(q.save());
+        tag.put("Quests", questList);
+        tag.putLong("LastQuestRefresh", lastQuestRefreshDay);
+
+        tag.put("Negotiator", negotiator.save());
+        tag.put("TradingCart", tradingCart.save());
+
+        ListTag diplomatList = new ListTag();
+        for (DiplomatRequest dr : activeDiplomatRequests) diplomatList.add(dr.save());
+        tag.put("Diplomats", diplomatList);
+
+        tag.putLong("LifetimeEarnings", lifetimeEarnings);
+        tag.putInt("TotalShipments", totalShipmentsSent);
+        CompoundTag townEarningsTag = new CompoundTag();
+        for (Map.Entry<String, Long> e : earningsByTown.entrySet()) {
+            townEarningsTag.putLong(e.getKey(), e.getValue());
+        }
+        tag.put("EarningsByTown", townEarningsTag);
+        CompoundTag itemEarningsTag = new CompoundTag();
+        for (Map.Entry<String, Long> e : earningsByItem.entrySet()) {
+            itemEarningsTag.putLong(e.getKey(), e.getValue());
+        }
+        tag.put("EarningsByItem", itemEarningsTag);
+
+        CompoundTag repTag = new CompoundTag();
+        for (Map.Entry<String, Integer> e : townReputation.entrySet()) {
+            repTag.putInt(e.getKey(), e.getValue());
+        }
+        tag.put("TownReputation", repTag);
+
+        return tag;
+    }
+
+    /**
+     * Load shared (global) trader state from a CompoundTag.
+     * Called when pulling state from TradingData into this block entity.
+     */
+    public void loadSharedState(CompoundTag tag) {
+        traderLevel = tag.getInt("TraderLevel");
+        if (traderLevel < 1) traderLevel = 1;
+        traderXp = tag.getInt("TraderXp");
+        pendingCoins = tag.getInt("PendingCoins");
+        saleCheckTimer = tag.getInt("SaleTimer");
+        lastRefreshDay = tag.getLong("LastRefreshDay");
+
+        activeShipments.clear();
+        ListTag shipmentList = tag.getList("Shipments", Tag.TAG_COMPOUND);
+        for (int i = 0; i < shipmentList.size(); i++) {
+            activeShipments.add(Shipment.load(shipmentList.getCompound(i)));
+        }
+
+        marketListings.clear();
+        ListTag listingsList = tag.getList("Listings", Tag.TAG_COMPOUND);
+        for (int i = 0; i < listingsList.size(); i++) {
+            marketListings.add(MarketListing.load(listingsList.getCompound(i)));
+        }
+
+        shipmentHistory.clear();
+        if (tag.contains("History")) {
+            ListTag historyList = tag.getList("History", Tag.TAG_COMPOUND);
+            for (int i = 0; i < historyList.size(); i++) {
+                shipmentHistory.add(historyList.getCompound(i));
+            }
+        }
+
+        if (tag.contains("Demand")) {
+            demandTracker.load(tag.getCompound("Demand"));
+        }
+
+        activeBuyOrders.clear();
+        if (tag.contains("BuyOrders")) {
+            ListTag buyOrderList = tag.getList("BuyOrders", Tag.TAG_COMPOUND);
+            for (int i = 0; i < buyOrderList.size(); i++) {
+                activeBuyOrders.add(BuyOrder.load(buyOrderList.getCompound(i)));
+            }
+        }
+
+        activeQuests.clear();
+        if (tag.contains("Quests")) {
+            ListTag questList = tag.getList("Quests", Tag.TAG_COMPOUND);
+            for (int i = 0; i < questList.size(); i++) {
+                activeQuests.add(Quest.load(questList.getCompound(i)));
+            }
+        }
+        lastQuestRefreshDay = tag.getLong("LastQuestRefresh");
+
+        if (tag.contains("Negotiator")) {
+            negotiator = Worker.load(tag.getCompound("Negotiator"));
+        }
+        if (tag.contains("TradingCart")) {
+            tradingCart = Worker.load(tag.getCompound("TradingCart"));
+        }
+
+        activeDiplomatRequests.clear();
+        if (tag.contains("Diplomats")) {
+            ListTag diplomatList = tag.getList("Diplomats", Tag.TAG_COMPOUND);
+            for (int i = 0; i < diplomatList.size(); i++) {
+                activeDiplomatRequests.add(DiplomatRequest.load(diplomatList.getCompound(i)));
+            }
+        }
+
+        lifetimeEarnings = tag.getLong("LifetimeEarnings");
+        totalShipmentsSent = tag.getInt("TotalShipments");
+        earningsByTown.clear();
+        if (tag.contains("EarningsByTown")) {
+            CompoundTag townEarnings = tag.getCompound("EarningsByTown");
+            for (String key : townEarnings.getAllKeys()) {
+                earningsByTown.put(key, townEarnings.getLong(key));
+            }
+        }
+        earningsByItem.clear();
+        if (tag.contains("EarningsByItem")) {
+            CompoundTag itemEarnings = tag.getCompound("EarningsByItem");
+            for (String key : itemEarnings.getAllKeys()) {
+                earningsByItem.put(key, itemEarnings.getLong(key));
+            }
+        }
+
+        townReputation.clear();
+        if (tag.contains("TownReputation")) {
+            CompoundTag repTag = tag.getCompound("TownReputation");
+            for (String key : repTag.getAllKeys()) {
+                townReputation.put(key, repTag.getInt(key));
+            }
+        }
+    }
+
+    /**
+     * Called when this block entity's chunk is loaded.
+     * Registers with TradingData and pulls shared state to stay in sync
+     * with other Trading Posts. If TradingData is empty (existing world
+     * upgrading to linked posts), pushes our local data as the initial state.
+     */
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && !level.isClientSide() && level instanceof ServerLevel serverLevel) {
+            TradingData data = TradingData.get(serverLevel);
+            data.register(worldPosition);
+            if (data.isEmpty()) {
+                // First post to load — push our state as the canonical shared state (migration)
+                data.setSharedState(saveSharedState());
+            } else {
+                // Pull shared state from TradingData to sync with other posts
+                loadSharedState(data.getSharedState());
+            }
+        }
+    }
+
+    /**
+     * Called when this block entity is removed (block broken or chunk unloaded).
+     * Pushes final state and unregisters from TradingData.
+     */
+    @Override
+    public void setRemoved() {
+        if (level != null && !level.isClientSide() && level instanceof ServerLevel serverLevel) {
+            TradingData data = TradingData.get(serverLevel);
+            // Push our current state so it persists even after this post is gone
+            data.setSharedState(saveSharedState());
+            data.unregister(worldPosition);
+        }
+        super.setRemoved();
+    }
+
+    /**
+     * Push shared state to TradingData and sync all other loaded Trading Posts.
+     * Called after any shared state mutation to keep all posts consistent.
+     */
+    private void propagateToOtherPosts() {
+        if (level == null || level.isClientSide()) return;
+        if (!(level instanceof ServerLevel serverLevel)) return;
+
+        TradingData data = TradingData.get(serverLevel);
+        CompoundTag sharedTag = saveSharedState();
+        data.setSharedState(sharedTag);
+
+        isSyncing = true;
+        try {
+            for (BlockPos pos : data.getRegisteredPositions()) {
+                if (pos.equals(worldPosition)) continue;
+                BlockEntity be = level.getBlockEntity(pos);
+                if (be instanceof TradingPostBlockEntity other) {
+                    other.loadSharedState(sharedTag);
+                    other.setChanged();
+                    level.sendBlockUpdated(pos, other.getBlockState(), other.getBlockState(), 3);
+                }
+            }
+        } finally {
+            isSyncing = false;
+        }
     }
 
     // ==================== Trading Logic ====================
@@ -377,7 +606,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
 
         marketListings.remove(listing);
-        setChanged();
+        syncToClient();
         // ~25% chance to receive a purchase note
         if (level != null && !level.isClientSide() && new Random().nextDouble() < 0.25) {
             TownData purchaseTown = TownRegistry.getTown(listing.getTownId());
@@ -1068,6 +1297,16 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public static void serverTick(Level level, BlockPos pos, BlockState state,
                                    TradingPostBlockEntity be) {
         long gameTime = level.getGameTime();
+
+        // Only one trading post processes the global tick logic per game tick.
+        // All posts share state via TradingData; the first to tick each game tick wins.
+        if (level instanceof ServerLevel serverLevel) {
+            TradingData tradingData = TradingData.get(serverLevel);
+            if (!tradingData.tryClaimTick(gameTime)) {
+                return; // Another post already processed this tick
+            }
+        }
+
         boolean changed = false;
 
         // Process shipments
@@ -1501,11 +1740,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     /**
      * Marks dirty and sends block entity data to all tracking clients.
+     * Also propagates shared state to all other linked Trading Posts.
      */
     public void syncToClient() {
         setChanged();
         if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            if (!isSyncing) {
+                propagateToOtherPosts();
+            }
         }
     }
 
