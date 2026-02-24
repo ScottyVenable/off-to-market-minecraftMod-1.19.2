@@ -146,10 +146,48 @@ Trade livestock with the **Animal Trade Slip** system:
 
 ## Configuration
 
-The mod is highly configurable through config files:
+The mod is highly configurable through the TOML config file at `config/offtomarket-common.toml`.
 
-- `offtomarket-common.toml` - General mod settings
-- `ModdedItemConfig` system - Add custom items to town inventories
+### Config Sections
+
+| Section | Description |
+|---------|-------------|
+| `[timing]` | Control travel times, sale intervals |
+| `[pricing]` | Adjust price multipliers, sale chances |
+| `[currency]` | Coin exchange rates, gold-only mode |
+| `[leveling]` | XP and trader progression settings |
+| `[quests]` | Quest count, rewards, expiry |
+| `[workers]` | Hire costs, worker bonuses |
+| `[diplomats]` | Diplomat premiums and timing |
+| `[animals]` | Animal trading settings |
+| `[modCompat]` | Dynamic mod integration settings |
+| `[supplyDemand]` | Market dynamics |
+| `[tradingBin]` | Bin search radius, defaults |
+| `[debug]` | Debug mode, instant travel, free purchases |
+
+### Key Settings
+
+```toml
+[pricing]
+# Global multiplier for all prices (2.0 = everything costs/sells for double)
+globalPriceMultiplier = 1.0
+
+[currency]
+# Gold Only mode: disables silver and copper coins
+goldOnlyMode = false
+
+[modCompat]
+# Enable auto-generated towns based on installed mods
+enableDynamicTowns = true
+# Log discovered mod items to console (for debugging)
+logDiscoveredItems = false
+
+[debug]
+# Make all shipments arrive instantly (for testing)
+instantTravel = false
+# All purchases are free (for testing)
+freePurchases = false
+```
 
 ## Compatibility
 

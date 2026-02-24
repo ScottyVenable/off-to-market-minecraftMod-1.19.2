@@ -1,5 +1,7 @@
 package com.offtomarket.mod.data;
 
+import com.offtomarket.mod.OffToMarket;
+import com.offtomarket.mod.config.ModConfig;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -321,6 +323,9 @@ public class ModCompatibility {
         }
 
         // Scan all items in the registry
+        int modItemCount = 0;
+        Set<String> discoveredMods = new HashSet<>();
+        
         for (Item item : ForgeRegistries.ITEMS) {
             ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
             if (rl == null) continue;
@@ -332,15 +337,43 @@ public class ModCompatibility {
 
             // Add to mod map
             itemsByMod.computeIfAbsent(modId, k -> new HashSet<>()).add(item);
+            discoveredMods.add(modId);
+            modItemCount++;
 
             // Categorize item
             categorizeItem(item, rl);
+            
+            // Log if enabled
+            if (ModConfig.logDiscoveredItems) {
+                OffToMarket.LOGGER.info("[ModCompat] Discovered: {} (category: {})", 
+                    rl, getCategoryFor(item));
+            }
         }
 
-        // Generate dynamic towns for loaded mods
-        generateDynamicTowns();
+        // Log summary
+        OffToMarket.LOGGER.info("[ModCompat] Discovered {} items from {} mods", modItemCount, discoveredMods.size());
+        
+        // Generate dynamic towns for loaded mods (if enabled)
+        if (ModConfig.enableDynamicTowns) {
+            generateDynamicTowns();
+            OffToMarket.LOGGER.info("[ModCompat] Generated {} dynamic mod towns", dynamicTowns.size());
+        } else {
+            OffToMarket.LOGGER.info("[ModCompat] Dynamic towns disabled in config");
+        }
 
         initialized = true;
+    }
+    
+    /**
+     * Get the primary category for an item.
+     */
+    private static String getCategoryFor(Item item) {
+        for (Map.Entry<ItemCategory, Set<Item>> entry : itemsByCategory.entrySet()) {
+            if (entry.getValue().contains(item)) {
+                return entry.getKey().id;
+            }
+        }
+        return "uncategorized";
     }
 
     // ==================== Item Categorization ====================
@@ -472,16 +505,20 @@ public class ModCompatibility {
         Set<Item> modItems = itemsByMod.get(theme.modId());
         if (modItems == null || modItems.isEmpty()) return null;
 
+        int maxItems = ModConfig.maxItemsPerCategory;
+
         // Build needs (items town wants to buy)
         Set<ResourceLocation> needs = new HashSet<>();
         for (ItemCategory cat : theme.buyCategories()) {
             Set<Item> catItems = itemsByCategory.get(cat);
             if (catItems != null) {
+                int countInCategory = 0;
                 for (Item item : catItems) {
                     ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
                     if (rl != null) {
                         needs.add(rl);
-                        if (needs.size() >= 15) break; // Limit per category
+                        countInCategory++;
+                        if (countInCategory >= maxItems / 3) break; // Limit per category
                     }
                 }
             }
@@ -498,7 +535,7 @@ public class ModCompatibility {
             ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
             if (rl != null) {
                 surplus.add(rl);
-                if (surplus.size() >= 10) break;
+                if (surplus.size() >= maxItems / 5) break;
             }
         }
 
@@ -509,7 +546,7 @@ public class ModCompatibility {
             ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
             if (rl != null) {
                 specialty.add(rl);
-                if (specialty.size() >= 30) break;
+                if (specialty.size() >= maxItems / 2) break;
             }
         }
         // Then add from sell categories (from any mod)
@@ -520,7 +557,7 @@ public class ModCompatibility {
                     ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
                     if (rl != null && !specialty.contains(rl)) {
                         specialty.add(rl);
-                        if (specialty.size() >= 50) break;
+                        if (specialty.size() >= maxItems) break;
                     }
                 }
             }
