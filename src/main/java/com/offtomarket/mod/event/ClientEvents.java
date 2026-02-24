@@ -2,6 +2,7 @@ package com.offtomarket.mod.event;
 
 import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.client.screen.CoinBagScreen;
+import com.offtomarket.mod.client.screen.MailboxScreen;
 import com.offtomarket.mod.client.screen.MarketBoardScreen;
 import com.offtomarket.mod.client.screen.TradingBinScreen;
 import com.offtomarket.mod.client.screen.TradingPostScreen;
@@ -24,6 +25,7 @@ public class ClientEvents {
             MenuScreens.register(ModMenuTypes.TRADING_BIN.get(), TradingBinScreen::new);
             MenuScreens.register(ModMenuTypes.MARKET_BOARD.get(), MarketBoardScreen::new);
             MenuScreens.register(ModMenuTypes.COIN_BAG.get(), CoinBagScreen::new);
+            MenuScreens.register(ModMenuTypes.MAILBOX.get(), MailboxScreen::new);
 
             // Register debug overlay on the FORGE bus (game events, not mod lifecycle)
             MinecraftForge.EVENT_BUS.register(new DebugOverlay());

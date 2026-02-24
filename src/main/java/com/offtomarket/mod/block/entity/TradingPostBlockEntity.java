@@ -1,5 +1,6 @@
 package com.offtomarket.mod.block.entity;
 
+import com.offtomarket.mod.block.MailboxBlock;
 import com.offtomarket.mod.data.*;
 import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.item.CoinItem;
@@ -377,6 +378,16 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         marketListings.remove(listing);
         setChanged();
+        // ~25% chance to receive a purchase note
+        if (level != null && !level.isClientSide() && new Random().nextDouble() < 0.25) {
+            TownData purchaseTown = TownRegistry.getTown(listing.getTownId());
+            String purchaseTownName = purchaseTown != null ? purchaseTown.getDisplayName() : listing.getTownId();
+            deliverNoteToNearbyMailboxes(level, worldPosition,
+                    NoteTemplates.createNote(MailNote.NoteType.PURCHASE_MADE,
+                            purchaseTownName, listing.getItemDisplayName(), listing.getCount(),
+                            formatCoins(totalCost), "", player.getName().getString(),
+                            level.getGameTime()));
+        }
         return true;
     }
 
@@ -960,6 +971,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 if (!hasEnoughCoins(player, cost)) {
                     // Not enough coins - decline automatically
                     req.setStatus(DiplomatRequest.Status.FAILED);
+                    TownData costTown = TownRegistry.getTown(req.getTownId());
+                    String costTownName = costTown != null ? costTown.getDisplayName() : req.getTownId();
+                    if (level != null && !level.isClientSide()) {
+                        deliverNoteToNearbyMailboxes(level, worldPosition,
+                                NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                        costTownName, req.getItemDisplayName(), req.getRequestedCount(),
+                                        formatCoins(cost), "", player.getName().getString(),
+                                        level.getGameTime()));
+                    }
                     syncToClient();
                     return false;
                 }
@@ -981,6 +1001,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         for (DiplomatRequest req : activeDiplomatRequests) {
             if (req.getId().equals(requestId) && req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
                 req.setStatus(DiplomatRequest.Status.FAILED);
+                TownData decTown = TownRegistry.getTown(req.getTownId());
+                String decTownName = decTown != null ? decTown.getDisplayName() : req.getTownId();
+                if (level != null && !level.isClientSide()) {
+                    deliverNoteToNearbyMailboxes(level, worldPosition,
+                            NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                    decTownName, req.getItemDisplayName(), req.getRequestedCount(),
+                                    formatCoins(req.getProposedPrice()), "", "",
+                                    level.getGameTime()));
+                }
                 syncToClient();
                 return true;
             }
@@ -1065,6 +1094,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                                         .withStyle(ChatFormatting.AQUA));
                         SoundHelper.playShipmentArrive(level, pos);
                         ToastHelper.notifyShipmentArrived(level, pos, arrName);
+                        // ~30% chance to receive a shipment note
+                        if (be.negotiationRandom.nextDouble() < 0.30) {
+                            String firstItem = shipment.getItems().isEmpty() ? "goods"
+                                    : shipment.getItems().get(0).getDisplayName();
+                            int totalItems = shipment.getItems().stream().mapToInt(Shipment.ShipmentItem::getCount).sum();
+                            deliverNoteToNearbyMailboxes(level, pos,
+                                    NoteTemplates.createNote(MailNote.NoteType.SHIPMENT_RECEIVED,
+                                            arrName, firstItem, totalItems, "", "", "", gameTime));
+                        }
                         changed = true;
                     }
                     break;
@@ -1186,6 +1224,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                             notifyNearbyPlayers(level, pos,
                                     Component.literal("\u2718 " + townName + " couldn't fulfill your request for " + req.getItemDisplayName() + ".")
                                             .withStyle(ChatFormatting.RED));
+                            deliverNoteToNearbyMailboxes(level, pos,
+                                    NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                            townName, req.getItemDisplayName(), req.getRequestedCount(),
+                                            formatCoins(req.getProposedPrice()), "", "", gameTime));
                         }
                         changed = true;
                     }
@@ -1199,6 +1241,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                         notifyNearbyPlayers(level, pos,
                                 Component.literal("\u2718 Diplomat proposal from " + townName + " expired!")
                                         .withStyle(ChatFormatting.RED));
+                        deliverNoteToNearbyMailboxes(level, pos,
+                                NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                        townName, req.getItemDisplayName(), req.getRequestedCount(),
+                                        formatCoins(req.getProposedPrice()), "", "", gameTime));
                         changed = true;
                     }
                 }
@@ -1244,11 +1290,19 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 be.pendingCoins += quest.getRewardCoins();
                 be.addTraderXp(quest.getRewardXp());
                 be.addReputation(quest.getTownId(), quest.getRewardReputation());
+                TownData questTown = TownRegistry.getTown(quest.getTownId());
+                String questTownName = questTown != null ? questTown.getDisplayName() : quest.getTownId();
                 notifyNearbyPlayers(level, pos,
                         Component.literal("\u2714 Quest complete! +" + formatCoins(quest.getRewardCoins())
                                 + " bonus, +" + quest.getRewardXp() + " XP, +"
                                 + quest.getRewardReputation() + " rep")
                                 .withStyle(ChatFormatting.GREEN));
+                deliverNoteToNearbyMailboxes(level, pos,
+                        NoteTemplates.createNote(MailNote.NoteType.QUEST_COMPLETED,
+                                questTownName, quest.getItemDisplayName(), quest.getRequiredCount(),
+                                formatCoins(quest.getRewardCoins()),
+                                quest.getRewardXp() + " XP, " + quest.getRewardReputation() + " rep",
+                                "", gameTime));
                 changed = true;
             }
         }
@@ -1261,9 +1315,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     changed = true;
                 } else if (quest.isExpired(gameTime) && quest.getStatus() == Quest.Status.ACCEPTED) {
                     quest.setStatus(Quest.Status.EXPIRED);
+                    TownData expTown = TownRegistry.getTown(quest.getTownId());
+                    String expTownName = expTown != null ? expTown.getDisplayName() : quest.getTownId();
                     notifyNearbyPlayers(level, pos,
                             Component.literal("\u2718 Quest expired: " + quest.getItemDisplayName())
                                     .withStyle(ChatFormatting.RED));
+                    deliverNoteToNearbyMailboxes(level, pos,
+                            NoteTemplates.createNote(MailNote.NoteType.QUEST_EXPIRED,
+                                    expTownName, quest.getItemDisplayName(), quest.getRequiredCount(),
+                                    formatCoins(quest.getRewardCoins()), "", "", gameTime));
                     changed = true;
                 }
             }
@@ -1391,6 +1451,26 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         AABB area = new AABB(pos).inflate(64.0);
         for (Player player : level.getEntitiesOfClass(Player.class, area)) {
             player.displayClientMessage(message, false);
+        }
+    }
+
+    /**
+     * Deliver a mail note to all Mailbox block entities within a 32-block radius.
+     */
+    private static void deliverNoteToNearbyMailboxes(Level level, BlockPos pos, MailNote note) {
+        int radius = 32;
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    BlockPos check = pos.offset(x, y, z);
+                    if (level.getBlockState(check).getBlock() instanceof MailboxBlock) {
+                        BlockEntity be = level.getBlockEntity(check);
+                        if (be instanceof MailboxBlockEntity mailbox) {
+                            mailbox.addNote(note);
+                        }
+                    }
+                }
+            }
         }
     }
 

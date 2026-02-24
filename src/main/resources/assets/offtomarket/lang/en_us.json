@@ -4,6 +4,7 @@
   "block.offtomarket.trading_post": "Trading Post",
   "block.offtomarket.trading_bin": "Trading Bin",
   "block.offtomarket.market_board": "Market Board",
+  "block.offtomarket.mailbox": "Mailbox",
 
   "item.offtomarket.gold_coin": "Gold Coin",
   "item.offtomarket.silver_coin": "Silver Coin",
@@ -51,6 +52,8 @@
 
   "gui.offtomarket.market_board": "Market Board",
   "gui.offtomarket.market_board.refresh": "Refresh",
+
+  "gui.offtomarket.mailbox": "Mailbox",
   "gui.offtomarket.market_board.item": "Item",
   "gui.offtomarket.market_board.town": "Town",
   "gui.offtomarket.market_board.quantity": "Qty",

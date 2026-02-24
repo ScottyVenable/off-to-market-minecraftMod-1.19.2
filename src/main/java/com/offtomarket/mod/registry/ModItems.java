@@ -68,4 +68,9 @@ public class ModItems {
     public static final RegistryObject<Item> ANIMAL_TRADE_SLIP = ITEMS.register("animal_trade_slip",
             () -> new AnimalTradeSlipItem(new Item.Properties().tab(ModCreativeTab.TAB)
                     .stacksTo(16)));
+
+    // Mailbox
+    public static final RegistryObject<Item> MAILBOX_ITEM = ITEMS.register("mailbox",
+            () -> new BlockItem(ModBlocks.MAILBOX.get(),
+                    new Item.Properties().tab(ModCreativeTab.TAB)));
 }

@@ -149,5 +149,20 @@ public class ModNetwork {
                 ShowToastPacket::encode, ShowToastPacket::new,
                 ShowToastPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+
+        CHANNEL.registerMessage(id++, MarkNoteReadPacket.class,
+                MarkNoteReadPacket::encode, MarkNoteReadPacket::decode,
+                MarkNoteReadPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DeleteNotePacket.class,
+                DeleteNotePacket::encode, DeleteNotePacket::decode,
+                DeleteNotePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DeleteAllReadNotesPacket.class,
+                DeleteAllReadNotesPacket::encode, DeleteAllReadNotesPacket::decode,
+                DeleteAllReadNotesPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

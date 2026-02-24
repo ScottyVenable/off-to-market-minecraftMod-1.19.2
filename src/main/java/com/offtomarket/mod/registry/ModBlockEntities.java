@@ -1,6 +1,7 @@
 package com.offtomarket.mod.registry;
 
 import com.offtomarket.mod.OffToMarket;
+import com.offtomarket.mod.block.entity.MailboxBlockEntity;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
@@ -27,4 +28,9 @@ public class ModBlockEntities {
             BLOCK_ENTITIES.register("market_board",
                     () -> BlockEntityType.Builder.of(MarketBoardBlockEntity::new,
                             ModBlocks.MARKET_BOARD.get()).build(null));
+
+    public static final RegistryObject<BlockEntityType<MailboxBlockEntity>> MAILBOX =
+            BLOCK_ENTITIES.register("mailbox",
+                    () -> BlockEntityType.Builder.of(MailboxBlockEntity::new,
+                            ModBlocks.MAILBOX.get()).build(null));
 }
