@@ -35,15 +35,15 @@ public class ModItems {
     // Currency
     public static final RegistryObject<Item> GOLD_COIN = ITEMS.register("gold_coin",
             () -> new CoinItem(new Item.Properties().tab(ModCreativeTab.TAB).rarity(Rarity.RARE)
-                    .stacksTo(64), CoinType.GOLD));
+                    .stacksTo(99), CoinType.GOLD));
 
     public static final RegistryObject<Item> SILVER_COIN = ITEMS.register("silver_coin",
             () -> new CoinItem(new Item.Properties().tab(ModCreativeTab.TAB).rarity(Rarity.UNCOMMON)
-                    .stacksTo(64), CoinType.SILVER));
+                    .stacksTo(99), CoinType.SILVER));
 
     public static final RegistryObject<Item> COPPER_COIN = ITEMS.register("copper_coin",
             () -> new CoinItem(new Item.Properties().tab(ModCreativeTab.TAB)
-                    .stacksTo(64), CoinType.COPPER));
+                    .stacksTo(99), CoinType.COPPER));
 
     // Tools
     public static final RegistryObject<Item> LEDGER = ITEMS.register("ledger",

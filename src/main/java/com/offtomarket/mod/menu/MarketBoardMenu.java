@@ -28,13 +28,13 @@ public class MarketBoardMenu extends AbstractContainerMenu {
         // Player inventory (3 rows of 9)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(inv, col + row * 9 + 9, 48 + col * 18, 140 + row * 18));
+                this.addSlot(new Slot(inv, col + row * 9 + 9, 111 + col * 18, 140 + row * 18));
             }
         }
 
         // Player hotbar
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(inv, col, 48 + col * 18, 198));
+            this.addSlot(new Slot(inv, col, 111 + col * 18, 198));
         }
     }
 
