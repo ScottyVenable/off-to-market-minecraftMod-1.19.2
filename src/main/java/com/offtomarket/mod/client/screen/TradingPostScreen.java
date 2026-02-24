@@ -264,11 +264,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             updateButtonVisibility();
         }));
 
-        // Search box for request creation
-        requestSearchBox = new EditBox(this.font, x + 5, y + 48, 260, 12,
+        // Search box for request creation (custom wood-themed background drawn in renderDiplomatBg)
+        requestSearchBox = new EditBox(this.font, x + 7, y + 50, 256, 10,
                 Component.literal("Search items..."));
         requestSearchBox.setMaxLength(50);
-        requestSearchBox.setBordered(true);
+        requestSearchBox.setBordered(false);
+        requestSearchBox.setTextColor(0xFFEEDDCC);
         requestSearchBox.setVisible(false);
         requestSearchBox.setResponder(text -> updateRequestFilteredItems());
         addRenderableWidget(requestSearchBox);
@@ -616,6 +617,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             hoveredDiplomatRow = -1; // Reset so stale hover can't trigger diplomat actions
             hoveredRequestItem = -1;
             if (requestSelectedItem == null) {
+                // Wood-themed search box background (replaces default black EditBox border)
+                drawInsetPanel(ps, x + 5, y + 48, 260, 14);
+
                 // Search results list background
                 for (int i = 0; i < VISIBLE_REQUEST_ITEMS; i++) {
                     int rowY = y + 64 + i * 10;
