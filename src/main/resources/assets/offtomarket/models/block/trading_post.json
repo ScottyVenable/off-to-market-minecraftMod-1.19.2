@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "offtomarket:block/trading_post_top",
+    "front": "offtomarket:block/trading_post_front",
+    "side": "offtomarket:block/trading_post_side"
+  }
+}

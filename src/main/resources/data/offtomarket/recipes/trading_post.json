@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "LEL",
+    "LLL"
+  ],
+  "key": {
+    "L": { "item": "minecraft:oak_log" },
+    "E": { "item": "minecraft:emerald" }
+  },
+  "result": {
+    "item": "offtomarket:trading_post",
+    "count": 1
+  }
+}

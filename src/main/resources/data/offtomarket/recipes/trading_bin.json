@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PPP",
+    "PCP",
+    "PPP"
+  ],
+  "key": {
+    "P": { "item": "minecraft:oak_planks" },
+    "C": { "item": "minecraft:chest" }
+  },
+  "result": {
+    "item": "offtomarket:trading_bin",
+    "count": 1
+  }
+}

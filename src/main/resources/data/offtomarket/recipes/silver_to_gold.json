@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SSS",
+    "SSS"
+  ],
+  "key": {
+    "S": { "item": "offtomarket:silver_coin" }
+  },
+  "result": {
+    "item": "offtomarket:gold_coin",
+    "count": 1
+  }
+}

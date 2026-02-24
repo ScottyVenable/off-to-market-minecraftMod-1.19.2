@@ -1,0 +1,12 @@
+{
+  "java.debug.settings.hotCodeReplace": "auto",
+  "java.autobuild.enabled": true,
+  "java.compile.nullAnalysis.mode": "disabled",
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "files.exclude": {
+    "**/.gradle": true,
+    "**/build": true,
+    "**/.settings": true,
+    "run/": true
+  }
+}

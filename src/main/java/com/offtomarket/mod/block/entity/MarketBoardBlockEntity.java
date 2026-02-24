@@ -1,0 +1,113 @@
+package com.offtomarket.mod.block.entity;
+
+import com.offtomarket.mod.data.MarketListing;
+import com.offtomarket.mod.data.TownData;
+import com.offtomarket.mod.data.TownRegistry;
+import com.offtomarket.mod.menu.MarketBoardMenu;
+import com.offtomarket.mod.registry.ModBlockEntities;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+
+import javax.annotation.Nullable;
+import java.util.*;
+
+/**
+ * The Market Board shows available items from various towns' markets.
+ * It's read-only and refreshes periodically.
+ */
+public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider {
+
+    private final List<MarketListing> listings = new ArrayList<>();
+    private int refreshTimer = 0;
+
+    public MarketBoardBlockEntity(BlockPos pos, BlockState state) {
+        super(ModBlockEntities.MARKET_BOARD.get(), pos, state);
+    }
+
+    public List<MarketListing> getListings() {
+        return listings;
+    }
+
+    public void refreshListings() {
+        listings.clear();
+        Random rand = new Random();
+        long gameTime = level != null ? level.getGameTime() : 0;
+
+        for (TownData town : TownRegistry.getAllTowns()) {
+            listings.addAll(MarketListing.generateListings(town, gameTime, rand));
+        }
+        syncToClient();
+    }
+
+    // ==================== Client Sync ====================
+
+    public void syncToClient() {
+        setChanged();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    @Override
+    public CompoundTag getUpdateTag() {
+        CompoundTag tag = super.getUpdateTag();
+        saveAdditional(tag);
+        return tag;
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    // ==================== Menu Provider ====================
+
+    @Override
+    public Component getDisplayName() {
+        return Component.translatable("block.offtomarket.market_board");
+    }
+
+    @Nullable
+    @Override
+    public AbstractContainerMenu createMenu(int containerId, Inventory inv, Player player) {
+        return new MarketBoardMenu(containerId, inv, this);
+    }
+
+    // ==================== NBT ====================
+
+    @Override
+    protected void saveAdditional(CompoundTag tag) {
+        super.saveAdditional(tag);
+        tag.putInt("RefreshTimer", refreshTimer);
+
+        ListTag listingsList = new ListTag();
+        for (MarketListing ml : listings) {
+            listingsList.add(ml.save());
+        }
+        tag.put("Listings", listingsList);
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        super.load(tag);
+        refreshTimer = tag.getInt("RefreshTimer");
+
+        listings.clear();
+        ListTag listingsList = tag.getList("Listings", Tag.TAG_COMPOUND);
+        for (int i = 0; i < listingsList.size(); i++) {
+            listings.add(MarketListing.load(listingsList.getCompound(i)));
+        }
+    }
+}

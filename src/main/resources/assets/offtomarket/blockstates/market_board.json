@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "offtomarket:block/market_board" },
+    "facing=south": { "model": "offtomarket:block/market_board", "y": 180 },
+    "facing=west": { "model": "offtomarket:block/market_board", "y": 270 },
+    "facing=east": { "model": "offtomarket:block/market_board", "y": 90 }
+  }
+}

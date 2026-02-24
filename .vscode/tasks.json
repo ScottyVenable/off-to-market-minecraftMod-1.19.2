@@ -1,0 +1,70 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "prepareRunClientCompile",
+      "type": "shell",
+      "command": "./gradlew prepareRunClientCompile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$javac"
+    },
+    {
+      "label": "prepareRunDataCompile",
+      "type": "shell",
+      "command": "./gradlew prepareRunDataCompile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$javac"
+    },
+    {
+      "label": "prepareRunGameTestServerCompile",
+      "type": "shell",
+      "command": "./gradlew prepareRunGameTestServerCompile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$javac"
+    },
+    {
+      "label": "prepareRunServerCompile",
+      "type": "shell",
+      "command": "./gradlew prepareRunServerCompile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$javac"
+    },
+    {
+      "label": "Quick Recompile (Hot Swap)",
+      "type": "shell",
+      "command": "./gradlew classes",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$javac",
+      "detail": "Recompiles classes for hot-swapping into running Minecraft. Use Ctrl+Shift+B."
+    },
+    {
+      "label": "Build Mod JAR",
+      "type": "shell",
+      "command": "./gradlew build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$javac",
+      "detail": "Full build producing the distributable mod JAR."
+    }
+  ]
+}

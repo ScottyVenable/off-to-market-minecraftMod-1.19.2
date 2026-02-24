@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LIL",
+    "IPI",
+    "LIL"
+  ],
+  "key": {
+    "L": { "item": "minecraft:leather" },
+    "I": { "item": "minecraft:ink_sac" },
+    "P": { "item": "minecraft:paper" }
+  },
+  "result": {
+    "item": "offtomarket:ledger",
+    "count": 1
+  }
+}

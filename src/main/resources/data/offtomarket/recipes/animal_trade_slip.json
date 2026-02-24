@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:ink_sac" }
+  ],
+  "result": {
+    "item": "offtomarket:animal_trade_slip",
+    "count": 3
+  }
+}

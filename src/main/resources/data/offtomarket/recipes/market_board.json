@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SPS",
+    "SSS"
+  ],
+  "key": {
+    "S": { "item": "minecraft:oak_sign" },
+    "P": { "item": "minecraft:paper" }
+  },
+  "result": {
+    "item": "offtomarket:market_board",
+    "count": 1
+  }
+}
