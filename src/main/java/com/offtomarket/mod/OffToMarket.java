@@ -28,8 +28,8 @@ public class OffToMarket {
     public static final String MODID = "offtomarket";
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    public OffToMarket(FMLJavaModLoadingContext context) {
-        IEventBus modEventBus = context.getModEventBus();
+    public OffToMarket() {
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         // Register deferred registers
         ModBlocks.BLOCKS.register(modEventBus);
@@ -44,7 +44,7 @@ public class OffToMarket {
         MinecraftForge.EVENT_BUS.register(this);
 
         // Config
-        context.registerConfig(Type.COMMON, ModConfig.SPEC);
+        FMLJavaModLoadingContext.get().registerConfig(Type.COMMON, ModConfig.SPEC);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {

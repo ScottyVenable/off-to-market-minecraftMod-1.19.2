@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:book" },
+    { "item": "minecraft:emerald" }
+  ],
+  "result": {
+    "item": "offtomarket:guide_book",
+    "count": 1
+  }
+}
