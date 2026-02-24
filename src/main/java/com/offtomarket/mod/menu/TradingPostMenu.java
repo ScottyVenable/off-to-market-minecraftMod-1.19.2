@@ -76,13 +76,13 @@ public class TradingPostMenu extends AbstractContainerMenu {
         addDataSlots(this.data);
 
         // Player inventory slots (3 rows of 9 + hotbar)
-        addPlayerInventory(inv, 48, 148);
-        addPlayerHotbar(inv, 48, 206);
+        addPlayerInventory(inv, 111, 148);
+        addPlayerHotbar(inv, 111, 206);
 
         // Coin exchange slots (3 slots for drag-and-drop coin conversion)
         // isActive() returns false when not on Coins tab, hiding them automatically
         for (int i = 0; i < 3; i++) {
-            this.addSlot(new CoinSlot(coinExchange, i, 72 + i * 36, 72));
+            this.addSlot(new CoinSlot(coinExchange, i, 138 + i * 36, 72));
         }
     }
 

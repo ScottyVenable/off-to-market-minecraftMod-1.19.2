@@ -51,7 +51,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
     public TradingBinScreen(TradingBinMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
-        this.imageWidth = 256;
+        this.imageWidth = 384;
         this.imageHeight = 166;
     }
 
@@ -62,11 +62,11 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         int y = this.topPos;
 
         // ---- Tab buttons at top of book panel ----
-        binTabButton = addRenderableWidget(new Button(x + 182, y + 8, 32, 12,
+        binTabButton = addRenderableWidget(new Button(x + 185, y + 8, 50, 12,
                 Component.literal("\u00A7e\u00A7lBin"), btn -> {
             activeTab = 0; updateTabVisibility(); updateTabLabels();
         }));
-        configTabButton = addRenderableWidget(new Button(x + 216, y + 8, 34, 12,
+        configTabButton = addRenderableWidget(new Button(x + 245, y + 8, 50, 12,
                 Component.literal("\u00A77Config"), btn -> {
             activeTab = 1; updateTabVisibility(); updateTabLabels();
         }));
@@ -74,14 +74,14 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         // ---- Bin tab widgets ----
 
         // Price input field (inside the book panel)
-        this.priceInput = new EditBox(this.font, x + 188, y + 76, 56, 12,
+        this.priceInput = new EditBox(this.font, x + 192, y + 76, 90, 12,
                 Component.literal("Price"));
         this.priceInput.setMaxLength(6);
         this.priceInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
         this.addWidget(this.priceInput);
 
         // Set Price button
-        setButton = addRenderableWidget(new Button(x + 188, y + 90, 56, 14,
+        setButton = addRenderableWidget(new Button(x + 192, y + 90, 90, 14,
                 Component.literal("Set"), btn -> {
             if (!priceInput.getValue().isEmpty()) {
                 TradingBinBlockEntity be = menu.getBlockEntity();
@@ -98,7 +98,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         TradingBinBlockEntity be = menu.getBlockEntity();
 
         // Crafting Tax % input
-        taxInput = new EditBox(this.font, x + 224, y + 84, 24, 10,
+        taxInput = new EditBox(this.font, x + 260, y + 84, 30, 10,
                 Component.literal("Tax"));
         taxInput.setMaxLength(3);
         taxInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
@@ -106,7 +106,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         this.addWidget(taxInput);
 
         // Min Markup % input
-        markupInput = new EditBox(this.font, x + 224, y + 96, 24, 10,
+        markupInput = new EditBox(this.font, x + 260, y + 96, 30, 10,
                 Component.literal("Markup"));
         markupInput.setMaxLength(3);
         markupInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
@@ -115,7 +115,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         // Auto-Price Mode cycling button
         String modeLabel = be != null ? be.getAutoPriceMode().getDisplayName() : "Auto Fair";
-        autoPriceModeButton = addRenderableWidget(new Button(x + 187, y + 108, 62, 12,
+        autoPriceModeButton = addRenderableWidget(new Button(x + 192, y + 108, 100, 12,
                 Component.literal(modeLabel), btn -> {
             TradingBinBlockEntity blockEntity = menu.getBlockEntity();
             if (blockEntity != null) {
@@ -125,7 +125,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }));
 
         // Apply Settings button
-        applySettingsBtn = addRenderableWidget(new Button(x + 187, y + 122, 62, 12,
+        applySettingsBtn = addRenderableWidget(new Button(x + 192, y + 122, 100, 12,
                 Component.literal("Apply"), btn -> {
             sendSettingsToServer();
         }));
@@ -208,7 +208,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     }
 
     private void drawBookPanel(PoseStack ps, int bx, int by) {
-        int bw = 76, bh = 134;
+        int bw = 200, bh = 134;
         // Outer leather cover
         fill(ps, bx, by, bx + bw, by + bh, 0xFF3B2A18);
         // Spine (left edge)
@@ -272,12 +272,12 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         if (activeTab == 1) {
             // ---- Config tab labels ----
-            drawCenteredString(poseStack, this.font, "Config", 217, 22, 0xFF5C3D28);
+            drawCenteredString(poseStack, this.font, "Config", 280, 22, 0xFF5C3D28);
 
             // Draw modifier checkboxes
             TradingBinBlockEntity cbe = menu.getBlockEntity();
             if (cbe != null) {
-                int cbX = 187;
+                int cbX = 192;
                 drawCheckbox(poseStack, cbX, 42, cbe.isEnchantedMarkupEnabled(),
                         "Ench +" + cbe.getEnchantedMarkupPercent() + "%", 0xFF3B7A3B);
                 drawCheckbox(poseStack, cbX, 52, cbe.isUsedDiscountEnabled(),
@@ -288,8 +288,8 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                         "Rare +" + cbe.getRareMarkupPercent() + "%", 0xFF5555FF);
             }
 
-            this.font.draw(poseStack, "Tax%:", 189, 86, 0xFF3B2A18);
-            this.font.draw(poseStack, "Mkp%:", 189, 98, 0xFF3B2A18);
+            this.font.draw(poseStack, "Tax%:", 195, 86, 0xFF3B2A18);
+            this.font.draw(poseStack, "Mkp%:", 195, 98, 0xFF3B2A18);
 
             // Show estimated market time if an item is in the inspection slot
             if (cbe != null) {
@@ -300,13 +300,13 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                     int maxPrice = PriceCalculator.getMaxPrice(inspectStack);
                     String est = TradingBinBlockEntity.getEstimatedMarketTime(
                             modifiedPrice, baseValue, maxPrice);
-                    this.font.draw(poseStack, "Est: " + est, 189, 136, 0xFF6B4A35);
+                    this.font.draw(poseStack, "Est: " + est, 195, 136, 0xFF6B4A35);
                 }
             }
         } else {
             // ---- Price book labels ----
             // Book header
-            drawCenteredString(poseStack, this.font, "Price Book", 217, 22, 0xFF5C3D28);
+            drawCenteredString(poseStack, this.font, "Price Book", 280, 22, 0xFF5C3D28);
 
         TradingBinBlockEntity be = menu.getBlockEntity();
         if (be != null) {
@@ -334,8 +334,8 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             if (!selectedStack.isEmpty()) {
                 // Item name (single line, truncated to fit book width)
                 String itemName = selectedStack.getHoverName().getString();
-                if (this.font.width(itemName) > 58) {
-                    while (this.font.width(itemName + "..") > 58 && itemName.length() > 3) {
+                if (this.font.width(itemName) > 120) {
+                    while (this.font.width(itemName + "..") > 120 && itemName.length() > 3) {
                         itemName = itemName.substring(0, itemName.length() - 1);
                     }
                     itemName += "..";
@@ -391,7 +391,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             if (be != null) {
                 int x = this.leftPos;
                 int y = this.topPos;
-                int cbX = x + 187;
+                int cbX = x + 192;
                 int[] cbYs = getCheckboxYPositions();
 
                 for (int i = 0; i < cbYs.length; i++) {

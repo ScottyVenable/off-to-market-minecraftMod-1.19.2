@@ -40,12 +40,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private Tab currentTab = Tab.TRADE;
     private static final String[] TAB_NAMES = {"Trade", "Activity", "Towns", "Quests", "Workers", "Requests"};
 
-    // Tab layout (6 tabs across 248px — 40px each with 1px gap)
+    // Tab layout (6 tabs across 376px — 60px each with 1px gap)
     private static final int TAB_Y = 18;
     private static final int TAB_H = 14;
-    private static final int TAB_W = 40;
+    private static final int TAB_W = 60;
     private static final int TAB_COUNT = 6;
-    private static final int[] TAB_X = {8, 49, 90, 131, 172, 213};
+    private static final int[] TAB_X = {8, 69, 130, 191, 252, 313};
 
     private static final int CONTENT_TOP = 32;
     private static final int CONTENT_H = 112;
@@ -103,7 +103,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     public TradingPostScreen(TradingPostMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
-        this.imageWidth = 256;
+        this.imageWidth = 384;
         this.imageHeight = 230;
     }
 
@@ -138,7 +138,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        nextTownBtn = addRenderableWidget(new Button(x + 235, y + 38, 14, 14,
+        nextTownBtn = addRenderableWidget(new Button(x + 363, y + 38, 14, 14,
                 Component.literal(">"), btn -> {
             List<TownData> towns = getAvailableTowns();
             if (!towns.isEmpty()) {
@@ -147,7 +147,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        sendBtn = addRenderableWidget(new Button(x + 8, y + 80, 120, 16,
+        sendBtn = addRenderableWidget(new Button(x + 8, y + 80, 182, 16,
                 Component.literal("Send to Market"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -156,7 +156,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        collectBtn = addRenderableWidget(new Button(x + 130, y + 80, 118, 16,
+        collectBtn = addRenderableWidget(new Button(x + 194, y + 80, 182, 16,
                 Component.literal("Collect Coins"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -167,15 +167,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // ==== Activity tab buttons (unified shipments + orders) ====
 
-        activityScrollUpBtn = addRenderableWidget(new Button(x + 236, y + 47, 14, 14,
+        activityScrollUpBtn = addRenderableWidget(new Button(x + 364, y + 47, 14, 14,
                 Component.literal("\u25B2"), btn -> {
             if (activityScrollOffset > 0) activityScrollOffset--;
         }));
 
-        activityScrollDownBtn = addRenderableWidget(new Button(x + 236, y + 127, 14, 14,
+        activityScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> activityScrollOffset++));
 
-        economyToggleBtn = addRenderableWidget(new Button(x + 175, y + 33, 60, 12,
+        economyToggleBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
                 Component.literal("\uD83D\uDCCA Stats"), btn -> {
             showingEconomyDashboard = !showingEconomyDashboard;
             btn.setMessage(Component.literal(showingEconomyDashboard ? "\u25C0 Activity" : "\uD83D\uDCCA Stats"));
@@ -186,17 +186,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // ==== Quests tab buttons ====
 
-        questScrollUpBtn = addRenderableWidget(new Button(x + 236, y + 47, 14, 14,
+        questScrollUpBtn = addRenderableWidget(new Button(x + 364, y + 47, 14, 14,
                 Component.literal("\u25B2"), btn -> {
             if (questScrollOffset > 0) questScrollOffset--;
         }));
 
-        questScrollDownBtn = addRenderableWidget(new Button(x + 236, y + 127, 14, 14,
+        questScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> questScrollOffset++));
 
         // ==== Workers tab buttons ====
 
-        hireNegotiatorBtn = addRenderableWidget(new Button(x + 8, y + 82, 112, 14,
+        hireNegotiatorBtn = addRenderableWidget(new Button(x + 8, y + 82, 178, 14,
                 Component.literal("Hire Negotiator"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -206,7 +206,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        hireCartBtn = addRenderableWidget(new Button(x + 130, y + 82, 118, 14,
+        hireCartBtn = addRenderableWidget(new Button(x + 196, y + 82, 178, 14,
                 Component.literal("Hire Trading Cart"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -218,16 +218,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // ==== Diplomat tab buttons ====
 
-        diplomatScrollUpBtn = addRenderableWidget(new Button(x + 236, y + 47, 14, 14,
+        diplomatScrollUpBtn = addRenderableWidget(new Button(x + 364, y + 47, 14, 14,
                 Component.literal("\u25B2"), btn -> {
             if (diplomatScrollOffset > 0) diplomatScrollOffset--;
         }));
 
-        diplomatScrollDownBtn = addRenderableWidget(new Button(x + 236, y + 127, 14, 14,
+        diplomatScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> diplomatScrollOffset++));
 
         // "New Request" button — opens request creation mode on Requests tab
-        newRequestBtn = addRenderableWidget(new Button(x + 170, y + 33, 65, 12,
+        newRequestBtn = addRenderableWidget(new Button(x + 298, y + 33, 65, 12,
                 Component.literal("+ New Request"), btn -> {
             creatingRequest = true;
             requestSelectedItem = null;
@@ -265,7 +265,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }));
 
         // Search box for request creation
-        requestSearchBox = new EditBox(this.font, x + 5, y + 48, 145, 12,
+        requestSearchBox = new EditBox(this.font, x + 5, y + 48, 260, 12,
                 Component.literal("Search items..."));
         requestSearchBox.setMaxLength(50);
         requestSearchBox.setBordered(true);
@@ -399,13 +399,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int y = this.topPos;
 
         // Main background panel
-        drawPanel(poseStack, x, y, 256, 230);
+        drawPanel(poseStack, x, y, 384, 230);
 
         // Title bar
-        drawInsetPanel(poseStack, x + 4, y + 3, 248, 14);
+        drawInsetPanel(poseStack, x + 4, y + 3, 376, 14);
 
         // Content area
-        drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 248, CONTENT_H);
+        drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 376, CONTENT_H);
 
         // Tab bar (6 tabs)
         for (int i = 0; i < TAB_COUNT; i++) {
@@ -436,33 +436,33 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Divider above inventory
-        fill(poseStack, x + 4, y + 145, x + 252, y + 146, 0xFF3B2E1E);
+        fill(poseStack, x + 4, y + 145, x + 380, y + 146, 0xFF3B2E1E);
 
         // Player inventory slot backgrounds
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                drawSlot(poseStack, x + 48 + col * 18, y + 148 + row * 18);
+                drawSlot(poseStack, x + 111 + col * 18, y + 148 + row * 18);
             }
         }
         for (int col = 0; col < 9; col++) {
-            drawSlot(poseStack, x + 48 + col * 18, y + 206);
+            drawSlot(poseStack, x + 111 + col * 18, y + 206);
         }
     }
 
     private void renderTradeBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         // Town selector sub-panel
-        drawInsetPanel(ps, x + 6, y + 35, 244, 22);
+        drawInsetPanel(ps, x + 6, y + 35, 372, 22);
         // Stats sub-panel
-        drawInsetPanel(ps, x + 6, y + 60, 244, 14);
+        drawInsetPanel(ps, x + 6, y + 60, 372, 14);
 
         // XP progress bar
         int level = menu.getTraderLevel();
         int xp = menu.getTraderXp();
         int xpNeeded = DebugConfig.getBaseXpToLevel() * Math.max(1, level);
         float xpFraction = Math.min(1.0f, xp / (float) xpNeeded);
-        int barX = x + 74;
+        int barX = x + 100;
         int barY = y + 63;
-        int barW = 80;
+        int barW = 160;
         fill(ps, barX - 1, barY - 1, barX + barW + 1, barY + 9, 0xFF1A1209);
         fill(ps, barX, barY, barX + barW, barY + 8, 0xFF2A2A2A);
         if (xpFraction > 0) {
@@ -485,7 +485,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Header row background
-        fill(ps, x + 5, y + 46, x + 233, y + 56, 0xFF2C2318);
+        fill(ps, x + 5, y + 46, x + 361, y + 56, 0xFF2C2318);
 
         // Activity rows with hover
         hoveredActivityRow = -1;
@@ -500,18 +500,18 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             boolean validRow = actIdx < totalActivity;
 
             boolean isHovered = false;
-            if (validRow && mouseX >= x + 5 && mouseX <= x + 233
+            if (validRow && mouseX >= x + 5 && mouseX <= x + 361
                     && mouseY >= rowY && mouseY < rowY + 12) {
                 hoveredActivityRow = i;
                 isHovered = true;
             }
 
             if (isHovered) {
-                fill(ps, x + 5, rowY, x + 233, rowY + 12, 0xFF5A4A30);
+                fill(ps, x + 5, rowY, x + 361, rowY + 12, 0xFF5A4A30);
                 fill(ps, x + 5, rowY, x + 6, rowY + 12, 0xFFFFD700);
             } else {
                 int rowColor = (i % 2 == 0) ? 0xFF4A3D2B : 0xFF3E3226;
-                fill(ps, x + 5, rowY, x + 233, rowY + 12, rowColor);
+                fill(ps, x + 5, rowY, x + 361, rowY + 12, rowColor);
             }
         }
     }
@@ -519,8 +519,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void renderTownsBg(PoseStack ps, int x, int y) {
         // Book-style page panel
         // Left page (parchment) — town list
-        fill(ps, x + 6, y + 35, x + 126, y + 140, 0xFFD8C8A0);
-        fill(ps, x + 7, y + 36, x + 125, y + 139, 0xFFF0E6C8);
+        fill(ps, x + 6, y + 35, x + 186, y + 140, 0xFFD8C8A0);
+        fill(ps, x + 7, y + 36, x + 185, y + 139, 0xFFF0E6C8);
 
         // Town list row backgrounds (selection/hover highlights)
         List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
@@ -533,18 +533,18 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int rowY = listStartY + i * rowH;
             if (townIdx == townViewPage) {
                 // Selected
-                fill(ps, x + 8, rowY, x + 124, rowY + rowH, 0xFF8B7355);
+                fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFF8B7355);
             } else if (i == hoveredTownRow) {
                 // Hovered
-                fill(ps, x + 8, rowY, x + 124, rowY + rowH, 0xFFBBA878);
+                fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFFBBA878);
             }
         }
 
         // Center spine
-        fill(ps, x + 126, y + 35, x + 130, y + 140, 0xFF6B5A3E);
+        fill(ps, x + 186, y + 35, x + 190, y + 140, 0xFF6B5A3E);
         // Right page (parchment) — detail view
-        fill(ps, x + 130, y + 35, x + 250, y + 140, 0xFFD8C8A0);
-        fill(ps, x + 131, y + 36, x + 249, y + 139, 0xFFF0E6C8);
+        fill(ps, x + 190, y + 35, x + 378, y + 140, 0xFFD8C8A0);
+        fill(ps, x + 191, y + 36, x + 377, y + 139, 0xFFF0E6C8);
     }
 
     /**
@@ -555,7 +555,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         hoveredTownRow = -1;
         {
             int leftPageLeft = x + 8;
-            int leftPageRight = x + 124;
+            int leftPageRight = x + 184;
             int listStartY = y + 50;
             int rowH = 11;
             int visibleTowns = 8;
@@ -575,7 +575,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private void renderQuestsBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         // Header row
-        fill(ps, x + 5, y + 46, x + 233, y + 56, 0xFF2C2318);
+        fill(ps, x + 5, y + 46, x + 361, y + 56, 0xFF2C2318);
 
         // Quest rows with hover
         hoveredQuestRow = -1;
@@ -588,26 +588,26 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             boolean validRow = qIdx < totalQuests;
 
             boolean isHovered = false;
-            if (validRow && mouseX >= x + 5 && mouseX <= x + 233
+            if (validRow && mouseX >= x + 5 && mouseX <= x + 361
                     && mouseY >= rowY && mouseY < rowY + 14) {
                 hoveredQuestRow = i;
                 isHovered = true;
             }
 
             if (isHovered) {
-                fill(ps, x + 5, rowY, x + 233, rowY + 14, 0xFF5A4A30);
+                fill(ps, x + 5, rowY, x + 361, rowY + 14, 0xFF5A4A30);
                 fill(ps, x + 5, rowY, x + 6, rowY + 14, 0xFFFFD700);
             } else {
                 int rowColor = (i % 2 == 0) ? 0xFF4A3D2B : 0xFF3E3226;
-                fill(ps, x + 5, rowY, x + 233, rowY + 14, rowColor);
+                fill(ps, x + 5, rowY, x + 361, rowY + 14, rowColor);
             }
         }
     }
 
     private void renderWorkersBg(PoseStack ps, int x, int y) {
         // Two side-by-side worker panels
-        drawInsetPanel(ps, x + 6, y + 35, 118, 106);  // Left: Negotiator
-        drawInsetPanel(ps, x + 132, y + 35, 118, 106); // Right: Trading Cart
+        drawInsetPanel(ps, x + 6, y + 35, 182, 106);  // Left: Negotiator
+        drawInsetPanel(ps, x + 196, y + 35, 182, 106); // Right: Trading Cart
     }
 
     private void renderDiplomatBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
@@ -623,29 +623,29 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     boolean validRow = itemIdx < requestFilteredItems.size();
 
                     boolean isHovered = false;
-                    if (validRow && mouseX >= x + 5 && mouseX <= x + 155
+                    if (validRow && mouseX >= x + 5 && mouseX <= x + 270
                             && mouseY >= rowY && mouseY < rowY + 10) {
                         hoveredRequestItem = i;
                         isHovered = true;
                     }
 
                     if (isHovered) {
-                        fill(ps, x + 5, rowY, x + 155, rowY + 10, 0xFF5A4A30);
+                        fill(ps, x + 5, rowY, x + 270, rowY + 10, 0xFF5A4A30);
                         fill(ps, x + 5, rowY, x + 6, rowY + 10, 0xFFFFD700);
                     } else if (validRow) {
                         int rowColor = (i % 2 == 0) ? 0xFF4A3D2B : 0xFF3E3226;
-                        fill(ps, x + 5, rowY, x + 155, rowY + 10, rowColor);
+                        fill(ps, x + 5, rowY, x + 270, rowY + 10, rowColor);
                     }
                 }
             } else {
                 // Selected item confirmation panel
-                drawInsetPanel(ps, x + 5, y + 48, 228, 75);
+                drawInsetPanel(ps, x + 5, y + 48, 370, 75);
             }
             return;
         }
 
         // Normal diplomat list — header row
-        fill(ps, x + 5, y + 46, x + 233, y + 56, 0xFF2C2318);
+        fill(ps, x + 5, y + 46, x + 361, y + 56, 0xFF2C2318);
 
         // Diplomat request rows with hover
         hoveredDiplomatRow = -1;
@@ -658,18 +658,18 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             boolean validRow = dIdx < totalReqs;
 
             boolean isHovered = false;
-            if (validRow && mouseX >= x + 5 && mouseX <= x + 233
+            if (validRow && mouseX >= x + 5 && mouseX <= x + 361
                     && mouseY >= rowY && mouseY < rowY + 14) {
                 hoveredDiplomatRow = i;
                 isHovered = true;
             }
 
             if (isHovered) {
-                fill(ps, x + 5, rowY, x + 233, rowY + 14, 0xFF5A4A30);
+                fill(ps, x + 5, rowY, x + 361, rowY + 14, 0xFF5A4A30);
                 fill(ps, x + 5, rowY, x + 6, rowY + 14, 0xFFFFD700);
             } else {
                 int rowColor = (i % 2 == 0) ? 0xFF4A3D2B : 0xFF3E3226;
-                fill(ps, x + 5, rowY, x + 233, rowY + 14, rowColor);
+                fill(ps, x + 5, rowY, x + 361, rowY + 14, rowColor);
             }
         }
     }
@@ -679,7 +679,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     @Override
     protected void renderLabels(PoseStack poseStack, int mouseX, int mouseY) {
         // Title
-        drawCenteredString(poseStack, this.font, "Trading Post", 128, 6, 0xFFD700);
+        drawCenteredString(poseStack, this.font, "Trading Post", 192, 6, 0xFFD700);
 
         // Tab labels (6 tabs)
         for (int i = 0; i < TAB_COUNT; i++) {
@@ -701,7 +701,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Inventory label
-        this.font.draw(poseStack, this.playerInventoryTitle, 48, 138, 0x404040);
+        this.font.draw(poseStack, this.playerInventoryTitle, 111, 138, 0x404040);
     }
 
     // ==================== Trade Tab ====================
@@ -714,14 +714,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             // Town name centered
             String townName = town.getDisplayName();
             int nameW = this.font.width(townName);
-            this.font.draw(poseStack, townName, (256 - nameW) / 2.0f, 38, 0xFFFFFF);
+            this.font.draw(poseStack, townName, (384 - nameW) / 2.0f, 38, 0xFFFFFF);
 
             // Type + distance
             String typeStr = town.getType().getDisplayName() + "  |  Dist: " + town.getDistance();
             int typeW = this.font.width(typeStr);
-            this.font.draw(poseStack, typeStr, (256 - typeW) / 2.0f, 48, 0xAAAAAA);
+            this.font.draw(poseStack, typeStr, (384 - typeW) / 2.0f, 48, 0xAAAAAA);
         } else {
-            drawCenteredString(poseStack, this.font, "No towns available", 128, 42, 0x888888);
+            drawCenteredString(poseStack, this.font, "No towns available", 192, 42, 0x888888);
         }
 
         // Stats row
@@ -731,13 +731,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         this.font.draw(poseStack, "Lvl " + level, 10, 63, 0xFFD700);
         String xpText = xp + " / " + xpNeeded;
         int xpW = this.font.width(xpText);
-        this.font.draw(poseStack, xpText, 74 + (80 - xpW) / 2.0f, 63, 0xCCCCCC);
+        this.font.draw(poseStack, xpText, 100 + (160 - xpW) / 2.0f, 63, 0xCCCCCC);
 
         int coins = menu.getPendingCoins();
         int coinW = CoinRenderer.getCoinValueWidth(this.font, coins);
         int labelW = this.font.width("Coins: ");
-        this.font.draw(poseStack, "Coins: ", 246 - coinW - labelW, 63, 0xFFD700);
-        CoinRenderer.renderCoinValue(poseStack, this.font, 246 - coinW, 63, coins);
+        this.font.draw(poseStack, "Coins: ", 374 - coinW - labelW, 63, 0xFFD700);
+        CoinRenderer.renderCoinValue(poseStack, this.font, 374 - coinW, 63, coins);
 
         // Shipment summary on Trade tab
         TradingPostBlockEntity be = menu.getBlockEntity();
@@ -783,13 +783,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     Math.min(activityScrollOffset + VISIBLE_ACTIVITY, totalActivity) +
                     " of " + totalActivity;
             int scrollW = this.font.width(scrollInfo);
-            this.font.draw(poseStack, scrollInfo, 230 - scrollW, 36, 0x666666);
+            this.font.draw(poseStack, scrollInfo, 358 - scrollW, 36, 0x666666);
         }
 
         // Column headers
         this.font.draw(poseStack, "Type", 8, 48, 0xFFD700);
         this.font.draw(poseStack, "Details", 40, 48, 0xFFD700);
-        this.font.draw(poseStack, "Status", 170, 48, 0xFFD700);
+        this.font.draw(poseStack, "Status", 260, 48, 0xFFD700);
 
         int yOff = 58;
         int displayed = 0;
@@ -888,7 +888,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Truncate destination
         String destDisplay = dest;
         int statusW = this.font.width(status);
-        int available = 170 - 42 - 4;
+        int available = 260 - 42 - 4;
         if (this.font.width(destDisplay) > available) {
             while (this.font.width(destDisplay + "..") > available && destDisplay.length() > 3) {
                 destDisplay = destDisplay.substring(0, destDisplay.length() - 1);
@@ -897,7 +897,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         this.font.draw(ps, destDisplay, 40, yOff, 0xCCCCCC);
-        this.font.draw(ps, status, 230 - statusW, yOff, statusColor);
+        this.font.draw(ps, status, 358 - statusW, yOff, statusColor);
 
         // Progress bar for IN_TRANSIT shipments
         if (s.getStatus() == Shipment.Status.IN_TRANSIT) {
@@ -906,7 +906,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             float progress = totalTravel > 0 ? Math.min(1.0f, (float) elapsed / totalTravel) : 1.0f;
             int barX = 40;
             int barY2 = yOff + 9;
-            int barW = 188;
+            int barW = 316;
             int barH = 2;
             fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF2A2A2A);
             if (progress > 0) {
@@ -936,7 +936,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Truncate item name
         int statusW = this.font.width(status);
-        int available = 170 - 42 - 4;
+        int available = 260 - 42 - 4;
         if (this.font.width(itemName) > available) {
             while (this.font.width(itemName + "..") > available && itemName.length() > 3) {
                 itemName = itemName.substring(0, itemName.length() - 1);
@@ -945,7 +945,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         this.font.draw(ps, itemName, 40, yOff, 0xCCCCCC);
-        this.font.draw(ps, status, 230 - statusW, yOff, statusColor);
+        this.font.draw(ps, status, 358 - statusW, yOff, statusColor);
 
         // Progress bar for IN_TRANSIT orders
         if (order.getStatus() == BuyOrder.Status.IN_TRANSIT) {
@@ -954,7 +954,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             float progress = totalTravel > 0 ? Math.min(1.0f, (float) elapsed / totalTravel) : 1.0f;
             int barX = 40;
             int barY2 = yOff + 9;
-            int barW = 188;
+            int barW = 316;
             int barH = 2;
             fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF2A2A2A);
             if (progress > 0) {
@@ -993,7 +993,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Top items (right column)
         Map<String, Long> itemEarnings = be.getEarningsByItem();
         if (!itemEarnings.isEmpty()) {
-            this.font.draw(ps, "Top Items", 140, 48, 0xFFD700);
+            this.font.draw(ps, "Top Items", 230, 48, 0xFFD700);
             List<Map.Entry<String, Long>> sorted = itemEarnings.entrySet().stream()
                     .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
                     .limit(5)
@@ -1007,8 +1007,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     }
                     name += "..";
                 }
-                this.font.draw(ps, name, 140, itemY, 0xCCCCCC);
-                CoinRenderer.renderCoinValue(ps, this.font, 205, itemY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
+                this.font.draw(ps, name, 230, itemY, 0xCCCCCC);
+                CoinRenderer.renderCoinValue(ps, this.font, 295, itemY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
                 itemY += 9;
             }
         }
@@ -1033,13 +1033,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     townName += "..";
                 }
                 this.font.draw(ps, townName, 10, drawY, 0xCCCCCC);
-                CoinRenderer.renderCoinValue(ps, this.font, 85, drawY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
+                CoinRenderer.renderCoinValue(ps, this.font, 130, drawY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
 
                 // Show shipment count from history for this town
                 if (totalShips > 0) {
                     long townAvg = entry.getValue() / Math.max(1, countShipmentsForTown(be, entry.getKey()));
-                    this.font.draw(ps, "avg:", 140, drawY, 0x888888);
-                    CoinRenderer.renderCoinValue(ps, this.font, 160, drawY, (int) Math.min(townAvg, Integer.MAX_VALUE));
+                    this.font.draw(ps, "avg:", 190, drawY, 0x888888);
+                    CoinRenderer.renderCoinValue(ps, this.font, 215, drawY, (int) Math.min(townAvg, Integer.MAX_VALUE));
                 }
                 drawY += 9;
             }
@@ -1080,10 +1080,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 this.font.draw(ps, tName, 10, drawY, 0xCCCCCC);
                 // Show trend counts
                 if (falling > 0) {
-                    this.font.draw(ps, "\u25B2" + falling, 80, drawY, 0x44CC44); // demand rising
+                    this.font.draw(ps, "\u25B2" + falling, 130, drawY, 0x44CC44); // demand rising
                 }
                 if (rising > 0) {
-                    this.font.draw(ps, "\u25BC" + rising, 105, drawY, 0xCC4444); // demand falling
+                    this.font.draw(ps, "\u25BC" + rising, 165, drawY, 0xCC4444); // demand falling
                 }
                 drawY += 9;
                 if (drawY > 165) break; // don't overflow
@@ -1125,7 +1125,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // ========== LEFT PAGE: Scrollable town list ==========
         int leftX = 10;
-        int rightX = 136;
+        int rightX = 196;
 
         // Header
         this.font.draw(poseStack, "Towns", leftX, 38, 0x3B2A14);
@@ -1144,7 +1144,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             // Build display text: truncate name to fit with distance
             String distSuffix = " \u00B7" + t.getDistance();
             String name = t.getDisplayName();
-            int maxNameW = 100 - this.font.width(distSuffix);
+            int maxNameW = 160 - this.font.width(distSuffix);
             if (this.font.width(name) > maxNameW) {
                 while (this.font.width(name + "..") > maxNameW && name.length() > 3)
                     name = name.substring(0, name.length() - 1);
@@ -1167,10 +1167,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Scroll indicators for town list
         if (townListScroll > 0) {
-            this.font.draw(poseStack, "\u25B2", 114, 42, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25B2", 174, 42, 0x6B5A3E);
         }
         if (townListScroll < maxListScroll) {
-            this.font.draw(poseStack, "\u25BC", 114, 134, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25BC", 174, 134, 0x6B5A3E);
         }
 
         // ========== RIGHT PAGE: Detail view of selected town ==========
@@ -1203,7 +1203,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Description (2 lines max)
         List<FormattedCharSequence> descLines = this.font.split(
-                Component.literal(town.getDescription()), 108);
+                Component.literal(town.getDescription()), 170);
         for (int i = 0; i < Math.min(descLines.size(), 2); i++) {
             this.font.draw(poseStack, descLines.get(i), rightX, 80 + i * 10, 0x5C4A32);
         }
@@ -1224,8 +1224,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (item == null) continue;
             NeedLevel level = town.getNeedLevel(item);
             String iname = new ItemStack(item).getHoverName().getString();
-            if (this.font.width(iname) > 86) {
-                while (this.font.width(iname + "..") > 86 && iname.length() > 3)
+            if (this.font.width(iname) > 150) {
+                while (this.font.width(iname + "..") > 150 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
@@ -1242,8 +1242,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (item == null) continue;
             NeedLevel level = town.getNeedLevel(item);
             String iname = new ItemStack(item).getHoverName().getString();
-            if (this.font.width(iname) > 86) {
-                while (this.font.width(iname + "..") > 86 && iname.length() > 3)
+            if (this.font.width(iname) > 150) {
+                while (this.font.width(iname + "..") > 150 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
@@ -1293,10 +1293,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Scroll indicators for needs/surplus
         if (townContentScroll > 0) {
-            this.font.draw(poseStack, "\u25B2", rightX + 104, needsStartY, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25B2", rightX + 170, needsStartY, 0x6B5A3E);
         }
         if (townContentScroll < maxScrollR) {
-            this.font.draw(poseStack, "\u25BC", rightX + 104, needsStartY + (visibleLines - 1) * 9, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25BC", rightX + 170, needsStartY + (visibleLines - 1) * 9, 0x6B5A3E);
         }
     }
 
@@ -1324,15 +1324,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     Math.min(questScrollOffset + VISIBLE_QUESTS, quests.size()) +
                     " of " + quests.size();
             int scrollW = this.font.width(scrollInfo);
-            this.font.draw(poseStack, scrollInfo, 230 - scrollW, 36, 0x666666);
+            this.font.draw(poseStack, scrollInfo, 358 - scrollW, 36, 0x666666);
         }
 
         // Column headers
         this.font.draw(poseStack, "Type", 8, 48, 0xFFD700);
-        this.font.draw(poseStack, "Item", 45, 48, 0xFFD700);
-        this.font.draw(poseStack, "Qty", 115, 48, 0xFFD700);
-        this.font.draw(poseStack, "Reward", 145, 48, 0xFFD700);
-        this.font.draw(poseStack, "Status", 195, 48, 0xFFD700);
+        this.font.draw(poseStack, "Item", 60, 48, 0xFFD700);
+        this.font.draw(poseStack, "Qty", 170, 48, 0xFFD700);
+        this.font.draw(poseStack, "Reward", 210, 48, 0xFFD700);
+        this.font.draw(poseStack, "Status", 290, 48, 0xFFD700);
 
         int yOff = 59;
         int displayed = 0;
@@ -1352,8 +1352,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
             // Item name (truncated)
             String itemName = quest.getItemDisplayName();
-            if (this.font.width(itemName) > 65) {
-                while (this.font.width(itemName + "..") > 65 && itemName.length() > 3) {
+            if (this.font.width(itemName) > 100) {
+                while (this.font.width(itemName + "..") > 100 && itemName.length() > 3) {
                     itemName = itemName.substring(0, itemName.length() - 1);
                 }
                 itemName += "..";
@@ -1398,10 +1398,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 }
             }
 
-            this.font.draw(poseStack, itemName, 45, yOff, 0xCCCCCC);
-            this.font.draw(poseStack, qty, 115, yOff, 0xAAAAAA);
-            this.font.draw(poseStack, reward, 145, yOff, 0xFFD700);
-            this.font.draw(poseStack, status, 195, yOff, statusColor);
+            this.font.draw(poseStack, itemName, 60, yOff, 0xCCCCCC);
+            this.font.draw(poseStack, qty, 170, yOff, 0xAAAAAA);
+            this.font.draw(poseStack, reward, 210, yOff, 0xFFD700);
+            this.font.draw(poseStack, status, 290, yOff, statusColor);
 
             yOff += 14;
         }
@@ -1419,7 +1419,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         renderWorkerPanel(poseStack, 10, 38, be.getNegotiator());
 
         // Right panel: Trading Cart
-        renderWorkerPanel(poseStack, 136, 38, be.getTradingCart());
+        renderWorkerPanel(poseStack, 200, 38, be.getTradingCart());
     }
 
     private void renderWorkerPanel(PoseStack poseStack, int px, int py, com.offtomarket.mod.data.Worker worker) {
@@ -1429,7 +1429,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (!worker.isHired()) {
             // Show description and hire cost
             List<FormattedCharSequence> descLines = this.font.split(
-                    Component.literal(worker.getType().getDescription()), 110);
+                    Component.literal(worker.getType().getDescription()), 170);
             for (int i = 0; i < descLines.size(); i++) {
                 this.font.draw(poseStack, descLines.get(i), px, py + 12 + i * 10, 0x888888);
             }
@@ -1446,7 +1446,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int xpNeeded = worker.getXpForNextLevel();
             int barX = px;
             int barY = py + 23;
-            int barW = 100;
+            int barW = 164;
             fill(poseStack, barX - 1, barY - 1, barX + barW + 1, barY + 7, 0xFF1A1209);
             fill(poseStack, barX, barY, barX + barW, barY + 6, 0xFF2A2A2A);
             float frac = Math.min(1.0f, worker.getXp() / (float) xpNeeded);
@@ -1499,13 +1499,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     Math.min(diplomatScrollOffset + VISIBLE_DIPLOMAT, requests.size()) +
                     " of " + requests.size();
             int scrollW = this.font.width(scrollInfo);
-            this.font.draw(poseStack, scrollInfo, 230 - scrollW, 36, 0x666666);
+            this.font.draw(poseStack, scrollInfo, 358 - scrollW, 36, 0x666666);
         }
 
         // Column headers
         this.font.draw(poseStack, "Item", 8, 48, 0xFFD700);
-        this.font.draw(poseStack, "Town", 80, 48, 0xFFD700);
-        this.font.draw(poseStack, "Status", 140, 48, 0xFFD700);
+        this.font.draw(poseStack, "Town", 120, 48, 0xFFD700);
+        this.font.draw(poseStack, "Status", 210, 48, 0xFFD700);
 
         int yOff = 59;
         int displayed = 0;
@@ -1515,8 +1515,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             // Item name with count
             String itemName = req.getItemDisplayName();
             if (req.getRequestedCount() > 1) itemName += " x" + req.getRequestedCount();
-            if (this.font.width(itemName) > 68) {
-                while (this.font.width(itemName + "..") > 68 && itemName.length() > 3) {
+            if (this.font.width(itemName) > 105) {
+                while (this.font.width(itemName + "..") > 105 && itemName.length() > 3) {
                     itemName = itemName.substring(0, itemName.length() - 1);
                 }
                 itemName += "..";
@@ -1525,8 +1525,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             // Town name (truncated)
             TownData town = TownRegistry.getTown(req.getTownId());
             String townName = town != null ? town.getDisplayName() : req.getTownId();
-            if (this.font.width(townName) > 55) {
-                while (this.font.width(townName + "..") > 55 && townName.length() > 3) {
+            if (this.font.width(townName) > 85) {
+                while (this.font.width(townName + "..") > 85 && townName.length() > 3) {
                     townName = townName.substring(0, townName.length() - 1);
                 }
                 townName += "..";
@@ -1576,20 +1576,20 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
 
             this.font.draw(poseStack, itemName, 8, yOff, 0xCCCCCC);
-            this.font.draw(poseStack, townName, 80, yOff, 0xAAAAAA);
+            this.font.draw(poseStack, townName, 120, yOff, 0xAAAAAA);
             
             // For DISCUSSING status, show price and Accept/Decline buttons
             if (req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
-                this.font.draw(poseStack, status, 140, yOff, statusColor);
+                this.font.draw(poseStack, status, 210, yOff, statusColor);
                 // Accept button (green checkmark)
-                this.font.draw(poseStack, "\u2714", 200, yOff, 0x55FF55);
+                this.font.draw(poseStack, "\u2714", 280, yOff, 0x55FF55);
                 // Decline button (red X)
-                this.font.draw(poseStack, "\u2718", 215, yOff, 0xFF5555);
+                this.font.draw(poseStack, "\u2718", 300, yOff, 0xFF5555);
             } else if (showProgress) {
                 // Draw progress bar for traveling/waiting stages
-                int barX = 140;
+                int barX = 210;
                 int barY = yOff;
-                int barW = 60;
+                int barW = 100;
                 int barH = 8;
                 // Background
                 fill(poseStack, barX, barY, barX + barW, barY + barH, 0xFF333333);
@@ -1604,10 +1604,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 // Time text (right-aligned after bar)
                 String timeStr = ticksToTime(req.getTicksRemaining(gameTime));
                 int timeW = this.font.width(timeStr);
-                this.font.draw(poseStack, timeStr, 228 - timeW, yOff, 0x888888);
+                this.font.draw(poseStack, timeStr, 348 - timeW, yOff, 0x888888);
             } else {
                 int statusW = this.font.width(status);
-                this.font.draw(poseStack, status, 230 - statusW, yOff, statusColor);
+                this.font.draw(poseStack, status, 358 - statusW, yOff, statusColor);
             }
 
             yOff += 14;
@@ -1645,8 +1645,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 if (item == null) continue;
 
                 String name = new ItemStack(item).getHoverName().getString();
-                if (this.font.width(name) > 145) {
-                    while (this.font.width(name + "..") > 145 && name.length() > 3) {
+                if (this.font.width(name) > 260) {
+                    while (this.font.width(name + "..") > 260 && name.length() > 3) {
                         name = name.substring(0, name.length() - 1);
                     }
                     name += "..";
@@ -1659,17 +1659,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
             // Scroll indicators
             if (requestListScroll > 0) {
-                this.font.draw(poseStack, "\u25B2", 148, 64, 0x888888);
+                this.font.draw(poseStack, "\u25B2", 268, 64, 0x888888);
             }
             if (requestListScroll < maxScroll) {
-                this.font.draw(poseStack, "\u25BC", 148, 65 + (VISIBLE_REQUEST_ITEMS - 1) * 10, 0x888888);
+                this.font.draw(poseStack, "\u25BC", 268, 65 + (VISIBLE_REQUEST_ITEMS - 1) * 10, 0x888888);
             }
 
             // Result count
             if (!requestFilteredItems.isEmpty()) {
                 String count = requestFilteredItems.size() + " results";
                 int cw = this.font.width(count);
-                this.font.draw(poseStack, count, 230 - cw, 36, 0x666666);
+                this.font.draw(poseStack, count, 358 - cw, 36, 0x666666);
             }
         } else {
             // ---- Confirmation state: selected item + quantity + cost estimate ----
@@ -1726,7 +1726,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
 
             // Hint
-            this.font.draw(poseStack, "(Click item name to change)", 160, 52, 0x555555);
+            this.font.draw(poseStack, "(Click item name to change)", 280, 52, 0x555555);
         }
     }
 
@@ -1783,6 +1783,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Diplomat tooltip on hover (Diplomat tab)
         if (currentTab == Tab.DIPLOMAT && hoveredDiplomatRow >= 0) {
             renderDiplomatTooltip(poseStack, mouseX, mouseY);
+        }
+
+        // Cost breakdown tooltip on hover (Request creation with item selected)
+        if (currentTab == Tab.DIPLOMAT && creatingRequest && requestSelectedItem != null) {
+            int costY = topPos + 94;
+            int costX = leftPos + 10;
+            if (mouseX >= costX && mouseX <= costX + 200 && mouseY >= costY && mouseY < costY + 10) {
+                renderCostBreakdownTooltip(poseStack, mouseX, mouseY);
+            }
         }
     }
 
@@ -1995,6 +2004,72 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         renderComponentTooltip(ps, tooltip, mouseX, mouseY);
     }
 
+    private void renderCostBreakdownTooltip(PoseStack ps, int mouseX, int mouseY) {
+        if (requestSelectedItem == null) return;
+        Item item = ForgeRegistries.ITEMS.getValue(requestSelectedItem);
+        if (item == null) return;
+
+        int basePrice = PriceCalculator.getBaseValue(new ItemStack(item));
+        int traderLevel = menu.getTraderLevel();
+        List<TownData> towns = TownRegistry.getAvailableTowns(Math.max(1, traderLevel));
+
+        TownData bestTown = null;
+        int bestScore = 0;
+        for (TownData t : towns) {
+            if (t.getMinTraderLevel() > traderLevel) continue;
+            int score = DiplomatRequest.getSupplyScore(t, requestSelectedItem);
+            if (score > bestScore || (score == bestScore && bestTown != null
+                    && t.getDistance() < bestTown.getDistance())) {
+                bestScore = score;
+                bestTown = t;
+            }
+        }
+        if (bestTown == null) return;
+
+        double typeMult = DiplomatRequest.getDiplomatPremiumMultiplier(bestTown);
+        double difficultyMult;
+        String supplyLabel;
+        if (bestScore >= 90) {
+            difficultyMult = 1.0;
+            supplyLabel = "Surplus";
+        } else if (bestScore >= 70) {
+            difficultyMult = 1.1;
+            supplyLabel = "Specialty";
+        } else if (bestScore >= 40) {
+            difficultyMult = 1.4;
+            supplyLabel = "Neutral";
+        } else {
+            difficultyMult = 1.8;
+            supplyLabel = "High Demand";
+        }
+
+        double totalMult = typeMult * difficultyMult;
+        int estPerUnit = Math.max(1, (int) (basePrice * totalMult));
+        int estTotal = estPerUnit * requestQuantity;
+
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(Component.literal("Cost Breakdown")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+        tooltip.add(Component.literal(""));
+        tooltip.add(Component.literal("Base Value: " + formatCoinText(basePrice))
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal("Town Type (" + bestTown.getType().getDisplayName() + "): \u00D7"
+                + String.format("%.2f", typeMult))
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal("Supply (" + supplyLabel + "): \u00D7"
+                + String.format("%.1f", difficultyMult))
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal(""));
+        tooltip.add(Component.literal("Per Unit: " + formatCoinText(estPerUnit))
+                .withStyle(ChatFormatting.WHITE));
+        if (requestQuantity > 1) {
+            tooltip.add(Component.literal("\u00D7 " + requestQuantity + " = " + formatCoinText(estTotal))
+                    .withStyle(ChatFormatting.YELLOW));
+        }
+
+        renderComponentTooltip(ps, tooltip, mouseX, mouseY);
+    }
+
     // ==================== Mouse Handling ====================
 
     @Override
@@ -2046,7 +2121,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     }
                 }
                 // Click on item name area (localY ~50-60) to go back to search
-                if (localY >= 50 && localY <= 60 && localX >= 8 && localX <= 230) {
+                if (localY >= 50 && localY <= 60 && localX >= 8 && localX <= 358) {
                     requestSelectedItem = null;
                     requestQuantity = 1;
                     if (requestSearchBox != null) requestSearchBox.setFocus(true);
@@ -2172,12 +2247,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     } else if (req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
                         // Check if clicking accept (checkmark at x=200) or decline (X at x=215)
                         double localX = mouseX - this.leftPos;
-                        if (localX >= 198 && localX <= 210) {
+                        if (localX >= 278 && localX <= 290) {
                             // Accept button clicked
                             ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                                     new AcceptDiplomatPacket(be.getBlockPos(), req.getId()));
                             return true;
-                        } else if (localX >= 213 && localX <= 225) {
+                        } else if (localX >= 298 && localX <= 310) {
                             // Decline button clicked
                             ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                                     new DeclineDiplomatPacket(be.getBlockPos(), req.getId()));
@@ -2219,8 +2294,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 }
             }
         } else if (currentTab == Tab.TOWNS) {
-            // Right page area (x >= leftPos + 130): scroll needs/surplus content
-            if (mouseX >= this.leftPos + 130) {
+            // Right page area (x >= leftPos + 190): scroll needs/surplus content
+            if (mouseX >= this.leftPos + 190) {
                 if (delta > 0 && townContentScroll > 0) {
                     townContentScroll--;
                     return true;
