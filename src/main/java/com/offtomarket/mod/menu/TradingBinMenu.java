@@ -34,8 +34,8 @@ public class TradingBinMenu extends AbstractContainerMenu {
             }
         }
 
-        // Inspection slot (in book panel on the right)
-        this.addSlot(new Slot(container, TradingBinBlockEntity.INSPECT_SLOT, 209, 24) {
+        // Inspection slot (in right panel)
+        this.addSlot(new Slot(container, TradingBinBlockEntity.INSPECT_SLOT, 184, 34) {
             @Override
             public int getMaxStackSize() { return 64; }
         });
