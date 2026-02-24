@@ -469,7 +469,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (xpFraction > 0) {
             int fillW = Math.max(1, (int) (barW * xpFraction));
             fill(ps, barX, barY, barX + fillW, barY + 8, 0xFF55CC55);
+            // Highlight sheen on top edge
+            fill(ps, barX, barY, barX + fillW, barY + 1, 0xFF77EE77);
         }
+
+        // Overview panel below buttons
+        drawInsetPanel(ps, x + 6, y + 98, 372, 44);
+        // Header separator
+        fill(ps, x + 12, y + 109, x + 372, y + 110, 0xFF4A3D2B);
+        // Column divider
+        fill(ps, x + 194, y + 111, x + 195, y + 140, 0xFF4A3D2B);
     }
 
     // ==================== Activity Tab (Unified Shipments + Orders) ====================
@@ -711,7 +720,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // ==================== Trade Tab ====================
 
     private void renderTradeLabels(PoseStack poseStack) {
+        TradingPostBlockEntity be = menu.getBlockEntity();
         List<TownData> towns = getAvailableTowns();
+
         if (!towns.isEmpty() && selectedTownIndex < towns.size()) {
             TownData town = towns.get(selectedTownIndex);
 
@@ -720,10 +731,22 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int nameW = this.font.width(townName);
             this.font.draw(poseStack, townName, (384 - nameW) / 2.0f, 38, 0xFFFFFF);
 
-            // Type + distance
-            String typeStr = town.getType().getDisplayName() + "  |  Dist: " + town.getDistance();
-            int typeW = this.font.width(typeStr);
-            this.font.draw(poseStack, typeStr, (384 - typeW) / 2.0f, 48, 0xAAAAAA);
+            // Type + distance + reputation
+            String baseStr = town.getType().getDisplayName() + "  |  Dist: " + town.getDistance();
+            if (be != null) {
+                int rep = be.getReputation(town.getId());
+                String repLevel = TradingPostBlockEntity.getReputationLevel(rep);
+                int repColor = TradingPostBlockEntity.getReputationColor(rep);
+                String sep = "  |  ";
+                String repStr = "\u2605 " + repLevel;
+                int totalW = this.font.width(baseStr + sep + repStr);
+                float startX = (384 - totalW) / 2.0f;
+                this.font.draw(poseStack, baseStr + sep, startX, 48, 0xAAAAAA);
+                this.font.draw(poseStack, repStr, startX + this.font.width(baseStr + sep), 48, repColor);
+            } else {
+                int typeW = this.font.width(baseStr);
+                this.font.draw(poseStack, baseStr, (384 - typeW) / 2.0f, 48, 0xAAAAAA);
+            }
         } else {
             drawCenteredString(poseStack, this.font, "No towns available", 192, 42, 0x888888);
         }
@@ -743,14 +766,29 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         this.font.draw(poseStack, "Coins: ", 374 - coinW - labelW, 63, 0xFFD700);
         CoinRenderer.renderCoinValue(poseStack, this.font, 374 - coinW, 63, coins);
 
-        // Shipment summary on Trade tab
-        TradingPostBlockEntity be = menu.getBlockEntity();
+        // Quick Overview panel
+        drawCenteredString(poseStack, this.font, "Overview", 192, 100, 0xBEA876);
+
         if (be != null) {
-            int activeCount = be.getActiveShipments().size();
-            this.font.draw(poseStack, "Shipments: " + activeCount + " active", 8, 102, 0xAAAAAA);
-            if (activeCount > 0) {
-                this.font.draw(poseStack, "(See Ships tab for details)", 8, 114, 0x666666);
-            }
+            int ships = be.getActiveShipments().size();
+            int orders = be.getActiveBuyOrders().size();
+            int reqs = be.getActiveDiplomatRequests().size();
+            int sent = be.getTotalShipmentsSent();
+            long earned = be.getLifetimeEarnings();
+
+            // Left column — active counts
+            this.font.draw(poseStack, "\u2022 " + ships + " Shipment" + (ships != 1 ? "s" : ""),
+                    12, 112, ships > 0 ? 0x88BBFF : 0x666666);
+            this.font.draw(poseStack, "\u2022 " + orders + " Order" + (orders != 1 ? "s" : ""),
+                    12, 122, orders > 0 ? 0xFFCC44 : 0x666666);
+            this.font.draw(poseStack, "\u2022 " + reqs + " Request" + (reqs != 1 ? "s" : ""),
+                    12, 132, reqs > 0 ? 0xDD88FF : 0x666666);
+
+            // Right column — lifetime stats
+            this.font.draw(poseStack, "Total Sent: " + sent, 200, 112, 0x999999);
+            this.font.draw(poseStack, "Towns: " + towns.size(), 200, 122, 0x999999);
+            this.font.draw(poseStack, "Earned: " + formatCoinText((int) Math.min(earned, Integer.MAX_VALUE)),
+                    200, 132, 0xBEA876);
         }
     }
 
