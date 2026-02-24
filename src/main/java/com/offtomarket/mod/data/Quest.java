@@ -150,8 +150,10 @@ public class Quest {
 
     /**
      * Record delivered items. Returns true if quest is now fully delivered.
+     * Only valid when quest is ACCEPTED.
      */
     public boolean deliver(int count) {
+        if (status != Status.ACCEPTED || count <= 0) return false;
         deliveredCount += count;
         if (deliveredCount >= requiredCount) {
             deliveredCount = requiredCount;

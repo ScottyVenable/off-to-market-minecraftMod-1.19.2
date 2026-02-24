@@ -193,7 +193,7 @@ public class DiplomatRequest {
      * Get a supply score for how easily a town can fulfill a request for the given item.
      * Higher score = easier/cheaper for the town.
      * 
-     * @return 0 if town absolutely cannot supply, otherwise 20-95
+     * @return 25-95 based on town's relationship with the item
      */
     public static int getSupplyScore(TownData town, ResourceLocation itemId) {
         // Surplus items — town has excess, easy to supply

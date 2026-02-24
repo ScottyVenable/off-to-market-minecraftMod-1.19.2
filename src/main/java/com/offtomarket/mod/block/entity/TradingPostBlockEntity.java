@@ -65,8 +65,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // Sale check timer
     private int saleCheckTimer = 0;
 
-    // Market listings refresh timer
-    private int marketRefreshTimer = 0;
+    // Market listings
     private final List<MarketListing> marketListings = new ArrayList<>();
 
     // Completed shipment history (newest first, capped)
@@ -748,9 +747,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         activeQuests.removeIf(q -> q.getStatus() == Quest.Status.COMPLETED
                 || q.getStatus() == Quest.Status.EXPIRED);
 
-        // Mark expired quests
+        // Mark expired quests (but never expire DELIVERING quests — their rewards are in transit)
         for (Quest quest : activeQuests) {
-            if (quest.isExpired(gameTime) && quest.getStatus() != Quest.Status.EXPIRED) {
+            if (quest.isExpired(gameTime)
+                    && quest.getStatus() != Quest.Status.EXPIRED
+                    && quest.getStatus() != Quest.Status.DELIVERING
+                    && quest.getStatus() != Quest.Status.COMPLETED) {
                 quest.setStatus(Quest.Status.EXPIRED);
             }
         }
@@ -1040,7 +1042,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         boolean changed = false;
 
         // Process shipments
-        List<Shipment> toRemove = new ArrayList<>();
 
         // Check for sales periodically (outside the shipment loop)
         boolean checkSales = false;
@@ -1078,7 +1079,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     break;
 
                 case SOLD:
-                    be.archiveShipment(shipment);
                     // Apply negotiator bonus and deduct worker costs
                     int rawEarnings = shipment.getTotalEarnings();
                     int negotiatedEarnings = (int) (rawEarnings * be.getNegotiationBonus());
@@ -1086,6 +1086,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     // Store final earnings in shipment for collection, instead of pendingCoins
                     shipment.setTotalEarnings(finalEarnings);
                     shipment.setStatus(Shipment.Status.COMPLETED);
+                    // Archive AFTER adjusting earnings so history tracks final amounts
+                    be.archiveShipment(shipment);
                     be.addTraderXp(DebugConfig.getXpPerSale());
                     TownData soldTown = TownRegistry.getTown(shipment.getTownId());
                     String soldName = soldTown != null ? soldTown.getDisplayName() : shipment.getTownId();
@@ -1120,8 +1122,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     break;
             }
         }
-
-        be.activeShipments.removeAll(toRemove);
 
         // Tick demand decay
         if (be.demandTracker.tick()) {
@@ -1466,7 +1466,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         tag.putInt("MaxDist", maxDistance);
         tag.putInt("PendingCoins", pendingCoins);
         tag.putInt("SaleTimer", saleCheckTimer);
-        tag.putInt("MarketTimer", marketRefreshTimer);
         tag.putLong("LastRefreshDay", lastRefreshDay);
 
         if (!ledgerSlot.isEmpty()) {
@@ -1553,7 +1552,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (maxDistance < 1) maxDistance = 10;
         pendingCoins = tag.getInt("PendingCoins");
         saleCheckTimer = tag.getInt("SaleTimer");
-        marketRefreshTimer = tag.getInt("MarketTimer");
         lastRefreshDay = tag.getLong("LastRefreshDay");
 
         if (tag.contains("Ledger")) {

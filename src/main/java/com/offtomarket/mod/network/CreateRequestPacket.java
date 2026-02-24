@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.function.Supplier;
 
@@ -50,6 +51,13 @@ public class CreateRequestPacket {
 
             if (player.distanceToSqr(msg.pos.getX() + 0.5, msg.pos.getY() + 0.5,
                     msg.pos.getZ() + 0.5) > 64.0) return;
+
+            // Server-side validation: reject invalid counts
+            if (msg.count <= 0 || msg.count > 64) return;
+
+            // Server-side validation: reject unregistered items
+            if (ForgeRegistries.ITEMS.getValue(msg.itemId) == null
+                    || ForgeRegistries.ITEMS.getValue(msg.itemId) == net.minecraft.world.item.Items.AIR) return;
 
             tradingPost.createRequest(player, msg.itemId, msg.count);
             player.inventoryMenu.broadcastChanges();

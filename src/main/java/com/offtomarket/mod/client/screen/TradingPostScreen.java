@@ -92,7 +92,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private Button activityScrollUpBtn, activityScrollDownBtn;
     private Button economyToggleBtn;
     // Towns tab
-    private Button prevTownPageBtn, nextTownPageBtn;
     // sendDiplomatBtn/cancelDiplomatBtn removed — request creation moved to Requests tab
     // Quests tab
     private Button questScrollUpBtn, questScrollDownBtn;
@@ -284,6 +283,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         currentTab = tab;
         creatingRequest = false;
         showingEconomyDashboard = false;
+        confirmCancelShipmentId = null; // Clear cancel confirmation on tab switch
         if (economyToggleBtn != null) {
             economyToggleBtn.setMessage(Component.literal("\uD83D\uDCCA Stats"));
         }
@@ -293,7 +293,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void updateButtonVisibility() {
         boolean trade = currentTab == Tab.TRADE;
         boolean activity = currentTab == Tab.ACTIVITY;
-        boolean towns = currentTab == Tab.TOWNS;
         boolean quests = currentTab == Tab.QUESTS;
         boolean workers = currentTab == Tab.WORKERS;
         boolean diplomat = currentTab == Tab.DIPLOMAT;
@@ -310,8 +309,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Hide coin exchange slots (no longer have a coins tab)
         updateCoinSlotPositions(false);
 
-        prevTownPageBtn.visible = false; // deprecated, replaced by list clicks
-        nextTownPageBtn.visible = false; // deprecated, replaced by list clicks
 
         // Towns tab diplomat buttons removed — request creation moved to Requests tab
 
@@ -410,7 +407,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Content area
         drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 248, CONTENT_H);
 
-        // Tab bar (8 tabs)
+        // Tab bar (6 tabs)
         for (int i = 0; i < TAB_COUNT; i++) {
             boolean selected = currentTab.ordinal() == i;
             int tx = x + TAB_X[i];
@@ -483,6 +480,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         if (showingEconomyDashboard) {
+            hoveredActivityRow = -1; // Reset so stale hover can't trigger click actions
             return; // Dashboard draws its own content
         }
 
@@ -615,6 +613,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void renderDiplomatBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         if (creatingRequest) {
             // Request creation mode backgrounds
+            hoveredDiplomatRow = -1; // Reset so stale hover can't trigger diplomat actions
             hoveredRequestItem = -1;
             if (requestSelectedItem == null) {
                 // Search results list background
@@ -682,7 +681,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Title
         drawCenteredString(poseStack, this.font, "Trading Post", 128, 6, 0xFFD700);
 
-        // Tab labels (8 tabs)
+        // Tab labels (6 tabs)
         for (int i = 0; i < TAB_COUNT; i++) {
             boolean selected = currentTab.ordinal() == i;
             int color = selected ? 0xFFD700 : 0x888888;
@@ -921,7 +920,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Type indicator: "IN" for incoming orders
         this.font.draw(ps, "\u2193IN", 8, yOff, 0x44AAFF);
 
-        TownData town = TownRegistry.getTown(order.getTownId());
         String itemName = order.getItemDisplayName();
         if (order.getCount() > 1) itemName += " x" + order.getCount();
 
