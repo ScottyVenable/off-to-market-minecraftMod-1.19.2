@@ -95,6 +95,11 @@ public class ModNetwork {
                 HireWorkerPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
 
+        CHANNEL.registerMessage(id++, FireWorkerPacket.class,
+                FireWorkerPacket::encode, FireWorkerPacket::decode,
+                FireWorkerPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
         CHANNEL.registerMessage(id++, SendDiplomatPacket.class,
                 SendDiplomatPacket::encode, SendDiplomatPacket::decode,
                 SendDiplomatPacket::handle,

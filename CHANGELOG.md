@@ -1,5 +1,42 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.2.4 — Workers System Expansion
+
+### New Worker: Bookkeeper
+- **Third Worker Type** — The Bookkeeper manages trade finances, reducing overhead costs for all hired workers per trip.
+- **Cost Reduction Scaling** — Starts at ~8% reduction, scaling up to 35% (configurable) as the Bookkeeper levels up.
+- **Config Options** — `bookkeeperHireCost` (default 1040 CP) and `bookkeeperMaxCostReduction` (default 35%) added to mod config.
+
+### Worker Level Titles & Perks
+- **Level Titles** — Workers now display ranked titles: Novice (1-2), Apprentice (3-4), Journeyman (5-6), Expert (7-8), Master (9), Grandmaster (10).
+- **Title Colors** — Each title tier has a distinct color from gray to gold.
+- **Perk Milestones** — Workers unlock named perks at levels 3, 6, and 9:
+  - *Negotiator*: Bulk Pricing → Silver Tongue → Trade Mastery
+  - *Trading Cart*: Quick Loading → Shortcut Finder → Express Routes
+  - *Bookkeeper*: Penny Pincher → Market Analyst → Financial Advisor
+- **Perk Effects** — Bookkeeper's "Penny Pincher" (Lv3) lets their own overhead costs be reduced; "Financial Advisor" (Lv9) adds +5% cost reduction.
+
+### Worker Dismissal
+- **Fire Workers** — Players can now dismiss hired workers via the "✖ Dismiss" button.
+- **Partial Refund** — Firing returns 50% of the original hire cost.
+- **FireWorkerPacket** — New network packet handles dismissal with server-side distance validation.
+
+### Workers Tab UI Redesign
+- **List + Detail Layout** — Workers tab now shows a clickable worker list on the left and a detailed info panel on the right.
+- **Interactive Worker List** — Click to select a worker; hover highlighting and gold accent for the selected row.
+- **Status Indicators** — Green dot for hired workers, gray dot for unhired.
+- **Rich Detail Panel** — Shows worker name, title, level with XP bar (sheen effect), current bonus, cost/trip, trip count, and perk status.
+- **Perk Display** — Perks shown with ✔ (unlocked, green) or • (locked, gray) indicators.
+- **Next Level Preview** — Shows what bonus the worker will have at the next level.
+- **Lifetime Stats** — Tracks and displays cumulative earnings (Negotiator), time saved (Trading Cart), or overhead saved (Bookkeeper).
+- **Hire/Fire Buttons** — Context-sensitive buttons appear in the detail panel based on worker hire status.
+
+### Worker System Improvements
+- **Config Integration** — All worker bonuses, hire costs, and level caps now read from mod config instead of hardcoded values.
+- **Lifetime Bonus Tracking** — Each worker tracks their cumulative contribution (saved to NBT).
+- **XP Return Value** — `addXp()` now returns levels gained for triggering level-up logic.
+- **Robust NBT Loading** — Worker deserialization wrapped in try/catch for resilience against invalid data.
+
 ## Version 0.2.0 — Economy Overhaul & Requests System
 
 ### Economy Rebalance

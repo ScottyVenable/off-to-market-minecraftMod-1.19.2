@@ -96,7 +96,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // Quests tab
     private Button questScrollUpBtn, questScrollDownBtn;
     // Workers tab
-    private Button hireNegotiatorBtn, hireCartBtn;
+    private Button hireNegotiatorBtn, hireCartBtn, hireBookkeeperBtn;
+    private Button fireWorkerBtn;
+    private int selectedWorkerIndex = 0; // 0=Negotiator, 1=Trading Cart, 2=Bookkeeper
     // Diplomat tab
     private Button diplomatScrollUpBtn, diplomatScrollDownBtn;
     private Button newRequestBtn, sendRequestBtn, cancelRequestBtn;
@@ -196,7 +198,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // ==== Workers tab buttons ====
 
-        hireNegotiatorBtn = addRenderableWidget(new Button(x + 8, y + 82, 178, 14,
+        hireNegotiatorBtn = addRenderableWidget(new Button(x + 156, y + 128, 110, 14,
                 Component.literal("Hire Negotiator"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -206,13 +208,35 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        hireCartBtn = addRenderableWidget(new Button(x + 196, y + 82, 178, 14,
+        hireCartBtn = addRenderableWidget(new Button(x + 156, y + 128, 110, 14,
                 Component.literal("Hire Trading Cart"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
                 ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                         new HireWorkerPacket(tbe.getBlockPos(),
                                 com.offtomarket.mod.data.Worker.WorkerType.TRADING_CART));
+            }
+        }));
+
+        hireBookkeeperBtn = addRenderableWidget(new Button(x + 156, y + 128, 110, 14,
+                Component.literal("Hire Bookkeeper"), btn -> {
+            TradingPostBlockEntity tbe = menu.getBlockEntity();
+            if (tbe != null) {
+                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                        new HireWorkerPacket(tbe.getBlockPos(),
+                                com.offtomarket.mod.data.Worker.WorkerType.BOOKKEEPER));
+            }
+        }));
+
+        fireWorkerBtn = addRenderableWidget(new Button(x + 272, y + 128, 100, 14,
+                Component.literal("\u2716 Dismiss"), btn -> {
+            TradingPostBlockEntity tbe = menu.getBlockEntity();
+            if (tbe != null) {
+                com.offtomarket.mod.data.Worker.WorkerType[] types = com.offtomarket.mod.data.Worker.WorkerType.values();
+                if (selectedWorkerIndex >= 0 && selectedWorkerIndex < types.length) {
+                    ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                            new com.offtomarket.mod.network.FireWorkerPacket(tbe.getBlockPos(), types[selectedWorkerIndex]));
+                }
             }
         }));
 
@@ -317,8 +341,20 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         questScrollDownBtn.visible = quests;
 
         TradingPostBlockEntity be = menu.getBlockEntity();
-        hireNegotiatorBtn.visible = workers && (be == null || !be.getNegotiator().isHired());
-        hireCartBtn.visible = workers && (be == null || !be.getTradingCart().isHired());
+        // Workers tab: show hire button for selected unhired worker, fire button for selected hired worker
+        com.offtomarket.mod.data.Worker selectedWorker = null;
+        if (be != null) {
+            com.offtomarket.mod.data.Worker.WorkerType[] wTypes = com.offtomarket.mod.data.Worker.WorkerType.values();
+            if (selectedWorkerIndex >= 0 && selectedWorkerIndex < wTypes.length) {
+                selectedWorker = be.getWorker(wTypes[selectedWorkerIndex]);
+            }
+        }
+        boolean selHired = selectedWorker != null && selectedWorker.isHired();
+        boolean selNotHired = selectedWorker != null && !selectedWorker.isHired();
+        hireNegotiatorBtn.visible = workers && selNotHired && selectedWorkerIndex == 0;
+        hireCartBtn.visible = workers && selNotHired && selectedWorkerIndex == 1;
+        hireBookkeeperBtn.visible = workers && selNotHired && selectedWorkerIndex == 2;
+        fireWorkerBtn.visible = workers && selHired;
 
         diplomatScrollUpBtn.visible = diplomat && !creatingRequest;
         diplomatScrollDownBtn.visible = diplomat && !creatingRequest;
@@ -432,7 +468,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 updateTownsDiplomatHover(x, y, mouseX, mouseY);
             }
             case QUESTS -> renderQuestsBg(poseStack, x, y, mouseX, mouseY);
-            case WORKERS -> renderWorkersBg(poseStack, x, y);
+            case WORKERS -> renderWorkersBg(poseStack, x, y, mouseX, mouseY);
             case DIPLOMAT -> renderDiplomatBg(poseStack, x, y, mouseX, mouseY);
         }
 
@@ -647,10 +683,49 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
     }
 
-    private void renderWorkersBg(PoseStack ps, int x, int y) {
-        // Two side-by-side worker panels
-        drawInsetPanel(ps, x + 6, y + 35, 182, 106);  // Left: Negotiator
-        drawInsetPanel(ps, x + 196, y + 35, 182, 106); // Right: Trading Cart
+    private int hoveredWorkerRow = -1;
+
+    private void renderWorkersBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
+        // Left panel: worker list (140px wide)
+        drawInsetPanel(ps, x + 6, y + 35, 140, 106);
+
+        // Worker list rows (3 workers, 30px each)
+        hoveredWorkerRow = -1;
+        com.offtomarket.mod.data.Worker.WorkerType[] wTypes = com.offtomarket.mod.data.Worker.WorkerType.values();
+        TradingPostBlockEntity be = menu.getBlockEntity();
+        for (int i = 0; i < wTypes.length; i++) {
+            int rowY = y + 38 + i * 32;
+            boolean isSelected = (i == selectedWorkerIndex);
+            boolean isHovered = mouseX >= x + 8 && mouseX <= x + 144
+                    && mouseY >= rowY && mouseY < rowY + 30;
+
+            if (isHovered) hoveredWorkerRow = i;
+
+            if (isSelected) {
+                fill(ps, x + 8, rowY, x + 144, rowY + 30, 0xFF5A4A30);
+                fill(ps, x + 8, rowY, x + 10, rowY + 30, 0xFFFFD700); // gold left accent
+            } else if (isHovered) {
+                fill(ps, x + 8, rowY, x + 144, rowY + 30, 0xFF4A3D2B);
+            }
+
+            // Divider between rows
+            if (i > 0) {
+                fill(ps, x + 12, rowY - 1, x + 140, rowY, 0xFF2A1F14);
+            }
+
+            // Small status indicator (colored dot)
+            if (be != null) {
+                com.offtomarket.mod.data.Worker w = be.getWorker(wTypes[i]);
+                int dotColor = w.isHired() ? 0xFF55CC55 : 0xFF666666;
+                fill(ps, x + 14, rowY + 12, x + 18, rowY + 16, dotColor);
+            }
+        }
+
+        // Right panel: worker detail (224px wide)
+        drawInsetPanel(ps, x + 152, y + 35, 226, 106);
+
+        // Divider below detail header
+        fill(ps, x + 156, y + 55, x + 374, y + 56, 0xFF2A1F14);
     }
 
     private void renderDiplomatBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
@@ -1540,63 +1615,162 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // ==================== Workers Tab ====================
 
     private void renderWorkersLabels(PoseStack poseStack) {
-        this.font.draw(poseStack, "Workers", 8, 36, 0xFFD700);
-
         TradingPostBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
 
-        // Left panel: Negotiator
-        renderWorkerPanel(poseStack, 10, 38, be.getNegotiator());
+        // Left panel: Worker list
+        com.offtomarket.mod.data.Worker.WorkerType[] wTypes = com.offtomarket.mod.data.Worker.WorkerType.values();
+        for (int i = 0; i < wTypes.length; i++) {
+            com.offtomarket.mod.data.Worker w = be.getWorker(wTypes[i]);
+            int rowY = 6 + i * 32; // relative to content, rows start at y+38 abs → label y = 38-32+i*32 = 6+i*32
+            int textColor = (i == selectedWorkerIndex) ? 0xFFD700 : 0xCCCCCC;
 
-        // Right panel: Trading Cart
-        renderWorkerPanel(poseStack, 200, 38, be.getTradingCart());
+            // Worker symbol + name
+            String symbol = w.getType().getSymbol();
+            this.font.draw(poseStack, symbol, 22, rowY, textColor);
+            this.font.draw(poseStack, w.getType().getDisplayName(), 33, rowY, textColor);
+
+            // Status line
+            if (w.isHired()) {
+                String title = w.getLevelTitle();
+                this.font.draw(poseStack, "Lv" + w.getLevel() + " " + title, 22, rowY + 10, w.getLevelTitleColor());
+                // Mini XP bar
+                int barX = 22;
+                int barY = rowY + 20;
+                int barW = 112;
+                fill(poseStack, barX, barY, barX + barW, barY + 3, 0xFF2A2A2A);
+                if (w.getLevel() < com.offtomarket.mod.data.Worker.getMaxLevel()) {
+                    float frac = Math.min(1.0f, w.getXp() / (float) w.getXpForNextLevel());
+                    if (frac > 0) {
+                        fill(poseStack, barX, barY, barX + Math.max(1, (int)(barW * frac)), barY + 3, 0xFF55CC55);
+                    }
+                } else {
+                    fill(poseStack, barX, barY, barX + barW, barY + 3, 0xFFFFD700); // full gold at max
+                }
+            } else {
+                this.font.draw(poseStack, "Not Hired", 22, rowY + 10, 0x666666);
+            }
+        }
+
+        // Right panel: Selected worker detail
+        if (selectedWorkerIndex < 0 || selectedWorkerIndex >= wTypes.length) return;
+        com.offtomarket.mod.data.Worker worker = be.getWorker(wTypes[selectedWorkerIndex]);
+        renderWorkerDetail(poseStack, 156, 4, worker);
     }
 
-    private void renderWorkerPanel(PoseStack poseStack, int px, int py, com.offtomarket.mod.data.Worker worker) {
-        // Worker type name
-        this.font.draw(poseStack, worker.getType().getDisplayName(), px, py, 0xFFD700);
+    private void renderWorkerDetail(PoseStack poseStack, int px, int py, com.offtomarket.mod.data.Worker worker) {
+        // Header: Symbol + Name + Title
+        String header = worker.getType().getSymbol() + " " + worker.getType().getDisplayName();
+        this.font.draw(poseStack, header, px, py, 0xFFD700);
 
         if (!worker.isHired()) {
-            // Show description and hire cost
+            // Not hired: show description and hire cost
             List<FormattedCharSequence> descLines = this.font.split(
-                    Component.literal(worker.getType().getDescription()), 170);
+                    Component.literal(worker.getType().getDescription()), 210);
             for (int i = 0; i < descLines.size(); i++) {
-                this.font.draw(poseStack, descLines.get(i), px, py + 12 + i * 10, 0x888888);
+                this.font.draw(poseStack, descLines.get(i), px, py + 16 + i * 10, 0x999999);
             }
-            this.font.draw(poseStack, "Cost: " + formatCoinText(worker.getHireCost()), px, py + 38, 0xFFAA44);
+            this.font.draw(poseStack, "Hire Cost: " + formatCoinText(worker.getHireCost()), px, py + 42, 0xFFAA44);
+
+            // Show what this worker does at each level
+            this.font.draw(poseStack, "Perks:", px, py + 56, 0x888888);
+            int[] milestones = {3, 6, 9};
+            for (int i = 0; i < milestones.length; i++) {
+                String perkName = worker.getPerkName(milestones[i]);
+                if (perkName != null) {
+                    this.font.draw(poseStack, "Lv" + milestones[i] + ": " + perkName, px + 4, py + 66 + i * 10, 0x777777);
+                }
+            }
             return;
         }
 
-        // Hired — show stats
-        this.font.draw(poseStack, "Level " + worker.getLevel()
-                + (worker.getLevel() >= com.offtomarket.mod.data.Worker.MAX_LEVEL ? " (MAX)" : ""), px, py + 12, 0xCCCCCC);
+        // Hired: Title line
+        String titleLine = worker.getLevelTitle();
+        int titleW = this.font.width(titleLine);
+        this.font.draw(poseStack, titleLine, px + 218 - titleW, py, worker.getLevelTitleColor());
 
-        // XP bar
-        if (worker.getLevel() < com.offtomarket.mod.data.Worker.MAX_LEVEL) {
+        // Level + XP bar
+        int maxLvl = com.offtomarket.mod.data.Worker.getMaxLevel();
+        boolean isMax = worker.getLevel() >= maxLvl;
+        String lvlText = "Level " + worker.getLevel() + (isMax ? " (MAX)" : "");
+        this.font.draw(poseStack, lvlText, px, py + 16, 0xCCCCCC);
+
+        if (!isMax) {
             int xpNeeded = worker.getXpForNextLevel();
             int barX = px;
-            int barY = py + 23;
-            int barW = 164;
+            int barY = py + 27;
+            int barW = 218;
             fill(poseStack, barX - 1, barY - 1, barX + barW + 1, barY + 7, 0xFF1A1209);
             fill(poseStack, barX, barY, barX + barW, barY + 6, 0xFF2A2A2A);
             float frac = Math.min(1.0f, worker.getXp() / (float) xpNeeded);
             if (frac > 0) {
-                int fillW = Math.max(1, (int) (barW * frac));
+                int fillW = Math.max(1, (int)(barW * frac));
                 fill(poseStack, barX, barY, barX + fillW, barY + 6, 0xFF55CC55);
+                // Highlight sheen on top edge
+                fill(poseStack, barX, barY, barX + fillW, barY + 1, 0xFF77DD77);
             }
             String xpText = worker.getXp() + "/" + xpNeeded;
             int xpW = this.font.width(xpText);
             this.font.draw(poseStack, xpText, px + (barW - xpW) / 2, barY - 1, 0xCCCCCC);
+        } else {
+            // Full gold bar at max level
+            int barX = px;
+            int barY = py + 27;
+            int barW = 218;
+            fill(poseStack, barX - 1, barY - 1, barX + barW + 1, barY + 7, 0xFF1A1209);
+            fill(poseStack, barX, barY, barX + barW, barY + 6, 0xFFCCAA33);
+            fill(poseStack, barX, barY, barX + barW, barY + 1, 0xFFFFD700);
+            String maxText = "\u2605 GRANDMASTER \u2605";
+            if (worker.getLevel() < 10) maxText = "MAX LEVEL";
+            int mW = this.font.width(maxText);
+            this.font.draw(poseStack, maxText, px + (barW - mW) / 2, barY - 1, 0xFFD700);
         }
 
-        // Bonus
-        this.font.draw(poseStack, worker.getBonusDisplay(), px, py + 34, 0x88CC88);
+        // Current bonus (highlighted)
+        this.font.draw(poseStack, worker.getBonusDisplay(), px, py + 38, 0x88CC88);
 
-        // Trip cost
-        this.font.draw(poseStack, "Cost/trip: " + formatCoinText(worker.getPerTripCost()), px, py + 46, 0xAAAAAA);
+        // Next level preview
+        if (!isMax) {
+            String nextPreview = "Next: " + worker.getNextLevelBonusPreview();
+            this.font.draw(poseStack, nextPreview, px + 120, py + 38, 0x666666);
+        }
 
-        // Total trips
-        this.font.draw(poseStack, "Trips: " + worker.getTotalTrips(), px, py + 58, 0x888888);
+        // Stats row
+        this.font.draw(poseStack, "Cost/trip: " + formatCoinText(worker.getPerTripCost()), px, py + 50, 0xAAAAAA);
+        this.font.draw(poseStack, "Trips: " + worker.getTotalTrips(), px + 120, py + 50, 0x888888);
+
+        // Perks section
+        int perkY = py + 62;
+        this.font.draw(poseStack, "Perks:", px, perkY, 0xBBAAAA);
+        int[] milestones = {3, 6, 9};
+        for (int i = 0; i < milestones.length; i++) {
+            String perkName = worker.getPerkName(milestones[i]);
+            if (perkName == null) continue;
+            boolean unlocked = worker.hasPerk(milestones[i]);
+            int perkColor = unlocked ? 0x88CC88 : 0x555555;
+            String indicator = unlocked ? "\u2714 " : "\u2022 "; // ✔ or •
+            this.font.draw(poseStack, indicator + perkName + " (Lv" + milestones[i] + ")",
+                    px + 4, perkY + 10 + i * 9, perkColor);
+        }
+
+        // Lifetime stats
+        if (worker.getLifetimeBonusValue() > 0) {
+            String lifetimeLabel = worker.getLifetimeBonusDisplay() + ": ";
+            String lifetimeValue;
+            if (worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.TRADING_CART) {
+                // Convert ticks to readable time
+                long ticks = worker.getLifetimeBonusValue();
+                long seconds = ticks / 20;
+                if (seconds >= 60) {
+                    lifetimeValue = (seconds / 60) + "m " + (seconds % 60) + "s";
+                } else {
+                    lifetimeValue = seconds + "s";
+                }
+            } else {
+                lifetimeValue = formatCoinText((int) Math.min(worker.getLifetimeBonusValue(), Integer.MAX_VALUE));
+            }
+            this.font.draw(poseStack, lifetimeLabel + lifetimeValue, px, perkY + 38, 0x776655);
+        }
     }
 
     // ==================== Diplomat Tab ====================
@@ -2402,6 +2576,26 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 townContentScroll = 0; // reset right page scroll
                 updateButtonVisibility();
                 return true;
+            }
+        }
+
+        // Workers tab: click worker in list to select it
+        if (currentTab == Tab.WORKERS && button == 0) {
+            double lx = mouseX - x;
+            double ly = mouseY - y;
+            // Left list panel: x+6 to x+146, rows at y+38, y+70, y+102 (each 32px)
+            if (lx >= 6 && lx <= 146) {
+                for (int i = 0; i < 3; i++) {
+                    int rowTop = 38 + i * 32;
+                    if (ly >= rowTop && ly < rowTop + 32) {
+                        if (selectedWorkerIndex != i) {
+                            selectedWorkerIndex = i;
+                            updateButtonVisibility();
+                            SoundHelper.playUIClick();
+                        }
+                        return true;
+                    }
+                }
             }
         }
 

@@ -154,6 +154,14 @@ public class ModConfig {
             .comment("Maximum travel time reduction from a max-level Cart (0.4 = 40% faster)")
             .defineInRange("cartMaxSpeedBonus", 0.4, 0.0, 0.9);
 
+    private static final ForgeConfigSpec.IntValue BOOKKEEPER_HIRE_COST = BUILDER
+            .comment("Cost in copper to hire a Bookkeeper")
+            .defineInRange("bookkeeperHireCost", 1040, 0, 50000);
+
+    private static final ForgeConfigSpec.DoubleValue BOOKKEEPER_MAX_COST_REDUCTION = BUILDER
+            .comment("Maximum worker cost reduction from a max-level Bookkeeper (0.35 = 35%)")
+            .defineInRange("bookkeeperMaxCostReduction", 0.35, 0.0, 0.95);
+
     static { BUILDER.pop(); }
 
     // ==================== DIPLOMATS ====================
@@ -302,6 +310,8 @@ public class ModConfig {
     public static int maxWorkerLevel = 10;
     public static double negotiatorMaxBonus = 0.25;
     public static double cartMaxSpeedBonus = 0.4;
+    public static int bookkeeperHireCost = 1040;
+    public static double bookkeeperMaxCostReduction = 0.35;
 
     // Diplomats
     public static double diplomatBasePremium = 1.5;
@@ -370,6 +380,8 @@ public class ModConfig {
         maxWorkerLevel = MAX_WORKER_LEVEL.get();
         negotiatorMaxBonus = NEGOTIATOR_MAX_BONUS.get();
         cartMaxSpeedBonus = CART_MAX_SPEED_BONUS.get();
+        bookkeeperHireCost = BOOKKEEPER_HIRE_COST.get();
+        bookkeeperMaxCostReduction = BOOKKEEPER_MAX_COST_REDUCTION.get();
 
         // Diplomats
         diplomatBasePremium = DIPLOMAT_BASE_PREMIUM.get();

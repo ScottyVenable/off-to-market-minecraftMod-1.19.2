@@ -96,6 +96,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // Workers (hired helpers that provide passive bonuses)
     private Worker negotiator = new Worker(Worker.WorkerType.NEGOTIATOR);
     private Worker tradingCart = new Worker(Worker.WorkerType.TRADING_CART);
+    private Worker bookkeeper = new Worker(Worker.WorkerType.BOOKKEEPER);
 
     // Diplomat requests (player requests specific items from towns)
     private final List<DiplomatRequest> activeDiplomatRequests = new ArrayList<>();
@@ -131,6 +132,19 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public List<Quest> getActiveQuests() { return activeQuests; }
     public Worker getNegotiator() { return negotiator; }
     public Worker getTradingCart() { return tradingCart; }
+    public Worker getBookkeeper() { return bookkeeper; }
+
+    /**
+     * Get a worker by type.
+     */
+    public Worker getWorker(Worker.WorkerType type) {
+        return switch (type) {
+            case NEGOTIATOR -> negotiator;
+            case TRADING_CART -> tradingCart;
+            case BOOKKEEPER -> bookkeeper;
+        };
+    }
+
     public List<DiplomatRequest> getActiveDiplomatRequests() { return activeDiplomatRequests; }
     public long getLastRefreshDay() { return lastRefreshDay; }
     public Map<String, Integer> getTownReputation() { return Collections.unmodifiableMap(townReputation); }
@@ -242,6 +256,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         tag.put("Negotiator", negotiator.save());
         tag.put("TradingCart", tradingCart.save());
+        tag.put("Bookkeeper", bookkeeper.save());
 
         ListTag diplomatList = new ListTag();
         for (DiplomatRequest dr : activeDiplomatRequests) diplomatList.add(dr.save());
@@ -327,6 +342,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("TradingCart")) {
             tradingCart = Worker.load(tag.getCompound("TradingCart"));
+        }
+        if (tag.contains("Bookkeeper")) {
+            bookkeeper = Worker.load(tag.getCompound("Bookkeeper"));
         }
 
         activeDiplomatRequests.clear();
@@ -469,6 +487,11 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         long gameTime = level.getGameTime();
         int baseTravelTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
         int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier());
+        // Track trading cart lifetime time saved (in ticks)
+        if (tradingCart.isHired()) {
+            int ticksSaved = baseTravelTicks - travelTicks;
+            if (ticksSaved > 0) tradingCart.addLifetimeBonusValue(ticksSaved);
+        }
         int pickupDelay = DebugConfig.SKIP_PICKUP_DELAY ? 0 : DebugConfig.getPickupDelay();
         long arrivalTime = gameTime + pickupDelay + travelTicks;
 
@@ -1026,7 +1049,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
      * Hire a worker by paying the hire cost.
      */
     public boolean hireWorker(Worker.WorkerType type, Player player) {
-        Worker worker = type == Worker.WorkerType.NEGOTIATOR ? negotiator : tradingCart;
+        Worker worker = getWorker(type);
         if (worker.isHired()) return false;
 
         int cost = worker.getHireCost();
@@ -1034,6 +1057,22 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         deductCoins(player, cost);
         worker.setHired(true);
+        syncToClient();
+        return true;
+    }
+
+    /**
+     * Fire (dismiss) a worker, giving back a partial refund (50% of hire cost).
+     */
+    public boolean fireWorker(Worker.WorkerType type, Player player) {
+        Worker worker = getWorker(type);
+        if (!worker.isHired()) return false;
+
+        int refund = worker.getFireRefund();
+        if (refund > 0) {
+            giveChange(player, refund);
+        }
+        worker.setHired(false);
         syncToClient();
         return true;
     }
@@ -1059,19 +1098,56 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
+     * Get the bookkeeper cost reduction factor (0.0 to ~0.95).
+     * Returns 0.0 if bookkeeper is not hired.
+     */
+    public double getBookkeeperCostReduction() {
+        if (bookkeeper.isHired()) {
+            return bookkeeper.getCostReductionBonus();
+        }
+        return 0.0;
+    }
+
+    /**
      * Deduct worker per-trip costs from shipment earnings. Returns adjusted earnings.
+     * Bookkeeper reduces the per-trip cost of all workers (including itself if perk unlocked).
      */
     public int applyWorkerCosts(int earnings) {
-        int costs = 0;
+        double costReduction = getBookkeeperCostReduction();
+        int totalCosts = 0;
+        int costsBeforeReduction = 0;
+
         if (negotiator.isHired()) {
-            costs += negotiator.getPerTripCost();
+            int rawCost = negotiator.getPerTripCost();
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - costReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
             negotiator.completedTrip();
         }
         if (tradingCart.isHired()) {
-            costs += tradingCart.getPerTripCost();
+            int rawCost = tradingCart.getPerTripCost();
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - costReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
             tradingCart.completedTrip();
         }
-        return Math.max(1, earnings - costs);
+        if (bookkeeper.isHired()) {
+            int rawCost = bookkeeper.getPerTripCost();
+            // Bookkeeper's own cost is only reduced if "Penny Pincher" perk (level 3+)
+            double selfReduction = bookkeeper.hasPerk(3) ? costReduction : 0.0;
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - selfReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
+            bookkeeper.completedTrip();
+            // Track lifetime savings from bookkeeper cost reduction
+            int saved = costsBeforeReduction - totalCosts;
+            if (saved > 0) bookkeeper.addLifetimeBonusValue(saved);
+        }
+
+        // Track negotiator lifetime bonus (extra earnings from negotiation)
+        // This is tracked at the call site where negotiation bonus is applied
+
+        return Math.max(1, earnings - totalCosts);
     }
 
     // ==================== Diplomat Methods ====================
@@ -1359,6 +1435,11 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     // Apply negotiator bonus and deduct worker costs
                     int rawEarnings = shipment.getTotalEarnings();
                     int negotiatedEarnings = (int) (rawEarnings * be.getNegotiationBonus());
+                    // Track negotiator lifetime bonus
+                    int negotiationBonus = negotiatedEarnings - rawEarnings;
+                    if (negotiationBonus > 0 && be.negotiator.isHired()) {
+                        be.negotiator.addLifetimeBonusValue(negotiationBonus);
+                    }
                     int finalEarnings = be.applyWorkerCosts(negotiatedEarnings);
                     // Store final earnings in shipment for collection, instead of pendingCoins
                     shipment.setTotalEarnings(finalEarnings);
@@ -1832,6 +1913,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Workers
         tag.put("Negotiator", negotiator.save());
         tag.put("TradingCart", tradingCart.save());
+        tag.put("Bookkeeper", bookkeeper.save());
 
         // Diplomat requests
         ListTag diplomatList = new ListTag();
@@ -1929,6 +2011,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("TradingCart")) {
             tradingCart = Worker.load(tag.getCompound("TradingCart"));
+        }
+        if (tag.contains("Bookkeeper")) {
+            bookkeeper = Worker.load(tag.getCompound("Bookkeeper"));
         }
 
         // Diplomat requests
