@@ -62,6 +62,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private static final int VISIBLE_ACTIVITY = 7;
     private static final int VISIBLE_QUESTS = 6;
     private static final int VISIBLE_DIPLOMAT = 6;
+    private static final int VISIBLE_INCOME_ROWS = 6; // rows in each income column
+
+    // Income tab scroll
+    private int incomeTownScroll = 0;
+    private int incomeItemScroll = 0;
 
     // Hover tracking
     private int hoveredActivityRow = -1;
@@ -720,8 +725,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     }
 
     private void renderIncomeBg(PoseStack ps, int x, int y) {
-        drawInsetPanel(ps, x + 6, y + 35, 372, 105);
-        fill(ps, x + 10, y + 48, x + 374, y + 49, 0xFF2A1F14);
+        // Top stats strip
+        drawInsetPanel(ps, x + 6, y + 35, 372, 22);
+        // Left panel: Best Towns
+        drawInsetPanel(ps, x + 6, y + 59, 183, 81);
+        fill(ps, x + 8, y + 71, x + 187, y + 72, 0xFF4A3828);
+        // Right panel: Top Items
+        drawInsetPanel(ps, x + 191, y + 59, 187, 81);
+        fill(ps, x + 193, y + 71, x + 376, y + 72, 0xFF4A3828);
     }
 
     private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
@@ -1342,91 +1353,111 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // ==================== Economy Dashboard ====================
 
     private void renderEconomyDashboard(PoseStack ps) {
-        this.font.draw(ps, "Economy Overview", 8, 36, 0xFFD700);
-
         TradingPostBlockEntity be = menu.getBlockEntity();
+
+        // ── Stats strip ──────────────────────────────────────────
+        this.font.draw(ps, "Economy Overview", 8, 36, 0xFFD700);
         if (be == null) {
             this.font.draw(ps, "No data available.", 10, 50, 0x888888);
             return;
         }
 
-        long lifetime = be.getLifetimeEarnings();
-        int totalShips = be.getTotalShipmentsSent();
+        long lifetime  = be.getLifetimeEarnings();
+        int  totalShips = be.getTotalShipmentsSent();
         long avgEarnings = totalShips > 0 ? lifetime / totalShips : 0;
 
-        // Summary stats
-        int drawY = 48;
-        this.font.draw(ps, "Total Earnings:", 8, drawY, 0xBBBBBB);
-        CoinRenderer.renderCoinValue(ps, this.font, 95, drawY, (int) Math.min(lifetime, Integer.MAX_VALUE));
-        drawY += 10;
-        this.font.draw(ps, "Shipments:", 8, drawY, 0xBBBBBB);
-        this.font.draw(ps, String.valueOf(totalShips), 95, drawY, 0xFFFFFF);
-        drawY += 10;
-        this.font.draw(ps, "Avg/Ship:", 8, drawY, 0xBBBBBB);
-        CoinRenderer.renderCoinValue(ps, this.font, 95, drawY, (int) Math.min(avgEarnings, Integer.MAX_VALUE));
-
-        // Top items (right column)
-        Map<String, Long> itemEarnings = be.getEarningsByItem();
-        if (!itemEarnings.isEmpty()) {
-            this.font.draw(ps, "Top Items", 230, 48, 0xFFD700);
-            List<Map.Entry<String, Long>> sorted = itemEarnings.entrySet().stream()
-                    .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
-                    .limit(5)
-                    .toList();
-            int itemY = 58;
-            for (Map.Entry<String, Long> entry : sorted) {
-                String name = entry.getKey();
-                if (this.font.width(name) > 60) {
-                    while (this.font.width(name + "..") > 60 && name.length() > 2) {
-                        name = name.substring(0, name.length() - 1);
-                    }
-                    name += "..";
-                }
-                this.font.draw(ps, name, 230, itemY, 0xCCCCCC);
-                CoinRenderer.renderCoinValue(ps, this.font, 295, itemY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
-                itemY += 9;
-            }
+        // Row 1 of stats strip
+        int statsY = 40;
+        this.font.draw(ps, "Earnings:", 8, statsY, 0x88BBDD);
+        if (lifetime > 0) {
+            CoinRenderer.renderCoinValue(ps, this.font, 60, statsY, (int) Math.min(lifetime, Integer.MAX_VALUE));
+        } else {
+            this.font.draw(ps, "—", 60, statsY, 0x666666);
+        }
+        this.font.draw(ps, "Ships:", 185, statsY, 0x88BBDD);
+        this.font.draw(ps, String.valueOf(totalShips), 216, statsY, 0xFFFFFF);
+        this.font.draw(ps, "Avg/Ship:", 250, statsY, 0x88BBDD);
+        if (avgEarnings > 0) {
+            CoinRenderer.renderCoinValue(ps, this.font, 305, statsY, (int) Math.min(avgEarnings, Integer.MAX_VALUE));
+        } else {
+            this.font.draw(ps, "—", 305, statsY, 0x666666);
         }
 
-        // Best towns (bottom section)
-        Map<String, Long> townEarnings = be.getEarningsByTown();
-        if (!townEarnings.isEmpty()) {
-            drawY += 14;
-            this.font.draw(ps, "Best Towns", 8, drawY, 0xFFD700);
-            drawY += 10;
-            List<Map.Entry<String, Long>> sortedTowns = townEarnings.entrySet().stream()
-                    .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
-                    .limit(4)
-                    .toList();
-            for (Map.Entry<String, Long> entry : sortedTowns) {
-                TownData town = TownRegistry.getTown(entry.getKey());
-                String townName = town != null ? town.getDisplayName() : entry.getKey();
-                if (this.font.width(townName) > 70) {
-                    while (this.font.width(townName + "..") > 70 && townName.length() > 2) {
-                        townName = townName.substring(0, townName.length() - 1);
-                    }
-                    townName += "..";
-                }
-                this.font.draw(ps, townName, 10, drawY, 0xCCCCCC);
-                CoinRenderer.renderCoinValue(ps, this.font, 130, drawY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
-
-                // Show shipment count from history for this town
-                if (totalShips > 0) {
-                    long townAvg = entry.getValue() / Math.max(1, countShipmentsForTown(be, entry.getKey()));
-                    this.font.draw(ps, "avg:", 190, drawY, 0x888888);
-                    CoinRenderer.renderCoinValue(ps, this.font, 215, drawY, (int) Math.min(townAvg, Integer.MAX_VALUE));
-                }
-                drawY += 9;
-            }
-        }
-
-        // Supply/Demand Trends removed from Income tab to prevent overflow.
-        // (Trends are visible on the Towns tab per-town detail panel.)
-
-        // Hint
         if (lifetime == 0) {
-            this.font.draw(ps, "Send shipments to see", 10, 80, 0x888888);
-            this.font.draw(ps, "your economy stats here!", 10, 90, 0x888888);
+            // Empty state hint inside the lower panels
+            this.font.draw(ps, "Send shipments to see stats here!", 10, 90, 0x666666);
+            return;
+        }
+
+        // ── Left panel: Best Towns ────────────────────────────────
+        this.font.draw(ps, "Best Towns", 8, 62, 0xFFD700);
+        // Column sub-headers
+        this.font.draw(ps, "Town",        8,  74, 0xCCAA44);
+        this.font.draw(ps, "Total",      110,  74, 0xCCAA44);
+        this.font.draw(ps, "Avg",        158,  74, 0xCCAA44);
+
+        Map<String, Long> townEarnings = be.getEarningsByTown();
+        List<Map.Entry<String, Long>> sortedTowns = townEarnings.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
+                .toList();
+
+        int maxTownScroll = Math.max(0, sortedTowns.size() - VISIBLE_INCOME_ROWS);
+        incomeTownScroll = Math.min(incomeTownScroll, maxTownScroll);
+
+        int rowY = 77;
+        int displayed = 0;
+        for (int i = incomeTownScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedTowns.size(); i++, displayed++) {
+            Map.Entry<String, Long> entry = sortedTowns.get(i);
+            TownData town = TownRegistry.getTown(entry.getKey());
+            String townName = town != null ? town.getDisplayName() : entry.getKey();
+            if (this.font.width(townName) > 95) {
+                while (this.font.width(townName + "..") > 95 && townName.length() > 2)
+                    townName = townName.substring(0, townName.length() - 1);
+                townName += "..";
+            }
+            this.font.draw(ps, townName, 8, rowY, 0xEEDDCC);
+            CoinRenderer.renderCoinValue(ps, this.font, 110, rowY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
+            long avg = entry.getValue() / Math.max(1, countShipmentsForTown(be, entry.getKey()));
+            CoinRenderer.renderCoinValue(ps, this.font, 158, rowY, (int) Math.min(avg, Integer.MAX_VALUE));
+            rowY += 9;
+        }
+        if (sortedTowns.size() > VISIBLE_INCOME_ROWS) {
+            String scrollInfo = (incomeTownScroll + 1) + "-" + Math.min(incomeTownScroll + VISIBLE_INCOME_ROWS, sortedTowns.size())
+                    + " / " + sortedTowns.size();
+            this.font.draw(ps, scrollInfo, 8, 135, 0x557799);
+        }
+
+        // ── Right panel: Top Items ────────────────────────────────
+        this.font.draw(ps, "Top Items", 195, 62, 0xFFD700);
+        this.font.draw(ps, "Item",  195, 74, 0xCCAA44);
+        this.font.draw(ps, "Total", 314, 74, 0xCCAA44);
+
+        Map<String, Long> itemEarnings = be.getEarningsByItem();
+        List<Map.Entry<String, Long>> sortedItems = itemEarnings.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
+                .toList();
+
+        int maxItemScroll = Math.max(0, sortedItems.size() - VISIBLE_INCOME_ROWS);
+        incomeItemScroll = Math.min(incomeItemScroll, maxItemScroll);
+
+        rowY = 77;
+        displayed = 0;
+        for (int i = incomeItemScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedItems.size(); i++, displayed++) {
+            Map.Entry<String, Long> entry = sortedItems.get(i);
+            String name = entry.getKey();
+            if (this.font.width(name) > 110) {
+                while (this.font.width(name + "..") > 110 && name.length() > 2)
+                    name = name.substring(0, name.length() - 1);
+                name += "..";
+            }
+            this.font.draw(ps, name, 195, rowY, 0xEEDDCC);
+            CoinRenderer.renderCoinValue(ps, this.font, 314, rowY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
+            rowY += 9;
+        }
+        if (sortedItems.size() > VISIBLE_INCOME_ROWS) {
+            String scrollInfo = (incomeItemScroll + 1) + "-" + Math.min(incomeItemScroll + VISIBLE_INCOME_ROWS, sortedItems.size())
+                    + " / " + sortedItems.size();
+            this.font.draw(ps, scrollInfo, 195, 135, 0x557799);
         }
     }
 
@@ -2990,6 +3021,30 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                         return true;
                     } else if (delta < 0 && diplomatScrollOffset < maxScroll) {
                         diplomatScrollOffset++;
+                        return true;
+                    }
+                }
+            }
+        } else if (currentTab == Tab.INCOME) {
+            TradingPostBlockEntity be = menu.getBlockEntity();
+            if (be != null) {
+                // Left half: scroll Best Towns; right half: scroll Top Items
+                if (mouseX < this.leftPos + 191) {
+                    int maxScroll = Math.max(0, be.getEarningsByTown().size() - VISIBLE_INCOME_ROWS);
+                    if (delta > 0 && incomeTownScroll > 0) {
+                        incomeTownScroll--;
+                        return true;
+                    } else if (delta < 0 && incomeTownScroll < maxScroll) {
+                        incomeTownScroll++;
+                        return true;
+                    }
+                } else {
+                    int maxScroll = Math.max(0, be.getEarningsByItem().size() - VISIBLE_INCOME_ROWS);
+                    if (delta > 0 && incomeItemScroll > 0) {
+                        incomeItemScroll--;
+                        return true;
+                    } else if (delta < 0 && incomeItemScroll < maxScroll) {
+                        incomeItemScroll++;
                         return true;
                     }
                 }
