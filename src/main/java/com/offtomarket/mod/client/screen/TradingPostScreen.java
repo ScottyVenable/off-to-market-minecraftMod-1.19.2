@@ -385,9 +385,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     @Override
     protected void containerTick() {
         super.containerTick();
-        if (sendBtn != null) {
-            sendBtn.active = menu.hasBinItems();
-        }
+        // Keep Send to Market always active — no conditional graying
+        if (sendBtn != null) sendBtn.active = true;
     }
 
     private void switchTab(Tab tab) {
@@ -411,7 +410,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         prevTownBtn.visible = trade;
         nextTownBtn.visible = trade;
         sendBtn.visible = trade;
-        sendBtn.active = menu.hasBinItems(); // grayed out when no items in the nearby ledger
         collectBtn.visible = trade;
 
         activityScrollUpBtn.visible = activity;

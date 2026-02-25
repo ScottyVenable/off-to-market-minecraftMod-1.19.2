@@ -711,7 +711,10 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             // Client side: use the set synced from server via NBT
             return clientVirtualSlots.contains(slot);
         }
-        return slotToVirtualSource.containsKey(slot);
+        // Server: check live tick-populated map first, then fall back to the NBT-loaded set
+        // (clientVirtualSlots is populated from NBT in load() on both sides, so it is reliable
+        // during block break even before the first server-tick scan has run).
+        return slotToVirtualSource.containsKey(slot) || clientVirtualSlots.contains(slot);
     }
 
     /**

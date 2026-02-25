@@ -73,8 +73,11 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
         if (be.refreshTimer > 0) {
             be.refreshTimer--;
             if (be.refreshTimer == 0) {
-                be.syncToClient(); // notify client that refresh is available
+                be.refreshListings(); // auto-refresh when cooldown completes; also resets timer
             }
+        } else if (be.listings.isEmpty()) {
+            // First-time placement or world load with no listings: generate immediately
+            be.refreshListings();
         }
     }
 

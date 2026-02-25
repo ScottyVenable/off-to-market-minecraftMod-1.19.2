@@ -33,12 +33,14 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
 
     /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings), 2 = History (past orders), 3 = Income. */
     private int activeTab = 0;
-    private Button binTabButton;
-    private Button configTabButton;
-    private Button historyTabButton;
-    private Button incomeTabButton;
     private int historyScrollOffset = 0;
     private int incomeScrollOffset = 0;
+
+    // Tab visual constants (Trading Post style)
+    private static final String[] TAB_NAMES = {"Bin", "Fees", "History", "Income"};
+    private static final int[] TAB_OFFSETS = {182, 232, 282, 332};
+    private static final int TAB_W = 49;
+    private static final int TAB_H = 12;
 
     // ---- Bin tab widgets ----
     private EditBox priceInput;
@@ -85,23 +87,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         int x = this.leftPos;
         int y = this.topPos;
 
-        // ---- Tab buttons (right panel tab bar — 4 equal tabs at 49px each) ----
-        binTabButton = addRenderableWidget(new Button(x + 182, y + 4, 49, 12,
-                Component.literal("\u00A7e\u00A7lBin"), btn -> {
-            activeTab = 0; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
-        }));
-        configTabButton = addRenderableWidget(new Button(x + 232, y + 4, 49, 12,
-                Component.literal("\u00A77Fees"), btn -> {
-            activeTab = 1; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
-        }));
-        historyTabButton = addRenderableWidget(new Button(x + 282, y + 4, 49, 12,
-                Component.literal("\u00A77History"), btn -> {
-            activeTab = 2; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
-        }));
-        incomeTabButton = addRenderableWidget(new Button(x + 332, y + 4, 49, 12,
-                Component.literal("\u00A77Income"), btn -> {
-            activeTab = 3; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
-        }));
+        // ---- Tabs are drawn manually (Trading Post style) via fill() in renderBg ----
 
         // ---- Search input (left panel, below title) ----
         searchInput = new EditBox(this.font, x + LIST_LEFT, y + 20, LIST_WIDTH, 12,
@@ -221,13 +207,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         return be.getItem(selectedSlot);
     }
 
-    /** Update tab button labels to show active state. */
-    private void updateTabLabels() {
-        binTabButton.setMessage(Component.literal(activeTab == 0 ? "\u00A7e\u00A7lBin" : "\u00A77Bin"));
-        configTabButton.setMessage(Component.literal(activeTab == 1 ? "\u00A7e\u00A7lFees" : "\u00A77Fees"));
-        historyTabButton.setMessage(Component.literal(activeTab == 2 ? "\u00A7e\u00A7lHistory" : "\u00A77History"));
-        if (incomeTabButton != null)
-            incomeTabButton.setMessage(Component.literal(activeTab == 3 ? "\u00A7e\u00A7lIncome" : "\u00A77Income"));
+    /** Switch to the given tab index and refresh visibility. */
+    private void switchTab(int tab) {
+        activeTab = tab;
+        historyScrollOffset = 0;
+        incomeScrollOffset = 0;
+        updateTabVisibility();
     }
 
     /** Toggle widget visibility based on active tab and selection state. */
@@ -324,6 +309,19 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         // ---- Right panel: dark wood ----
         drawPanel(poseStack, x + 178, y, 206, 230);
         drawInsetPanel(poseStack, x + 181, y + 3, 200, 14);    // tab bar
+        // ---- Custom tabs (Trading Post style) ----
+        for (int i = 0; i < TAB_OFFSETS.length; i++) {
+            boolean selected = (activeTab == i);
+            int tx = x + TAB_OFFSETS[i];
+            int ty = y + 4;
+            if (selected) {
+                fill(poseStack, tx, ty, tx + TAB_W, ty + TAB_H + 1, 0xFF8B7355);
+                fill(poseStack, tx + 1, ty + 1, tx + TAB_W - 1, ty + TAB_H + 1, 0xFF3E3226);
+            } else {
+                fill(poseStack, tx, ty + 2, tx + TAB_W, ty + TAB_H, 0xFF1A1209);
+                fill(poseStack, tx + 1, ty + 3, tx + TAB_W - 1, ty + TAB_H - 1, 0xFF2A1F14);
+            }
+        }
         drawInsetPanel(poseStack, x + 181, y + 19, 200, 207);  // content area
 
         updateTabVisibility();
@@ -409,7 +407,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             // Fees tab
             drawDivider(poseStack, x, y + 62);
             drawDivider(poseStack, x, y + 80);
-            drawDivider(poseStack, x, y + 130);
+            drawDivider(poseStack, x, y + 136);
             taxInput.render(poseStack, mouseX, mouseY, partialTick);
             markupInput.render(poseStack, mouseX, mouseY, partialTick);
         } else if (activeTab == 2) {
@@ -433,7 +431,15 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     @Override
     protected void renderLabels(PoseStack poseStack, int mouseX, int mouseY) {
         // Left panel title
-        this.font.draw(poseStack, "\u00A7e\u00A7lTrading Bin", 8, 6, 0xFFD700);
+        this.font.draw(poseStack, "\u00A7e\u00A7lTrading Ledger", 8, 6, 0xFFD700);
+
+        // Tab labels (Trading Post style: gold = selected, gray = unselected)
+        for (int i = 0; i < TAB_NAMES.length; i++) {
+            boolean sel = (activeTab == i);
+            int color = sel ? 0xFFD700 : 0x888888;
+            int textY = sel ? 7 : 8;
+            drawCenteredString(poseStack, this.font, TAB_NAMES[i], TAB_OFFSETS[i] + TAB_W / 2, textY, color);
+        }
 
         // Item count indicator
         this.font.draw(poseStack, "\u00A77" + filteredSlots.size() + "/" +
@@ -505,27 +511,27 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         boolean rareApplicable = hasItem && TradingLedgerBlockEntity.isRarityApplicable(inspectStack);
 
         int modX = 184;
-        int modY = 94;
+        int modY = 88;
         // Show modifier label + percent; highlight green if it applies to current item, gray otherwise
         this.font.draw(poseStack,
                 (enchApplicable ? "\u00A7a" : "\u00A78") + "Ench +" + cbe.getEnchantedMarkupPercent() + "%",
                 modX, modY, 0xFFFFFF);
         this.font.draw(poseStack,
                 (usedApplicable ? "\u00A7e" : "\u00A78") + "Used -" + cbe.getUsedDiscountPercent() + "%",
-                modX, modY + 11, 0xFFFFFF);
+                modX, modY + 14, 0xFFFFFF);
         this.font.draw(poseStack,
                 (dmgdApplicable ? "\u00A7c" : "\u00A78") + "Dmgd -" + cbe.getDamagedDiscountPercent() + "%",
-                modX, modY + 22, 0xFFFFFF);
+                modX, modY + 28, 0xFFFFFF);
         this.font.draw(poseStack,
                 (rareApplicable ? "\u00A79" : "\u00A78") + "Rare +" + cbe.getRareMarkupPercent() + "%",
-                modX, modY + 33, 0xFFFFFF);
+                modX, modY + 42, 0xFFFFFF);
         // Auto-apply status indicators
         if (hasItem) {
             int indX = 305;
-            this.font.draw(poseStack, enchApplicable ? "\u00A7a\u2713" : "\u00A78–", indX, modY, 0xFFFFFF);
-            this.font.draw(poseStack, usedApplicable ? "\u00A7a\u2713" : "\u00A78–", indX, modY + 11, 0xFFFFFF);
-            this.font.draw(poseStack, dmgdApplicable ? "\u00A7a\u2713" : "\u00A78–", indX, modY + 22, 0xFFFFFF);
-            this.font.draw(poseStack, rareApplicable ? "\u00A7a\u2713" : "\u00A78–", indX, modY + 33, 0xFFFFFF);
+            this.font.draw(poseStack, enchApplicable ? "\u00A7a\u2713" : "\u00A78\u2013", indX, modY, 0xFFFFFF);
+            this.font.draw(poseStack, usedApplicable ? "\u00A7a\u2713" : "\u00A78\u2013", indX, modY + 14, 0xFFFFFF);
+            this.font.draw(poseStack, dmgdApplicable ? "\u00A7a\u2713" : "\u00A78\u2013", indX, modY + 28, 0xFFFFFF);
+            this.font.draw(poseStack, rareApplicable ? "\u00A7a\u2713" : "\u00A78\u2013", indX, modY + 42, 0xFFFFFF);
         }
 
         // Summary: price breakdown for selected item
@@ -536,11 +542,11 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             String est = TradingLedgerBlockEntity.getEstimatedMarketTime(
                     modifiedPrice, baseValue, maxPrice);
 
-            this.font.draw(poseStack, "Base: " + formatCoinText(baseValue), 184, 134, 0xAAAAAA);
-            this.font.draw(poseStack, "\u00A76\u2192 " + formatCoinText(modifiedPrice), 264, 134, 0xFFAA00);
-            this.font.draw(poseStack, "Sells: " + est, 184, 143, 0x888888);
+            this.font.draw(poseStack, "Base: " + formatCoinText(baseValue), 184, 140, 0xAAAAAA);
+            this.font.draw(poseStack, "\u00A76\u2192 " + formatCoinText(modifiedPrice), 264, 140, 0xFFAA00);
+            this.font.draw(poseStack, "Sells: " + est, 184, 150, 0x888888);
         } else {
-            this.font.draw(poseStack, "Select an item to preview modifiers.", 184, 134, 0x666666);
+            this.font.draw(poseStack, "Select an item to preview modifiers.", 184, 140, 0x666666);
         }
 
         // Caravan Weight display removed — not shown in Fees panel
@@ -774,6 +780,20 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // ---- Custom tab click detection (Trading Post style) ----
+        if (button == 0) {
+            int relX = (int) mouseX - this.leftPos;
+            int relY = (int) mouseY - this.topPos;
+            if (relY >= 4 && relY < 4 + TAB_H) {
+                for (int i = 0; i < TAB_OFFSETS.length; i++) {
+                    if (relX >= TAB_OFFSETS[i] && relX < TAB_OFFSETS[i] + TAB_W) {
+                        switchTab(i);
+                        return true;
+                    }
+                }
+            }
+        }
+
         // Right-click list row → open context menu for withdraw options
         if (button == 1) {
             int x = this.leftPos;

@@ -1,5 +1,47 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.4.8 — UI Polish, Bug Fixes & Master Ledger
+
+### Bug Fix — Send to Market Button Always Active
+- `sendBtn.active` is now forced to `true` every tick in `containerTick()`, removing the unintended gray-out.
+
+### Bug Fix — Trading Ledger Virtual Items Dropped on Block Break
+- Fixed a critical bug where breaking a Trading Ledger block would drop items that belonged to adjacent containers (virtual slots) rather than protecting them.
+- Root cause: `slotToVirtualSource` is populated by the server tick scan and not persisted to NBT. If broken before the first scan tick after world load, all items dropped.
+- Fix: `isVirtualSlot()` now falls back to `clientVirtualSlots` (which IS loaded from NBT) on the server side.
+
+### New Item — Master Ledger (renamed from Ledger)
+- The **Ledger** item is now called the **Master Ledger**.
+- Right-clicking opens a new aggregated overview screen showing all nearby Trading Ledger bins (within 64 blocks): position, item count, and payout per bin.
+- Total items and payout are summarised at the bottom.
+- A **Send to Market** button automatically finds the nearest Trading Post and triggers shipment from there.
+- Shift+use still opens the Coin Exchange screen.
+
+### Market Board — Auto-Refresh (no manual Refresh button)
+- The manual "Refresh" button has been removed. The Market Board now **auto-refreshes listings** every 5 minutes (6000 ticks) without any player interaction.
+- On first placement (or if listings are empty after world load), listings generate immediately.
+- A **countdown timer** ("Next: M:SS") is shown in the title bar so players know when the next refresh will occur.
+
+### Market Board — Cart Toggle Tab Style
+- The "Cart (n)" button in the title bar now uses the same tab style as the Trading Post tabs (gold border when active, dark when inactive).
+- Click detection is handled manually; no vanilla Button widget is rendered.
+
+### Market Board — Pagination Label Repositioned
+- The "X listings (1-14)" count label and the cart total summary were moved from **y=120** (mid-listing) to **y=188** (below the last listing row), so they no longer overlap the listing table.
+
+### Trading Ledger — Tabs Restyled (Trading Post Style)
+- The four tab buttons (Bin, Fees, History, Income) now use the same fill()-based rendering as the Trading Post tabs: gold border + dark body when selected; dark border + darker body when unselected.
+- Tab label text renders in gold (selected) or gray (unselected) directly via `renderLabels()`.
+- Vanilla Button widgets for tabs have been removed; click detection is handled in `mouseClicked()`.
+
+### Trading Ledger — Renamed "Trading Bin" → "Trading Ledger" in UI
+- The left-panel title label no longer shows "Trading Bin"; it now correctly reads **"Trading Ledger"** in gold.
+
+### Trading Ledger — Fees Tab Modifier Layout Improved
+- Modifier rows (Ench/Used/Dmgd/Rare) now use **14px vertical spacing** instead of 11px, giving the section more breathing room.
+- The divider separating the modifier section from the summary moved down to y+136.
+- The per-item summary and "Select an item to preview modifiers" hint are now drawn at y+140/150, reducing dead space.
+
 ## Version 0.4.6 — UI Polish, Finance Table & Economy Fixes
 
 ### Bug Fix — "Send to Market" Button

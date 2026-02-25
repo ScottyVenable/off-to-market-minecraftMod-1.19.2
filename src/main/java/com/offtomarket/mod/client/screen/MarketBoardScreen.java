@@ -15,7 +15,6 @@ import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.menu.MarketBoardMenu;
 import com.offtomarket.mod.network.CartCheckoutPacket;
 import com.offtomarket.mod.network.ModNetwork;
-import com.offtomarket.mod.network.RefreshMarketPacket;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
@@ -99,8 +98,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
     // ==================== Buttons ====================
 
-    private Button scrollUpBtn, scrollDownBtn, refreshBtn;
-    private Button cartToggleBtn;
+    private Button scrollUpBtn, scrollDownBtn;
     private Button checkoutBtn, clearCartBtn;
     private Button cartScrollUpBtn, cartScrollDownBtn;
 
@@ -131,22 +129,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         scrollDownBtn = addRenderableWidget(new Button(x + 366, y + 183, 14, 14,
                 Component.literal("v"), btn -> scrollOffset++));
 
-        refreshBtn = addRenderableWidget(new Button(x + 194, y + 3, 48, 14,
-                Component.literal("Refresh"), btn -> {
-            MarketBoardBlockEntity be = menu.getBlockEntity();
-            if (be != null) {
-                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                        new RefreshMarketPacket(be.getBlockPos()));
-            }
-        }));
-
-        // Cart toggle button (shows item count)
-        cartToggleBtn = addRenderableWidget(new Button(x + 312, y + 3, 54, 14,
-                Component.literal("Cart (0)"), btn -> {
-            showingCart = !showingCart;
-            selectedListingIndex = -1;
-            updateButtonVisibility();
-        }));
+        // Cart toggle and refresh button replaced by manual drawing and click detection
 
         // ==== Cart view buttons ====
 
@@ -251,18 +234,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         scrollUpBtn.visible = listing;
         scrollDownBtn.visible = listing;
-        refreshBtn.visible = !cartView;
+        // refreshBtn removed — market board auto-refreshes; timer shown in title bar
 
-        // Disable refresh button during cooldown (unless cheat is enabled)
-        MarketBoardBlockEntity be = menu.getBlockEntity();
-        if (be != null && !be.canRefresh()) {
-            refreshBtn.active = false;
-        } else {
-            refreshBtn.active = true;
-        }
-
-        cartToggleBtn.visible = !qtyOverlay;
-        cartToggleBtn.setMessage(Component.literal("Cart (" + cart.size() + ")"));
+        // cartToggleBtn not a widget; visibility tracked via selectedListingIndex check in mouseClicked
 
         checkoutBtn.visible = cartView && !cart.isEmpty();
         clearCartBtn.visible = cartView && !cart.isEmpty();
@@ -280,11 +254,6 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     @Override
     protected void containerTick() {
         super.containerTick();
-        // Update refresh button active state each tick
-        MarketBoardBlockEntity be = menu.getBlockEntity();
-        if (be != null) {
-            refreshBtn.active = be.canRefresh();
-        }
     }
 
     // ==================== Cart Logic ====================
@@ -459,6 +428,19 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         // Title bar
         drawInsetPanel(poseStack, x + 4, y + 3, 376, 14);
 
+        // Cart toggle tab (right side of title bar, Trading Post style)
+        if (selectedListingIndex < 0) {
+            int tx = x + 312;
+            int ty = y + 3;
+            if (showingCart) {
+                fill(poseStack, tx, ty, tx + 54, ty + 15, 0xFF8B7355);
+                fill(poseStack, tx + 1, ty + 1, tx + 53, ty + 15, 0xFF3E3226);
+            } else {
+                fill(poseStack, tx, ty + 2, tx + 54, ty + 14, 0xFF1A1209);
+                fill(poseStack, tx + 1, ty + 3, tx + 53, ty + 13, 0xFF2A1F14);
+            }
+        }
+
         // Extended content area (listings / cart) — no inventory below
         drawInsetPanel(poseStack, x + 4, y + 19, 360, 169);
 
@@ -589,7 +571,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             drawCenteredString(poseStack, this.font, "Market Board", 96, 6, 0xFFD700);
         }
 
-        // Refresh cooldown timer (next to refresh button)
+        // Cart toggle tab label
+        if (selectedListingIndex < 0) {
+            String cartLabel = "Cart (" + cart.size() + ")";
+            int cartColor = showingCart ? 0xFFD700 : 0x888888;
+            drawCenteredString(poseStack, this.font, cartLabel, 339, showingCart ? 6 : 7, cartColor);
+        }
+
+        // Refresh countdown timer (shown in title bar when market is refreshing)
         if (!showingCart) {
             MarketBoardBlockEntity rbe = menu.getBlockEntity();
             if (rbe != null && rbe.getRefreshCooldown() > 0 && !DebugConfig.UNLIMITED_REFRESHES) {
@@ -597,8 +586,8 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 int totalSeconds = remainTicks / 20;
                 int minutes = totalSeconds / 60;
                 int seconds = totalSeconds % 60;
-                String countdownStr = String.format("%d:%02d", minutes, seconds);
-                this.font.draw(poseStack, countdownStr, 245, 6, 0xFF8888);
+                String countdownStr = "Next: " + String.format("%d:%02d", minutes, seconds);
+                this.font.draw(poseStack, countdownStr, 190, 6, 0xFF8888);
             }
         }
 
@@ -623,7 +612,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         if (listings.isEmpty()) {
             this.font.draw(poseStack, "No listings available.", 10, 50, 0x888888);
-            this.font.draw(poseStack, "Click Refresh to load market data.", 10, 62, 0x888888);
+            this.font.draw(poseStack, "Market data will load automatically.", 10, 62, 0x888888);
             return;
         }
 
@@ -714,13 +703,13 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             countText += "  (" + (scrollOffset + 1) + "-" +
                     Math.min(scrollOffset + VISIBLE_LISTINGS, listings.size()) + ")";
         }
-        this.font.draw(poseStack, countText, 8, 120, 0x666666);
+        this.font.draw(poseStack, countText, 8, 188, 0x666666);
 
         // Cart summary
         if (!cart.isEmpty()) {
             String cartSummary = "Cart: " + formatCoinText(getCartTotal());
             int cartW = this.font.width(cartSummary);
-            this.font.draw(poseStack, cartSummary, 358 - cartW, 120, 0xFFCC44);
+            this.font.draw(poseStack, cartSummary, 358 - cartW, 188, 0xFFCC44);
         }
     }
 
@@ -960,6 +949,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             int y = this.topPos;
             double relX = mouseX - x;
             double relY = mouseY - y;
+
+            // Cart toggle tab click (right side of title bar)
+            if (selectedListingIndex < 0 && relX >= 312 && relX < 366 && relY >= 3 && relY < 17) {
+                showingCart = !showingCart;
+                selectedListingIndex = -1;
+                updateButtonVisibility();
+                return true;
+            }
 
             // If quantity overlay is showing, don't allow other clicks
             // (buttons handle overlay interaction)

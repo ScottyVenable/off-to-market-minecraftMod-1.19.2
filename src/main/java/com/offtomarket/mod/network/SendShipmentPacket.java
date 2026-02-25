@@ -46,7 +46,7 @@ public class SendShipmentPacket {
                     com.offtomarket.mod.util.SoundHelper.playShipmentSend(player.level, msg.pos);
                 } else {
                     player.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal("No items to send or no Trading Bin found nearby!")
+                            net.minecraft.network.chat.Component.literal("No items to send or no Trading Ledger found nearby!")
                                     .withStyle(net.minecraft.ChatFormatting.RED), true);
                 }
             }

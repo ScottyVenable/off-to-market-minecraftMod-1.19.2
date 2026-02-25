@@ -5,7 +5,6 @@ import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -99,7 +98,19 @@ public class TradingLedgerBlock extends BaseEntityBlock {
         if (!state.is(newState.getBlock())) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TradingLedgerBlockEntity tbbe) {
-                Containers.dropContents(level, pos, tbbe.getItems());
+                // Only drop items that are physically owned by this ledger block.
+                // Virtual slots mirror items from adjacent containers — those items
+                // stay in their source container and should NOT be duplicated on break.
+                net.minecraft.world.item.ItemStack[] owned = new net.minecraft.world.item.ItemStack[TradingLedgerBlockEntity.BIN_SIZE];
+                for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
+                    owned[i] = tbbe.isVirtualSlot(i)
+                            ? net.minecraft.world.item.ItemStack.EMPTY
+                            : tbbe.getItems().get(i);
+                }
+                for (net.minecraft.world.item.ItemStack stack : owned) {
+                    net.minecraft.world.Containers.dropItemStack(level,
+                            pos.getX(), pos.getY(), pos.getZ(), stack);
+                }
             }
         }
         super.onRemove(state, level, pos, newState, isMoving);
