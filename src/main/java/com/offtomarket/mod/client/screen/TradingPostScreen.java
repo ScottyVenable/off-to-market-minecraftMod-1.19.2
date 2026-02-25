@@ -717,14 +717,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     }
 
     private void renderIncomeBg(PoseStack ps, int x, int y) {
-        // Top stats strip
-        drawInsetPanel(ps, x + 6, y + 35, 372, 22);
-        // Left panel: Best Towns
-        drawInsetPanel(ps, x + 6, y + 59, 183, 81);
-        fill(ps, x + 8, y + 71, x + 187, y + 72, 0xFF4A3828);
+        // Stats strip (y=35+20=55)
+        drawInsetPanel(ps, x + 6, y + 35, 372, 20);
+        // Left panel: Best Towns (y=57+83=140)
+        drawInsetPanel(ps, x + 6, y + 57, 183, 83);
+        fill(ps, x + 8,   y + 68, x + 187, y + 69, OtmGuiTheme.SEPARATOR);
         // Right panel: Top Items
-        drawInsetPanel(ps, x + 191, y + 59, 187, 81);
-        fill(ps, x + 193, y + 71, x + 376, y + 72, 0xFF4A3828);
+        drawInsetPanel(ps, x + 191, y + 57, 187, 83);
+        fill(ps, x + 193, y + 68, x + 376, y + 69, OtmGuiTheme.SEPARATOR);
     }
 
     private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
@@ -1342,24 +1342,20 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
     }
 
-    // ==================== Economy Dashboard ====================
-
     private void renderEconomyDashboard(PoseStack ps) {
         TradingPostBlockEntity be = menu.getBlockEntity();
 
-        // ── Stats strip ──────────────────────────────────────────
-        this.font.draw(ps, "Economy Overview", 8, 36, OtmGuiTheme.TEXT_TITLE);
+        // ── Stats strip (y=35–55, text centered at y=39) ──────────────
         if (be == null) {
-            this.font.draw(ps, "No data available.", 10, 50, OtmGuiTheme.TEXT_MUTED);
+            this.font.draw(ps, "No data available.", 10, 39, OtmGuiTheme.TEXT_MUTED);
             return;
         }
 
-        long lifetime  = be.getLifetimeEarnings();
+        long lifetime   = be.getLifetimeEarnings();
         int  totalShips = be.getTotalShipmentsSent();
         long avgEarnings = totalShips > 0 ? lifetime / totalShips : 0;
 
-        // Row 1 of stats strip
-        int statsY = 40;
+        int statsY = 39;
         this.font.draw(ps, "Earnings:", 8, statsY, OtmGuiTheme.TEXT_LABEL);
         if (lifetime > 0) {
             CoinRenderer.renderCoinValue(ps, this.font, 60, statsY, (int) Math.min(lifetime, Integer.MAX_VALUE));
@@ -1376,17 +1372,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         if (lifetime == 0) {
-            // Empty state hint inside the lower panels
             this.font.draw(ps, "Send shipments to see stats here!", 10, 90, OtmGuiTheme.TEXT_MUTED);
             return;
         }
 
-        // ── Left panel: Best Towns ────────────────────────────────
-        this.font.draw(ps, "Best Towns", 8, 62, OtmGuiTheme.TEXT_TITLE);
-        // Column sub-headers
-        this.font.draw(ps, "Town",        8,  74, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Total",      110,  74, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Avg",        158,  74, OtmGuiTheme.TEXT_COL_HEADER);
+        // ── Left panel: Best Towns (panels start y=57) ─────────────
+        // Section header at y=60, divider at y=68, col-headers at y=70, rows from y=81
+        this.font.draw(ps, "Best Towns", 8, 60, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Town",  8,   70, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Total", 110, 70, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Avg",   158, 70, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> townEarnings = be.getEarningsByTown();
         List<Map.Entry<String, Long>> sortedTowns = townEarnings.entrySet().stream()
@@ -1396,7 +1391,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int maxTownScroll = Math.max(0, sortedTowns.size() - VISIBLE_INCOME_ROWS);
         incomeTownScroll = Math.min(incomeTownScroll, maxTownScroll);
 
-        int rowY = 77;
+        int rowY = 81;
         int displayed = 0;
         for (int i = incomeTownScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedTowns.size(); i++, displayed++) {
             Map.Entry<String, Long> entry = sortedTowns.get(i);
@@ -1410,15 +1405,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             rowY += 9;
         }
         if (sortedTowns.size() > VISIBLE_INCOME_ROWS) {
-            String scrollInfo = (incomeTownScroll + 1) + "-" + Math.min(incomeTownScroll + VISIBLE_INCOME_ROWS, sortedTowns.size())
+            String scrollInfo = (incomeTownScroll + 1) + "-"
+                    + Math.min(incomeTownScroll + VISIBLE_INCOME_ROWS, sortedTowns.size())
                     + " / " + sortedTowns.size();
-            this.font.draw(ps, scrollInfo, 8, 135, OtmGuiTheme.TEXT_SCROLL);
+            this.font.draw(ps, scrollInfo, 8, 133, OtmGuiTheme.TEXT_SCROLL);
         }
 
         // ── Right panel: Top Items ────────────────────────────────
-        this.font.draw(ps, "Top Items", 195, 62, OtmGuiTheme.TEXT_TITLE);
-        this.font.draw(ps, "Item",  195, 74, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Total", 314, 74, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Top Items", 195, 60, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Item",  195, 70, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Total", 314, 70, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> itemEarnings = be.getEarningsByItem();
         List<Map.Entry<String, Long>> sortedItems = itemEarnings.entrySet().stream()
@@ -1428,7 +1424,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int maxItemScroll = Math.max(0, sortedItems.size() - VISIBLE_INCOME_ROWS);
         incomeItemScroll = Math.min(incomeItemScroll, maxItemScroll);
 
-        rowY = 77;
+        rowY = 81;
         displayed = 0;
         for (int i = incomeItemScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedItems.size(); i++, displayed++) {
             Map.Entry<String, Long> entry = sortedItems.get(i);
@@ -1438,9 +1434,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             rowY += 9;
         }
         if (sortedItems.size() > VISIBLE_INCOME_ROWS) {
-            String scrollInfo = (incomeItemScroll + 1) + "-" + Math.min(incomeItemScroll + VISIBLE_INCOME_ROWS, sortedItems.size())
+            String scrollInfo = (incomeItemScroll + 1) + "-"
+                    + Math.min(incomeItemScroll + VISIBLE_INCOME_ROWS, sortedItems.size())
                     + " / " + sortedItems.size();
-            this.font.draw(ps, scrollInfo, 195, 135, OtmGuiTheme.TEXT_SCROLL);
+            this.font.draw(ps, scrollInfo, 195, 133, OtmGuiTheme.TEXT_SCROLL);
         }
     }
 
