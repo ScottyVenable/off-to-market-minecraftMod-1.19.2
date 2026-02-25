@@ -1,6 +1,6 @@
 package com.offtomarket.mod.network;
 
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -77,11 +77,11 @@ public class UpdateBinSettingsPacket {
             ServerPlayer player = ctx.get().getSender();
             if (player != null) {
                 BlockEntity be = player.level.getBlockEntity(msg.pos);
-                if (be instanceof TradingBinBlockEntity tbbe) {
+                if (be instanceof TradingLedgerBlockEntity tbbe) {
                     tbbe.setCraftingTaxPercent(msg.craftingTaxPercent);
                     tbbe.setMinMarkupPercent(msg.minMarkupPercent);
-                    TradingBinBlockEntity.AutoPriceMode[] modes =
-                            TradingBinBlockEntity.AutoPriceMode.values();
+                    TradingLedgerBlockEntity.AutoPriceMode[] modes =
+                            TradingLedgerBlockEntity.AutoPriceMode.values();
                     if (msg.autoPriceModeOrdinal >= 0 && msg.autoPriceModeOrdinal < modes.length) {
                         tbbe.setAutoPriceMode(modes[msg.autoPriceModeOrdinal]);
                     }

@@ -3,7 +3,7 @@ package com.offtomarket.mod.registry;
 import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.block.MailboxBlock;
 import com.offtomarket.mod.block.MarketBoardBlock;
-import com.offtomarket.mod.block.TradingBinBlock;
+import com.offtomarket.mod.block.TradingLedgerBlock;
 import com.offtomarket.mod.block.TradingPostBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
@@ -23,8 +23,8 @@ public class ModBlocks {
                     .sound(SoundType.WOOD)
                     .noOcclusion()));
 
-    public static final RegistryObject<Block> TRADING_BIN = BLOCKS.register("trading_bin",
-            () -> new TradingBinBlock(BlockBehaviour.Properties.of(Material.WOOD)
+    public static final RegistryObject<Block> TRADING_LEDGER = BLOCKS.register("trading_ledger",
+            () -> new TradingLedgerBlock(BlockBehaviour.Properties.of(Material.WOOD)
                     .strength(2.5f)
                     .sound(SoundType.WOOD)));
 

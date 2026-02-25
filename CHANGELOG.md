@@ -1,5 +1,14 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.4.3 — Trading Bin Renamed to Trading Ledger
+
+### Block Rename
+- **Trading Bin → Trading Ledger** — The storage block for items awaiting shipment has been renamed. Registry ID, item, lang keys, loot table, recipe, and all code references updated.
+- **Directional placement** — The Trading Ledger now has a FACING property (north/south/east/west) and faces the player on placement, matching the Trading Post behavior.
+- **New directional model** — Block now uses four distinct textures: `trading_ledger_front`, `trading_ledger_back`, `trading_ledger_side`, and `trading_ledger_top`. The blockstates JSON handles rotation so the front always faces the player.
+
+---
+
 ## Version 0.4.2 — UI Polish, Reputation Overhaul & Trading Bin Improvements
 
 ### Reputation System

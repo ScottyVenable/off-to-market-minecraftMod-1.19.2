@@ -7,7 +7,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "offtomarket:trading_bin"
+          "name": "offtomarket:trading_ledger"
         }
       ],
       "conditions": [

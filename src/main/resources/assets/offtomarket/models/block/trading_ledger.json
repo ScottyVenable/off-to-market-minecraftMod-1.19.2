@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "offtomarket:block/trading_ledger_side",
+    "north":    "offtomarket:block/trading_ledger_front",
+    "south":    "offtomarket:block/trading_ledger_back",
+    "east":     "offtomarket:block/trading_ledger_side",
+    "west":     "offtomarket:block/trading_ledger_side",
+    "up":       "offtomarket:block/trading_ledger_top",
+    "down":     "offtomarket:block/trading_ledger_top"
+  }
+}

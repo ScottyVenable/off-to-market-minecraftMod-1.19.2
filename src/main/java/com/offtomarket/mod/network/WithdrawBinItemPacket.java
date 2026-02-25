@@ -1,6 +1,6 @@
 package com.offtomarket.mod.network;
 
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -44,8 +44,8 @@ public class WithdrawBinItemPacket {
             ServerPlayer player = ctx.get().getSender();
             if (player != null) {
                 BlockEntity be = player.level.getBlockEntity(msg.pos);
-                if (be instanceof TradingBinBlockEntity tbbe) {
-                    if (msg.slot >= 0 && msg.slot < TradingBinBlockEntity.BIN_SIZE) {
+                if (be instanceof TradingLedgerBlockEntity tbbe) {
+                    if (msg.slot >= 0 && msg.slot < TradingLedgerBlockEntity.BIN_SIZE) {
                         ItemStack stack = tbbe.getItem(msg.slot);
                         if (!stack.isEmpty()) {
                             ItemStack toGive = stack.copy();
@@ -58,7 +58,7 @@ public class WithdrawBinItemPacket {
                                     net.minecraft.world.level.block.entity.BlockEntity adj =
                                             player.level.getBlockEntity(be.getBlockPos().relative(dir));
                                     if (adj instanceof net.minecraft.world.Container adjCont
-                                            && !(adj instanceof TradingBinBlockEntity)) {
+                                            && !(adj instanceof TradingLedgerBlockEntity)) {
                                         for (int i = 0; i < adjCont.getContainerSize(); i++) {
                                             ItemStack slot2 = adjCont.getItem(i);
                                             if (slot2.isEmpty()) {

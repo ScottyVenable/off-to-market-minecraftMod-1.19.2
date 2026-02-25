@@ -3,7 +3,7 @@ package com.offtomarket.mod.registry;
 import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.block.entity.MailboxBlockEntity;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.registries.DeferredRegister;
@@ -19,10 +19,10 @@ public class ModBlockEntities {
                     () -> BlockEntityType.Builder.of(TradingPostBlockEntity::new,
                             ModBlocks.TRADING_POST.get()).build(null));
 
-    public static final RegistryObject<BlockEntityType<TradingBinBlockEntity>> TRADING_BIN =
-            BLOCK_ENTITIES.register("trading_bin",
-                    () -> BlockEntityType.Builder.of(TradingBinBlockEntity::new,
-                            ModBlocks.TRADING_BIN.get()).build(null));
+    public static final RegistryObject<BlockEntityType<TradingLedgerBlockEntity>> TRADING_LEDGER =
+            BLOCK_ENTITIES.register("trading_ledger",
+                    () -> BlockEntityType.Builder.of(TradingLedgerBlockEntity::new,
+                            ModBlocks.TRADING_LEDGER.get()).build(null));
 
     public static final RegistryObject<BlockEntityType<MarketBoardBlockEntity>> MARKET_BOARD =
             BLOCK_ENTITIES.register("market_board",

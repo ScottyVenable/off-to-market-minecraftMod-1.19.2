@@ -1,6 +1,6 @@
 package com.offtomarket.mod.network;
 
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,7 +33,7 @@ public class UpgradeCaravanWeightPacket {
             if (player == null) return;
 
             BlockEntity be = player.level.getBlockEntity(msg.pos);
-            if (be instanceof TradingBinBlockEntity tbbe) {
+            if (be instanceof TradingLedgerBlockEntity tbbe) {
                 tbbe.upgradeCaravanWeight(player);
             }
         });

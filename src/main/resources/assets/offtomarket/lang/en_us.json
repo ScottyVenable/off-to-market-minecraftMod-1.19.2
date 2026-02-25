@@ -2,7 +2,7 @@
   "itemGroup.offtomarket": "Off to Market",
 
   "block.offtomarket.trading_post": "Trading Post",
-  "block.offtomarket.trading_bin": "Trading Bin",
+  "block.offtomarket.trading_ledger": "Trading Ledger",
   "block.offtomarket.market_board": "Market Board",
   "block.offtomarket.mailbox": "Mailbox",
 
@@ -34,8 +34,8 @@
   "gui.offtomarket.trading_post.distance": "Distance: %d - %d",
   "gui.offtomarket.trading_post.shipments": "Active Shipments:",
   "gui.offtomarket.trading_post.shipment_entry": "%s → %s [%s]",
-  "gui.offtomarket.trading_post.no_bin": "No Trading Bin found nearby!",
-  "gui.offtomarket.trading_post.bin_empty": "Trading Bin is empty!",
+  "gui.offtomarket.trading_post.no_ledger": "No Trading Ledger found nearby!",
+  "gui.offtomarket.trading_post.ledger_empty": "Trading Ledger is empty!",
   "gui.offtomarket.trading_post.no_town_selected": "Select a town first!",
   "gui.offtomarket.trading_post.level_too_low": "Trader level too low for this town!",
   "gui.offtomarket.trading_post.no_coins": "No coins to collect!",
@@ -44,11 +44,11 @@
   "gui.offtomarket.trading_post.level_up": "Trader Level Up! Now level %d!",
   "gui.offtomarket.trading_post.return_requested": "Requesting return of shipment...",
 
-  "gui.offtomarket.trading_bin": "Trading Bin",
-  "gui.offtomarket.trading_bin.set_price": "Set Price",
-  "gui.offtomarket.trading_bin.price": "Price: %d CP",
-  "gui.offtomarket.trading_bin.no_price": "No price set",
-  "gui.offtomarket.trading_bin.slot": "Slot %d",
+  "gui.offtomarket.trading_ledger": "Trading Ledger",
+  "gui.offtomarket.trading_ledger.set_price": "Set Price",
+  "gui.offtomarket.trading_ledger.price": "Price: %d CP",
+  "gui.offtomarket.trading_ledger.no_price": "No price set",
+  "gui.offtomarket.trading_ledger.slot": "Slot %d",
 
   "gui.offtomarket.market_board": "Market Board",
   "gui.offtomarket.market_board.refresh": "Refresh",

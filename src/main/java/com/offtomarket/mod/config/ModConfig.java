@@ -234,7 +234,7 @@ public class ModConfig {
 
     // ==================== TRADING BIN ====================
     static {
-        BUILDER.comment("Trading Bin Settings - Control bin behavior").push("tradingBin");
+        BUILDER.comment("Trading Bin Settings - Control bin behavior").push("tradingLedger");
     }
 
     private static final ForgeConfigSpec.IntValue BIN_SEARCH_RADIUS = BUILDER

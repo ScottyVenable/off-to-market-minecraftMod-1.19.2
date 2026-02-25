@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.4.2-blue" alt="Version 0.4.2">
+  <img src="https://img.shields.io/badge/Version-0.4.3-blue" alt="Version 0.4.3">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -27,7 +27,7 @@ The central hub for all your trading activities. Use it to:
 - Complete quests for reputation and rewards
 - Track your merchant level progression
 
-#### Trading Bin
+#### Trading Ledger
 Your local storage for items to sell:
 - Set prices per item slot
 - Items are automatically valued when caravans come
@@ -120,7 +120,7 @@ Trade livestock with the **Animal Trade Slip** system:
 ## Getting Started
 
 1. **Craft a Trading Post** - Your gateway to commerce
-2. **Craft a Trading Bin** - Store items you want to sell
+2. **Craft a Trading Ledger** - Store items you want to sell
 3. **Earn some coins** - Complete initial quests or sell goods
 4. **Build reputation** - Unlock access to more towns and better prices
 5. **Expand your empire** - Set up trade routes and grow wealth!
@@ -136,7 +136,7 @@ Trade livestock with the **Animal Trade Slip** system:
 [Oak Log] [Oak Log] [Oak Log]
 ```
 
-### Trading Bin
+### Trading Ledger
 ```
 [Oak Planks] [Oak Planks] [Oak Planks]
 [Oak Planks] [Chest]      [Oak Planks]
@@ -228,7 +228,7 @@ Works alongside other economy mods and integrates automatically with item-adding
 ## Installation
 
 1. Install Minecraft Forge 1.19.2 (version 43.x or higher)
-2. Download `offtomarket-0.4.2.jar`
+2. Download `offtomarket-0.4.3.jar`
 3. Place in your `mods` folder
 4. Launch the game!
 

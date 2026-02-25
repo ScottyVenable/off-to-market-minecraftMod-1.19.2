@@ -2,9 +2,9 @@ package com.offtomarket.mod.client.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.data.PriceCalculator;
-import com.offtomarket.mod.menu.TradingBinMenu;
+import com.offtomarket.mod.menu.TradingLedgerMenu;
 import com.offtomarket.mod.network.ModNetwork;
 import com.offtomarket.mod.network.SetPricePacket;
 import com.offtomarket.mod.network.UpgradeCaravanWeightPacket;
@@ -29,7 +29,7 @@ import java.util.Locale;
  * Right panel: Price Book / Fees tabs.
  * Items are auto-filled from adjacent container blocks (chest, barrel, etc.) every ~3 s.
  */
-public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
+public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMenu> {
 
     /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings). */
     private int activeTab = 0;
@@ -67,7 +67,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     private int contextMenuX;
     private int contextMenuY;
 
-    public TradingBinScreen(TradingBinMenu menu, Inventory inv, Component title) {
+    public TradingLedgerScreen(TradingLedgerMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
         this.imageWidth = 384;
         this.imageHeight = 166;
@@ -115,7 +115,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         setButton = addRenderableWidget(new Button(x + 296, y + 102, 78, 14,
                 Component.literal("Set Price"), btn -> {
             if (!priceInput.getValue().isEmpty()) {
-                TradingBinBlockEntity be = menu.getBlockEntity();
+                TradingLedgerBlockEntity be = menu.getBlockEntity();
                 if (be != null && selectedSlot >= 0) {
                     int price = Integer.parseInt(priceInput.getValue());
                     ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
@@ -126,8 +126,8 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         withdrawButton = addRenderableWidget(new Button(x + 184, y + 148, 80, 14,
                 Component.literal("Withdraw"), btn -> {
-            TradingBinBlockEntity be = menu.getBlockEntity();
-            if (be != null && selectedSlot >= 0 && selectedSlot < TradingBinBlockEntity.BIN_SIZE) {
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
+            if (be != null && selectedSlot >= 0 && selectedSlot < TradingLedgerBlockEntity.BIN_SIZE) {
                 ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                         new WithdrawBinItemPacket(be.getBlockPos(), selectedSlot));
                 selectedSlot = -1;
@@ -137,7 +137,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }));
 
         // ---- Fees tab widgets ----
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
 
         taxInput = new EditBox(this.font, x + 260, y + 32, 42, 12,
                 Component.literal("Tax"));
@@ -156,7 +156,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         String modeLabel = be != null ? be.getAutoPriceMode().getDisplayName() : "Auto Fair";
         autoPriceModeButton = addRenderableWidget(new Button(x + 184, y + 64, 106, 14,
                 Component.literal(modeLabel), btn -> {
-            TradingBinBlockEntity blockEntity = menu.getBlockEntity();
+            TradingLedgerBlockEntity blockEntity = menu.getBlockEntity();
             if (blockEntity != null) {
                 blockEntity.cycleAutoPriceMode();
                 btn.setMessage(Component.literal(blockEntity.getAutoPriceMode().getDisplayName()));
@@ -168,7 +168,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         upgradeCaravanBtn = addRenderableWidget(new Button(x + 184, y + 147, 190, 14,
             Component.literal("Upgrade Caravan"), btn -> {
-            TradingBinBlockEntity blockEntity = menu.getBlockEntity();
+            TradingLedgerBlockEntity blockEntity = menu.getBlockEntity();
             if (blockEntity != null) {
             ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                 new UpgradeCaravanWeightPacket(blockEntity.getBlockPos()));
@@ -184,10 +184,10 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     /** Rebuild the list of bin slot indices that match the current search filter. */
     private void updateFilteredSlots() {
         filteredSlots.clear();
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
         String filter = searchInput != null ? searchInput.getValue().toLowerCase(Locale.ROOT) : "";
-        for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
+        for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
             ItemStack stack = be.getItem(i);
             if (!stack.isEmpty()) {
                 if (filter.isEmpty() ||
@@ -202,8 +202,8 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
     /** Get the currently selected item for pricing. */
     private ItemStack getSelectedItem() {
-        TradingBinBlockEntity be = menu.getBlockEntity();
-        if (be == null || selectedSlot < 0 || selectedSlot >= TradingBinBlockEntity.BIN_SIZE) {
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        if (be == null || selectedSlot < 0 || selectedSlot >= TradingLedgerBlockEntity.BIN_SIZE) {
             return ItemStack.EMPTY;
         }
         return be.getItem(selectedSlot);
@@ -235,7 +235,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
     /** Send current fee/modifier settings to the server. */
     private void sendSettingsToServer() {
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
         int tax = 15, markup = 0;
         try { tax = Integer.parseInt(taxInput.getValue()); } catch (NumberFormatException ignored) {}
@@ -264,7 +264,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         // Deselect if item was withdrawn or removed
         if (selectedSlot >= 0) {
-            TradingBinBlockEntity be = menu.getBlockEntity();
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
             if (be == null || be.getItem(selectedSlot).isEmpty()) {
                 selectedSlot = -1;
                 lastSelectedItem = ItemStack.EMPTY;
@@ -316,7 +316,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         searchInput.render(poseStack, mouseX, mouseY, partialTick);
 
         // ---- List rows (backgrounds and text) ----
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be != null) {
             int listX = x + LIST_LEFT;
             int listY = y + LIST_TOP;
@@ -415,9 +415,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         // Item count indicator
         this.font.draw(poseStack, "\u00A77" + filteredSlots.size() + "/" +
-                TradingBinBlockEntity.BIN_SIZE, 130, 6, 0x888888);
+                TradingLedgerBlockEntity.BIN_SIZE, 130, 6, 0x888888);
 
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be != null) {
             String payout = "Payout: " + formatCoinText(be.getTotalProposedPayout());
             this.font.draw(poseStack, payout, 8, 154, 0xCCAA66);
@@ -446,7 +446,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         this.font.draw(poseStack, "Min Markup:", 184, 49, 0xCCCCCC);
         this.font.draw(poseStack, "%", 304, 49, 0x999999);
 
-        TradingBinBlockEntity cbe = menu.getBlockEntity();
+        TradingLedgerBlockEntity cbe = menu.getBlockEntity();
         if (cbe == null) return;
 
         if (upgradeCaravanBtn != null) {
@@ -471,12 +471,12 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }
 
         // Auto-applied price modifiers (always active — no toggles needed)
-        boolean enchApplicable = hasItem && TradingBinBlockEntity.isEnchantmentApplicable(inspectStack);
-        boolean usedApplicable = hasItem && TradingBinBlockEntity.isDurabilityApplicable(inspectStack)
-                && !TradingBinBlockEntity.isHeavilyDamaged(inspectStack);
-        boolean dmgdApplicable = hasItem && TradingBinBlockEntity.isDurabilityApplicable(inspectStack)
-                && TradingBinBlockEntity.isHeavilyDamaged(inspectStack);
-        boolean rareApplicable = hasItem && TradingBinBlockEntity.isRarityApplicable(inspectStack);
+        boolean enchApplicable = hasItem && TradingLedgerBlockEntity.isEnchantmentApplicable(inspectStack);
+        boolean usedApplicable = hasItem && TradingLedgerBlockEntity.isDurabilityApplicable(inspectStack)
+                && !TradingLedgerBlockEntity.isHeavilyDamaged(inspectStack);
+        boolean dmgdApplicable = hasItem && TradingLedgerBlockEntity.isDurabilityApplicable(inspectStack)
+                && TradingLedgerBlockEntity.isHeavilyDamaged(inspectStack);
+        boolean rareApplicable = hasItem && TradingLedgerBlockEntity.isRarityApplicable(inspectStack);
 
         int modX = 184;
         int modY = 94;
@@ -507,7 +507,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             int baseValue = PriceCalculator.getBaseValue(inspectStack);
             int modifiedPrice = cbe.getEffectivePrice(inspectStack, baseValue);
             int maxPrice = PriceCalculator.getMaxPrice(inspectStack);
-            String est = TradingBinBlockEntity.getEstimatedMarketTime(
+            String est = TradingLedgerBlockEntity.getEstimatedMarketTime(
                     modifiedPrice, baseValue, maxPrice);
 
             this.font.draw(poseStack, "Base: " + formatCoinText(baseValue), 184, 142, 0xAAAAAA);
@@ -525,7 +525,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         // Header
         drawCenteredString(poseStack, this.font, "\u00A7lPrice Book", 280, 21, 0xFFD700);
 
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
 
         ItemStack selectedStack = getSelectedItem();
@@ -550,7 +550,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }
     }
 
-    private void renderItemPriceInfo(PoseStack poseStack, TradingBinBlockEntity be, ItemStack stack) {
+    private void renderItemPriceInfo(PoseStack poseStack, TradingLedgerBlockEntity be, ItemStack stack) {
         // Item name (next to the icon rendered in render())
         String itemName = stack.getHoverName().getString();
         int maxNameW = 168;
@@ -612,7 +612,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         this.font.draw(poseStack, rating.getLabel(), 184, 128, rating.getColor());
         this.font.draw(poseStack, "Final: " + formatCoinText(effectivePrice), 266, 128, 0xBEA876);
 
-        String est = TradingBinBlockEntity.getEstimatedMarketTime(
+        String est = TradingLedgerBlockEntity.getEstimatedMarketTime(
             effectivePrice, bd.materialCost(), bd.maxPrice());
         this.font.draw(poseStack, "Sells: " + est, 184, 140, 0x888888);
     }
@@ -639,7 +639,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                 int rowY = listY + i * ROW_HEIGHT;
                 if (mouseX >= listX && mouseX < listX + LIST_WIDTH
                         && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
-                    TradingBinBlockEntity be = menu.getBlockEntity();
+                    TradingLedgerBlockEntity be = menu.getBlockEntity();
                     if (be != null && !be.getItem(slot).isEmpty()) {
                         contextMenuSlot = slot;
                         contextMenuX = (int) mouseX;
@@ -658,7 +658,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             int cmY = contextMenuY;
             // Option 0: To Inventory  (y offset 0..10)
             if (mouseX >= cmX && mouseX < cmX + 80 && mouseY >= cmY && mouseY < cmY + 10) {
-                TradingBinBlockEntity be = menu.getBlockEntity();
+                TradingLedgerBlockEntity be = menu.getBlockEntity();
                 if (be != null) {
                     ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                             new com.offtomarket.mod.network.WithdrawBinItemPacket(
@@ -669,7 +669,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             }
             // Option 1: To Container  (y offset 12..22)
             if (mouseX >= cmX && mouseX < cmX + 80 && mouseY >= cmY + 12 && mouseY < cmY + 22) {
-                TradingBinBlockEntity be = menu.getBlockEntity();
+                TradingLedgerBlockEntity be = menu.getBlockEntity();
                 if (be != null) {
                     ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                             new com.offtomarket.mod.network.WithdrawBinItemPacket(
@@ -695,7 +695,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
                 if (mouseX >= listX && mouseX < listX + LIST_WIDTH
                         && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
-                    TradingBinBlockEntity be = menu.getBlockEntity();
+                    TradingLedgerBlockEntity be = menu.getBlockEntity();
                     if (be != null && !be.getItem(slot).isEmpty()) {
                         if (selectedSlot == slot) {
                             // Toggle deselect
@@ -744,7 +744,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // Enter in price input → set price
         if (keyCode == 257 && priceInput.isFocused() && !priceInput.getValue().isEmpty()) {
-            TradingBinBlockEntity be = menu.getBlockEntity();
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
             if (be != null && selectedSlot >= 0) {
                 int price = Integer.parseInt(priceInput.getValue());
                 ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
@@ -789,7 +789,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         super.render(poseStack, mouseX, mouseY, partialTick);
 
         // Render item icons in the list (after bg, on top of row backgrounds)
-        TradingBinBlockEntity be = menu.getBlockEntity();
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be != null) {
             int x = this.leftPos;
             int y = this.topPos;

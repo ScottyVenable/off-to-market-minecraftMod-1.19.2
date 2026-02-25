@@ -461,14 +461,14 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (town == null || town.getMinTraderLevel() > traderLevel) return false;
 
         // Find a nearby Trading Bin
-        TradingBinBlockEntity bin = findNearbyBin(level, postPos);
+        TradingLedgerBlockEntity bin = findNearbyBin(level, postPos);
         if (bin == null || bin.isEmpty()) return false;
 
         // Collect items from the bin
         List<ItemStack> itemsToShip = new ArrayList<>();
         List<Shipment.ShipmentItem> shipmentItems = new ArrayList<>();
 
-        for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
+        for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
             ItemStack stack = bin.getItem(i);
             if (!stack.isEmpty() && stack.getItem() != net.minecraft.world.item.Items.AIR) {
                 int price = bin.getEffectivePriceForSlot(i);
@@ -1349,13 +1349,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // ==================== Helper Methods ====================
 
     @Nullable
-    private TradingBinBlockEntity findNearbyBin(Level level, BlockPos center) {
+    private TradingLedgerBlockEntity findNearbyBin(Level level, BlockPos center) {
         int radius = DebugConfig.getBinSearchRadius();
         for (BlockPos pos : BlockPos.betweenClosed(
                 center.offset(-radius, -radius, -radius),
                 center.offset(radius, radius, radius))) {
             BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof TradingBinBlockEntity bin) {
+            if (be instanceof TradingLedgerBlockEntity bin) {
                 return bin;
             }
         }

@@ -1,7 +1,7 @@
 package com.offtomarket.mod.debug;
 
 import com.offtomarket.mod.OffToMarket;
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import com.offtomarket.mod.data.Shipment;
 import net.minecraft.core.BlockPos;

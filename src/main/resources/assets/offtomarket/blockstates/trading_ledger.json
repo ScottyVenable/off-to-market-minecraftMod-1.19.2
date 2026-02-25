@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "offtomarket:block/trading_ledger" },
+    "facing=east":  { "model": "offtomarket:block/trading_ledger", "y": 90 },
+    "facing=south": { "model": "offtomarket:block/trading_ledger", "y": 180 },
+    "facing=west":  { "model": "offtomarket:block/trading_ledger", "y": 270 }
+  }
+}

@@ -1,6 +1,6 @@
 package com.offtomarket.mod.menu;
 
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.registry.ModMenuTypes;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -14,22 +14,22 @@ import net.minecraft.world.item.ItemStack;
  * All slots are positioned off-screen; the GUI uses a custom list view.
  * Shift-click still moves items between bin and player inventory.
  */
-public class TradingBinMenu extends AbstractContainerMenu {
-    private final TradingBinBlockEntity blockEntity;
+public class TradingLedgerMenu extends AbstractContainerMenu {
+    private final TradingLedgerBlockEntity blockEntity;
 
     // Client-side constructor
-    public TradingBinMenu(int containerId, Inventory inv) {
+    public TradingLedgerMenu(int containerId, Inventory inv) {
         this(containerId, inv, null);
     }
 
-    public TradingBinMenu(int containerId, Inventory inv, TradingBinBlockEntity be) {
-        super(ModMenuTypes.TRADING_BIN.get(), containerId);
+    public TradingLedgerMenu(int containerId, Inventory inv, TradingLedgerBlockEntity be) {
+        super(ModMenuTypes.TRADING_LEDGER.get(), containerId);
         this.blockEntity = be;
 
-        net.minecraft.world.Container container = be != null ? be : new SimpleContainer(TradingBinBlockEntity.BIN_SIZE);
+        net.minecraft.world.Container container = be != null ? be : new SimpleContainer(TradingLedgerBlockEntity.BIN_SIZE);
 
         // Bin slots (off-screen — rendered as a custom list in the screen)
-        for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
+        for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
             this.addSlot(new Slot(container, i, -9999, -9999));
         }
 
@@ -46,7 +46,7 @@ public class TradingBinMenu extends AbstractContainerMenu {
         }
     }
 
-    public TradingBinBlockEntity getBlockEntity() { return blockEntity; }
+    public TradingLedgerBlockEntity getBlockEntity() { return blockEntity; }
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
@@ -57,7 +57,7 @@ public class TradingBinMenu extends AbstractContainerMenu {
             ItemStack slotStack = slot.getItem();
             result = slotStack.copy();
 
-            int binEnd = TradingBinBlockEntity.BIN_SIZE;      // 9
+            int binEnd = TradingLedgerBlockEntity.BIN_SIZE;      // 9
             int playerStart = binEnd;                          // 9
             int playerEnd = playerStart + 36;                  // 45
 

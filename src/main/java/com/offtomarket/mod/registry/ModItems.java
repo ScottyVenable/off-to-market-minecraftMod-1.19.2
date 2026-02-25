@@ -24,8 +24,8 @@ public class ModItems {
             () -> new BlockItem(ModBlocks.TRADING_POST.get(),
                     new Item.Properties().tab(ModCreativeTab.TAB)));
 
-    public static final RegistryObject<Item> TRADING_BIN_ITEM = ITEMS.register("trading_bin",
-            () -> new BlockItem(ModBlocks.TRADING_BIN.get(),
+    public static final RegistryObject<Item> TRADING_LEDGER_ITEM = ITEMS.register("trading_ledger",
+            () -> new BlockItem(ModBlocks.TRADING_LEDGER.get(),
                     new Item.Properties().tab(ModCreativeTab.TAB)));
 
     public static final RegistryObject<Item> MARKET_BOARD_ITEM = ITEMS.register("market_board",

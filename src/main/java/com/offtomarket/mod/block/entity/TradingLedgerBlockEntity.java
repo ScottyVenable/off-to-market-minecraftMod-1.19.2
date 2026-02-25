@@ -1,7 +1,7 @@
 package com.offtomarket.mod.block.entity;
 
 import com.offtomarket.mod.data.PriceCalculator;
-import com.offtomarket.mod.menu.TradingBinMenu;
+import com.offtomarket.mod.menu.TradingLedgerMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -34,7 +34,7 @@ import java.util.Map;
  *
  * 9 slots for items, plus the note appears in slot 0 after pickup.
  */
-public class TradingBinBlockEntity extends BlockEntity implements Container, MenuProvider {
+public class TradingLedgerBlockEntity extends BlockEntity implements Container, MenuProvider {
     public static final int BIN_SIZE = 200;
     public static final int MAX_STACK_PER_SLOT = 200;
     public static final int BASE_CARAVAN_WEIGHT_CAPACITY = 800;
@@ -101,8 +101,8 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     /** Caravan weight upgrade level purchased from Fees tab. */
     private int caravanWeightUpgradeLevel = 0;
 
-    public TradingBinBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.TRADING_BIN.get(), pos, state);
+    public TradingLedgerBlockEntity(BlockPos pos, BlockState state) {
+        super(ModBlockEntities.TRADING_LEDGER.get(), pos, state);
     }
 
     // ==================== Price Management ====================
@@ -490,7 +490,7 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     }
 
     public static void serverTick(Level level, BlockPos pos, BlockState state,
-                                   TradingBinBlockEntity be) {
+                                   TradingLedgerBlockEntity be) {
         if (be.awaitingPickup && be.pickupTimer > 0) {
             be.pickupTimer--;
             if (be.pickupTimer <= 0) {
@@ -522,7 +522,7 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
             BlockPos adjPos = pos.relative(dir);
             BlockEntity adjBe = level.getBlockEntity(adjPos);
             if (!(adjBe instanceof Container container)) continue;
-            if (adjBe instanceof TradingBinBlockEntity) continue;
+            if (adjBe instanceof TradingLedgerBlockEntity) continue;
 
             boolean changed = false;
             for (int i = 0; i < container.getContainerSize(); i++) {
@@ -672,13 +672,13 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
 
     @Override
     public Component getDisplayName() {
-        return Component.translatable("block.offtomarket.trading_bin");
+        return Component.translatable("block.offtomarket.trading_ledger");
     }
 
     @Nullable
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory inv, Player player) {
-        return new TradingBinMenu(containerId, inv, this);
+        return new TradingLedgerMenu(containerId, inv, this);
     }
 
     // ==================== NBT ====================
