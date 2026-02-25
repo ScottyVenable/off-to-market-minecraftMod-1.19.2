@@ -7,6 +7,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.alchemy.PotionUtils;
@@ -559,7 +560,35 @@ public class PriceCalculator {
         if (item instanceof BannerItem)        return TIER_DECORATION;
         if (item instanceof BlockItem)         return null; // fall through to path heuristics
 
+        // Food items — price based on actual nutrition/saturation stats.
+        // This naturally handles all modded foods without requiring explicit overrides.
+        FoodProperties food = item.getFoodProperties(stack, null);
+        if (food != null) return classifyFoodByNutrition(food);
+
         return null; // unknown
+    }
+
+    /**
+     * Price a food item based on its nutrition and saturation modifier.
+     * Uses an "effective value" metric: nutrition × (1 + saturationMod).
+     * <p>
+     * Reference points (vanilla):
+     * <ul>
+     *   <li>Potato (1 n, 0.3s) → ~1.3 → TIER_COMMON (8cp)</li>
+     *   <li>Bread   (5 n, 0.6s) → ~8.0 → TIER_FOOD_GOOD (18cp)</li>
+     *   <li>Steak   (8 n, 0.8s) → ~14.4 → complex meal tier (35cp)</li>
+     *   <li>Rabbit Stew (10 n, 0.6s) → ~16 → complex meal tier</li>
+     * </ul>
+     */
+    private static ValueTier classifyFoodByNutrition(FoodProperties food) {
+        int nutrition = food.getNutrition();
+        float satMod = food.getSaturationModifier();
+        double effectiveValue = nutrition * (1.0 + satMod);
+        if (effectiveValue >= 14.0) return new ValueTier(35, 120); // hearty multi-ingredient meals
+        if (effectiveValue >=  9.0) return TIER_FOOD_GOOD;         // 18cp – cooked meat quality
+        if (effectiveValue >=  5.0) return TIER_USEFUL;            // 15cp – decent food
+        if (effectiveValue >=  2.0) return TIER_COMMON;            // 8cp – basic food
+        return new ValueTier(5, 18);                                // 5cp – minimal/novelty food
     }
 
     // ===================== Potion Pricing =====================
@@ -718,9 +747,35 @@ public class PriceCalculator {
                 || path.contains("leggings") || path.contains("boots"))
             return TIER_TOOL_IRON;
 
-        // Food
-        if (path.contains("cooked_") || path.contains("baked_") || path.contains("stew")
-                || path.contains("soup"))
+        // ---- Magic items (before stone check to avoid false positives) ----
+        if (path.contains("spell") || path.contains("scroll") || path.contains("_tome")
+                || path.contains("grimoire") || path.contains("_wand") || path.contains("_staff")
+                || path.contains("spellbook") || path.contains("spell_book"))
+            return TIER_ENCHANTED;   // 500cp
+
+        // ---- Potion-like consumables (elixirs, tonics, vials) ----
+        if (path.contains("elixir") || path.contains("tonic") || path.contains("_vial")
+                || path.contains("serum") || path.contains("_flask") || path.contains("infusion")
+                || path.contains("_brew") || path.contains("essence") && path.contains("bottle"))
+            return TIER_POTION;      // 50cp
+
+        // ---- Structural decoratives: doors, gates, windows ----
+        if (path.contains("_door") || path.contains("_gate") || path.contains("_trapdoor")
+                || path.contains("_window") || path.contains("_shutter"))
+            return TIER_DECORATION;  // 8cp (already has 3× ceiling)
+
+        // ---- Furniture (crafted, non-trivial) ----
+        if (path.contains("_desk") || path.contains("_chair") || path.contains("_bench")
+                || path.contains("_table") || path.contains("_stool") || path.contains("_cabinet")
+                || path.contains("_shelf") || path.contains("_bookcase") || path.contains("_sofa")
+                || path.contains("_couch") || path.contains("_wardrobe"))
+            return TIER_CRAFT_MAT;   // 25cp
+
+        // Food (path-based, for items that somehow bypassed classifyByClass)
+        if (path.contains("cooked_") || path.contains("baked_") || path.contains("_stew")
+                || path.contains("_soup") || path.contains("_roast") || path.contains("_meal")
+                || path.contains("_pie") || path.contains("_cake") || path.contains("_cookie")
+                || path.contains("_sandwich") || path.contains("_salad") || path.contains("_bowl"))
             return TIER_FOOD_GOOD;
         if (path.contains("raw_") && (path.contains("beef") || path.contains("pork")
                 || path.contains("chicken") || path.contains("fish") || path.contains("mutton")
@@ -739,8 +794,18 @@ public class PriceCalculator {
         if (path.contains("_log") || path.contains("_stem") || path.contains("_wood"))
             return TIER_BASIC;
 
-        // Stone variants, cobble
-        if (path.contains("cobble") || path.contains("stone") || path.contains("deepslate"))
+        // Stone-type building blocks.
+        // Use specific patterns instead of path.contains("stone") to avoid false positives
+        // on modded items like "philosopher_stone", "limestone_gem", "moonstone_crystal", etc.
+        if (path.equals("stone") || path.contains("cobblestone") || path.contains("cobbled_")
+                || path.endsWith("_stone") || path.contains("deepslate")
+                || path.contains("netherrack") || path.contains("andesite")
+                || path.contains("diorite") || path.contains("granite") || path.contains("tuff")
+                || path.contains("calcite") || path.contains("blackstone")
+                // Mod stone variants that clearly ARE just stone
+                || (path.contains("stone") && (path.contains("brick") || path.contains("slab")
+                        || path.contains("stair") || path.contains("wall") || path.contains("tile")
+                        || path.contains("path") || path.contains("pillar"))))
             return TIER_JUNK;
 
         // Dyes

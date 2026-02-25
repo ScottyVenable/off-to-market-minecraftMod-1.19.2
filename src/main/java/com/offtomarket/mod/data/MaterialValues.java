@@ -298,7 +298,8 @@ public final class MaterialValues {
         int tagValue = getTagValue(stack);
         if (tagValue > 0) return tagValue;
 
-        // 4. Default
+        // 4. Default: 1 CP. Tools/armor callers check for val > 1 and fall back to
+        //    durability-based estimation when this triggers, so keep it at 1.
         return 1;
     }
 
