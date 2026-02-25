@@ -140,16 +140,16 @@ public class MarketListing {
                     basePrice = PriceCalculator.getBaseValue(tempStack);
                 }
 
-                // Towns sell at fair value +/- 20%
-                int price = (int) (basePrice * (0.8 + random.nextDouble() * 0.4));
-                price = Math.max(1, price);
+                // Town-aware pricing (distance/type/need-aware), with a protective floor.
+                int price = computeTownListingPrice(town, item, basePrice, random);
 
                 // ~20% chance the item is on sale with 10-30% discount
                 boolean sale = random.nextFloat() < 0.2f;
                 int discount = 0;
                 if (sale) {
                     discount = 10 + random.nextInt(21); // 10 to 30
-                    price = Math.max(1, (int) (price * (1.0 - discount / 100.0)));
+                    int minSalePrice = Math.max(1, (int) Math.floor(basePrice * 0.5));
+                    price = Math.max(minSalePrice, (int) (price * (1.0 - discount / 100.0)));
                 }
 
                 listings.add(new MarketListing(
@@ -160,6 +160,64 @@ public class MarketListing {
         }
 
         return listings;
+    }
+
+    /**
+     * Compute a town-specific listing price for an item.
+     *
+     * Factors:
+     * - Distance premium (farther towns trend more expensive)
+     * - Town type bias (cities/outposts/markets generally pricier than villages)
+     * - Need level bias (what the town is short on trends pricier)
+     * - Small random band for variety
+     *
+     * Also applies a floor relative to fair value so listings don't collapse to
+     * unrealistically low prices in dynamic/modded towns.
+     */
+    private static int computeTownListingPrice(TownData town, net.minecraft.world.item.Item item,
+                                               int basePrice, Random random) {
+        NeedLevel need = town.getNeedLevel(item);
+
+        // Distance premium: +0% to +27% across distance 1..10
+        double distancePremium = Math.max(0, town.getDistance() - 1) * 0.03;
+
+        // Town role bias
+        double typeBias = switch (town.getType()) {
+            case VILLAGE -> -0.04;
+            case TOWN -> 0.00;
+            case MARKET -> 0.03;
+            case OUTPOST -> 0.07;
+            case CITY -> 0.10;
+        };
+
+        // Keep NPC sell listings moderate compared to full buy-price multipliers.
+        double needBias = switch (need) {
+            case DESPERATE -> 1.20;
+            case HIGH_NEED -> 1.12;
+            case MODERATE_NEED -> 1.06;
+            case BALANCED -> 1.00;
+            case SURPLUS -> 0.92;
+            case OVERSATURATED -> 0.85;
+        };
+
+        // Small market noise for variety
+        double randomBand = 0.90 + random.nextDouble() * 0.20; // 0.90 - 1.10
+
+        double adjusted = basePrice * (1.0 + distancePremium + typeBias) * needBias * randomBand;
+        int computed = Math.max(1, (int) Math.round(adjusted));
+
+        // Floor by need level (prevents very low prices on modded catalogues).
+        double floorFactor = switch (need) {
+            case DESPERATE -> 0.90;
+            case HIGH_NEED -> 0.88;
+            case MODERATE_NEED -> 0.86;
+            case BALANCED -> 0.80;
+            case SURPLUS -> 0.72;
+            case OVERSATURATED -> 0.65;
+        };
+        int floor = Math.max(1, (int) Math.floor(basePrice * floorFactor));
+
+        return Math.max(floor, computed);
     }
 
     /**
