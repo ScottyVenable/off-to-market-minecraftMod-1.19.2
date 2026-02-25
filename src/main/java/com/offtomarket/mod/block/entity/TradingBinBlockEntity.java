@@ -4,6 +4,7 @@ import com.offtomarket.mod.data.PriceCalculator;
 import com.offtomarket.mod.menu.TradingBinMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -53,6 +54,12 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     // Countdown for items to be "picked up" after send command
     private int pickupTimer = -1;
     private boolean awaitingPickup = false;
+
+    // Adjacent-container auto-sync
+    /** How often (in ticks) the bin pulls items from neighbouring containers (~3 s). */
+    private static final int SYNC_INTERVAL_TICKS = 60;
+    /** Counts down to the next auto-sync; starts at 0 so the first sync happens quickly. */
+    private int syncCooldown = 0;
 
     // ==================== Settings ====================
 
@@ -468,6 +475,48 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
                 // Timer expired - items should have been picked up by the Trading Post
                 be.awaitingPickup = false;
                 be.setChanged();
+            }
+        }
+
+        // Periodically pull items from adjacent containers into the bin
+        be.syncCooldown--;
+        if (be.syncCooldown <= 0) {
+            be.syncCooldown = SYNC_INTERVAL_TICKS;
+            be.syncFromAdjacentContainers();
+        }
+    }
+
+    /**
+     * Scan all six neighbouring positions and pull every item from any found
+     * {@link Container} block entity (excluding other Trading Bins) into this bin.
+     * Items are physically removed from the source container as they are inserted.
+     */
+    private void syncFromAdjacentContainers() {
+        Level level = this.getLevel();
+        if (level == null || level.isClientSide()) return;
+        BlockPos pos = this.getBlockPos();
+
+        for (Direction dir : Direction.values()) {
+            BlockPos adjPos = pos.relative(dir);
+            BlockEntity adjBe = level.getBlockEntity(adjPos);
+            if (!(adjBe instanceof Container container)) continue;
+            if (adjBe instanceof TradingBinBlockEntity) continue;
+
+            boolean changed = false;
+            for (int i = 0; i < container.getContainerSize(); i++) {
+                ItemStack stack = container.getItem(i);
+                if (stack.isEmpty()) continue;
+
+                int inserted = addItemAmount(stack.copy());
+                if (inserted <= 0) continue;
+
+                stack.shrink(inserted);
+                container.setItem(i, stack.isEmpty() ? ItemStack.EMPTY : stack);
+                changed = true;
+            }
+            if (changed) {
+                container.setChanged();
+                setChanged();
             }
         }
     }

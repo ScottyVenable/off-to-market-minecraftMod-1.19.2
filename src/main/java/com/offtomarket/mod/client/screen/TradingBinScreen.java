@@ -25,9 +25,9 @@ import java.util.Locale;
 
 /**
  * Trading Bin GUI — management-only interface.
- * Left panel: searchable list of bin contents.
+ * Left panel: searchable, scrollable list of bin contents.
  * Right panel: Price Book / Fees tabs.
- * Players deposit items by right-clicking the block while holding items.
+ * Items are auto-filled from adjacent container blocks (chest, barrel, etc.) every ~3 s.
  */
 public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
@@ -377,9 +377,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                     drawCenteredString(poseStack, this.font, "No matches", x + 89, y + 80, 0x666666);
                 } else {
                     drawCenteredString(poseStack, this.font, "Bin is empty", x + 89, y + 74, 0x666666);
-                    drawCenteredString(poseStack, this.font, "Right-click the bin", x + 89, y + 90, 0x555555);
-                    drawCenteredString(poseStack, this.font, "while holding items", x + 89, y + 102, 0x555555);
-                    drawCenteredString(poseStack, this.font, "to deposit them.", x + 89, y + 114, 0x555555);
+                    drawCenteredString(poseStack, this.font, "Place a chest or barrel", x + 89, y + 90, 0x555555);
+                    drawCenteredString(poseStack, this.font, "next to the bin to", x + 89, y + 102, 0x555555);
+                    drawCenteredString(poseStack, this.font, "auto-fill it.", x + 89, y + 114, 0x555555);
                 }
             }
         }
