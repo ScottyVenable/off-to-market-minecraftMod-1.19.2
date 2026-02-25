@@ -14,6 +14,7 @@ import net.minecraft.world.item.alchemy.Potions;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -82,6 +83,9 @@ public class PriceCalculator {
     // ===================== Exact Item Overrides =====================
 
     private static final Map<Item, ValueTier> ITEM_OVERRIDES = new LinkedHashMap<>();
+
+    /** Cache: Item → base (non-enchanted) ValueTier. Populated on first lookup; never invalidated (items are immutable). */
+    private static final Map<Item, ValueTier> BASE_TIER_CACHE = new HashMap<>(1024);
     static {
         // ---- Junk / ultra-common ----
         put(Items.DIRT,               TIER_JUNK);
@@ -761,49 +765,44 @@ public class PriceCalculator {
 
     /**
      * Get the full value tier for an item, resolving through the classification pipeline.
+     * <p>
+     * Results are cached per {@link Item} type (enchant bonus is applied on top, since it
+     * varies by enchantment count and is not cacheable without NBT as the key).
      */
     public static ValueTier getValueTier(ItemStack stack) {
         if (stack.isEmpty()) return TIER_JUNK;
+        // Look up (or compute) the base tier for this item type.
+        ValueTier base = BASE_TIER_CACHE.computeIfAbsent(stack.getItem(),
+                k -> computeBaseTier(new ItemStack(k)));
+        return stack.isEnchanted() ? applyEnchantBonus(base, stack) : base;
+    }
 
+    /**
+     * Compute the base (non-enchanted) value tier for an item, resolving the full
+     * classification pipeline.  Called exactly once per distinct {@link Item} type;
+     * the result is cached in {@link #BASE_TIER_CACHE}.
+     */
+    private static ValueTier computeBaseTier(ItemStack stack) {
         // 0. Ingredient-based pricing for tools & armor (handles vanilla + modded)
         ValueTier tier = computeIngredientPrice(stack);
-        if (tier != null) {
-            if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 1. Exact item override
         tier = ITEM_OVERRIDES.get(stack.getItem());
-        if (tier != null) {
-            // Apply enchantment bonus
-            if (stack.isEnchanted()) {
-                tier = applyEnchantBonus(tier, stack);
-            }
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 2. Tag-based rules
         for (CategoryRule rule : TAG_RULES) {
-            if (rule.test().test(stack)) {
-                tier = rule.tier();
-                if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-                return tier;
-            }
+            if (rule.test().test(stack)) return rule.tier();
         }
 
         // 3. Class-based heuristics
         tier = classifyByClass(stack);
-        if (tier != null) {
-            if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 4. Path-based heuristics
         tier = classifyByPath(stack);
-        if (tier != null) {
-            if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 5. Rarity fallback
         tier = rarityFallback(stack);
@@ -826,7 +825,6 @@ public class PriceCalculator {
             }
         }
 
-        if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
         return tier;
     }
 

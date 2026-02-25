@@ -80,6 +80,22 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private boolean questSortAscending = true;
     private boolean requestSortAscending = true;
 
+    // Sort-result caches — rebuilt only when data size or sort settings change.
+    // Key = packed int encoding of (count(s), sort column, ascending flag).
+    private List<ActivityEntry> cachedSortedActivity = null;
+    private int cachedActivityKey = -1;
+    private List<Integer> cachedSortedQuests = null;
+    private int cachedQuestsKey = -1;
+    private List<Integer> cachedSortedRequests = null;
+    private int cachedRequestsKey = -1;
+
+    /** Invalidate all three sort caches (call after a toggle action). */
+    private void invalidateSortCaches() {
+        cachedActivityKey = -1;
+        cachedQuestsKey   = -1;
+        cachedRequestsKey = -1;
+    }
+
     // Request creation mode (Requests tab)
     private boolean creatingRequest = false;
     private EditBox requestSearchBox;
@@ -647,12 +663,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     }
 
     private List<ActivityEntry> getSortedActivity(TradingPostBlockEntity be) {
-        List<ActivityEntry> entries = new ArrayList<>();
         List<Shipment> shipments = be.getActiveShipments();
+        List<BuyOrder> orders   = be.getActiveBuyOrders();
+        int key = (shipments.size() << 12) | (orders.size() << 4) | (activitySort.ordinal() << 1) | (activitySortAscending ? 1 : 0);
+        if (cachedSortedActivity != null && key == cachedActivityKey) {
+            return cachedSortedActivity;
+        }
+
+        List<ActivityEntry> entries = new ArrayList<>();
         for (int i = 0; i < shipments.size(); i++) {
             entries.add(new ActivityEntry(true, i, shipments.get(i).getDepartureTime()));
         }
-        List<BuyOrder> orders = be.getActiveBuyOrders();
         for (int i = 0; i < orders.size(); i++) {
             entries.add(new ActivityEntry(false, i, orders.get(i).getOrderTime()));
         }
@@ -670,6 +691,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         };
 
         entries.sort(activitySortAscending ? comparator : comparator.reversed());
+        cachedSortedActivity = entries;
+        cachedActivityKey    = key;
         return entries;
     }
 
@@ -1739,6 +1762,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private List<Integer> getSortedQuestIndices(TradingPostBlockEntity be) {
         List<Quest> quests = be.getActiveQuests();
+        int key = (quests.size() << 4) | (questSort.ordinal() << 1) | (questSortAscending ? 1 : 0);
+        if (cachedSortedQuests != null && key == cachedQuestsKey) {
+            return cachedSortedQuests;
+        }
+
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < quests.size(); i++) {
             indices.add(i);
@@ -1764,6 +1792,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 .thenComparingLong(i -> quests.get(i).getTicksRemaining(now));
         };
         indices.sort(questSortAscending ? comparator : comparator.reversed());
+        cachedSortedQuests = indices;
+        cachedQuestsKey    = key;
         return indices;
     }
 
@@ -2035,6 +2065,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private List<Integer> getSortedRequestIndices(TradingPostBlockEntity be) {
         List<DiplomatRequest> requests = be.getActiveDiplomatRequests();
+        int key = (requests.size() << 4) | (requestSort.ordinal() << 1) | (requestSortAscending ? 1 : 0);
+        if (cachedSortedRequests != null && key == cachedRequestsKey) {
+            return cachedSortedRequests;
+        }
+
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < requests.size(); i++) {
             indices.add(i);
@@ -2055,6 +2090,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 .thenComparingLong(i -> requests.get(i).getRequestTime());
         };
         indices.sort(requestSortAscending ? comparator : comparator.reversed());
+        cachedSortedRequests = indices;
+        cachedRequestsKey    = key;
         return indices;
     }
 
