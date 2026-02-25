@@ -1,5 +1,61 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.2.5 — Trading Bin Overhaul & Market Improvements
+
+### Trading Bin Complete Redesign
+- **List View Interface** — Replaced 3×3 grid + inspection slot with a searchable list view on the left panel.
+- **Searchable Inventory** — Type to filter bin contents by item name; filtered count displayed.
+- **Custom List Rendering** — Each row shows 12×12 item icon, truncated item name, and coin price (using CoinRenderer for colored denominations).
+- **Right-Click Deposit** — Players now deposit items by right-clicking the Trading Bin block while holding items; no drag-and-drop needed.
+- **Withdraw Button** — Click a list item to select, then click "Withdraw" to take it back into player inventory via `WithdrawBinItemPacket`.
+- **Inspection Slot Removed** — Eliminated the dedicated inspection slot; pricing now done entirely through list selection.
+- **Player Inventory Removed** — Trading Bin menu no longer displays player inventory; all slots positioned off-screen.
+- **Persistent Price Book Tab** — Price setting UI remains in the right "Bin" tab with price input and auto-population when items are selected.
+- **Modifiers Tab Unchanged** — "Fees" tab continues to show crafting tax, min markup, auto-price mode, and per-item modifier toggles.
+
+### Market Board Improvements
+- **Town Column Repositioned** — Shifted left by 12px (dot x=132, arrow x=136, name x=144) with 84px truncation for better spacing.
+- **Refresh Cooldown System** — 5-minute cooldown between market refreshes (configurable via `MarketBoardBlockEntity.REFRESH_COOLDOWN_TICKS`).
+- **Countdown Display** — Refresh button shows "M:SS" countdown during cooldown; button disabled until refresh is available.
+- **Cheats Bypass** — New `DebugConfig.UNLIMITED_REFRESHES` flag allows unlimited refreshes when enabled.
+- **Server-Side Ticker** — Added `serverTick()` to `MarketBoardBlockEntity` for countdown decrement; registered via `getTicker()` in `MarketBoardBlock`.
+
+### Bug Fixes
+- **Air Item Prevention** — Added guards at 4 points to prevent Items.AIR from being sold:
+  - `TradingBinBlockEntity.addItem()` — Guards against empty/air items in deposits
+  - `TradingBinBlockEntity.setPrice()` — Enhanced container methods with proper bounds checking
+  - `MarketListing.generateListings()` — Prevents air items from entering market listings
+  - `Shipment.ShipmentItem.createStack()` — Validates item isn't air before creating stacks
+  - `TradingPostBlockEntity.sendItemsToMarket()` — Guards against air in shipment processing
+- **Workers Tab Rendering** — Fixed text overlap by repositioning worker labels from rowY=6 to rowY=38+i×32 with compressed detail rendering.
+
+### Reputation & Experience Balancing
+- **Worker XP Increase** — Increased from 1 XP per trip to 3 XP per trip (Worker.completedTrip()).
+- **Sales-Based Reputation** — Trading Posts now grant reputation on regular sales (in addition to quests):
+  - Amount = number of items sold in the shipment (SoldCount)
+  - Applied on SOLD→COMPLETED state transition in `TradingPostBlockEntity`
+  - Eliminates the slow reputation grind when relying only on quests
+
+### Coin Text Coloring
+- **Colored Denominations** — Coin amounts now render with color codes across all screens:
+  - Gold: `§e` (yellow/gold)
+  - Silver: `§7` (light gray)
+  - Copper: `§6` (dark orange)
+- **Affected Screens** — TradingBinScreen, TradingPostScreen, MarketBoardScreen (all use updated `formatCoinText()`)
+- **Escape Sequences** — Uses `\u00A7e`, `\u00A77`, `\u00A76`, `\u00A7r` for robust rendering
+
+### Network Changes
+- **WithdrawBinItemPacket** — New packet for withdrawing items from Trading Bin to player inventory with validation.
+- **ModNetwork Registry** — Registered new packet in `ModNetwork.register()`.
+
+### Technical Details
+- **TradingBinMenu**: Simplified to 9 bin slots + 36 player slots, all positioned off-screen; handles shift-click moves programmatically.
+- **TradingBinScreen**: Complete rewrite (~1200 lines); features list filtering, item selection, price book management, modifier toggles.
+- **TradingBinBlockEntity**: Added air guards in critical methods; container methods now include proper bounds checking.
+- **TradingBinBlock**: Updated `use()` to deposit held items before opening GUI; cleaned up `onRemove()` (removed inspection slot handling).
+- **MarketBoardBlockEntity**: Added cooldown timer system with `canRefresh()`, `getRefreshCooldown()`, and `serverTick()` methods.
+- **MarketBoardBlock**: Registered ticker via `getTicker()` for server-side tick processing.
+
 ## Version 0.2.4 — Workers System Expansion
 
 ### New Worker: Bookkeeper
