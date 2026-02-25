@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.4.1-blue" alt="Version 0.4.1">
+  <img src="https://img.shields.io/badge/Version-0.4.2-blue" alt="Version 0.4.2">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -228,7 +228,7 @@ Works alongside other economy mods and integrates automatically with item-adding
 ## Installation
 
 1. Install Minecraft Forge 1.19.2 (version 43.x or higher)
-2. Download `offtomarket-0.4.1.jar`
+2. Download `offtomarket-0.4.2.jar`
 3. Place in your `mods` folder
 4. Launch the game!
 

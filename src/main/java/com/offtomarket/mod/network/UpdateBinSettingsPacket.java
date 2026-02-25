@@ -85,15 +85,17 @@ public class UpdateBinSettingsPacket {
                     if (msg.autoPriceModeOrdinal >= 0 && msg.autoPriceModeOrdinal < modes.length) {
                         tbbe.setAutoPriceMode(modes[msg.autoPriceModeOrdinal]);
                     }
-                    // Price modifiers
-                    tbbe.setEnchantedMarkupEnabled(msg.enchantedMarkupEnabled);
+                    // Price modifiers (enabled flags kept for NBT compat but always true now)
+                    tbbe.setEnchantedMarkupEnabled(true);
                     tbbe.setEnchantedMarkupPercent(msg.enchantedMarkupPercent);
-                    tbbe.setUsedDiscountEnabled(msg.usedDiscountEnabled);
+                    tbbe.setUsedDiscountEnabled(true);
                     tbbe.setUsedDiscountPercent(msg.usedDiscountPercent);
-                    tbbe.setDamagedDiscountEnabled(msg.damagedDiscountEnabled);
+                    tbbe.setDamagedDiscountEnabled(true);
                     tbbe.setDamagedDiscountPercent(msg.damagedDiscountPercent);
-                    tbbe.setRareMarkupEnabled(msg.rareMarkupEnabled);
+                    tbbe.setRareMarkupEnabled(true);
                     tbbe.setRareMarkupPercent(msg.rareMarkupPercent);
+                    // Auto-price all unpriced slots when Apply is pressed
+                    tbbe.applyAutoPricingToAllSlots();
                 }
             }
         });

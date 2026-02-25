@@ -156,36 +156,41 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
     
     /**
-     * Add reputation with a town.
+     * Add reputation with a town. Range is clamped to [-1000, 1000].
+     * Pass a negative amount to decrease reputation.
      */
     public void addReputation(String townId, int amount) {
         int current = townReputation.getOrDefault(townId, 0);
-        townReputation.put(townId, Math.max(0, current + amount));
+        townReputation.put(townId, Math.max(-1000, Math.min(1000, current + amount)));
         syncToClient();
     }
     
     /**
      * Get reputation level name based on value.
+     * Values range from -1000 (Hostile) to +1000 (Exalted).
      */
     public static String getReputationLevel(int rep) {
-        if (rep >= 200) return "Exalted";
-        if (rep >= 150) return "Revered";
-        if (rep >= 100) return "Honored";
-        if (rep >= 50) return "Friendly";
-        if (rep >= 20) return "Neutral";
-        return "Stranger";
+        if (rep >= 600) return "Exalted";
+        if (rep >= 300) return "Honored";
+        if (rep >= 100) return "Friendly";
+        if (rep >= -99) return "Neutral";
+        if (rep >= -299) return "Distrusted";
+        if (rep >= -599) return "Unfriendly";
+        return "Hostile";
     }
-    
+
     /**
      * Get reputation color based on value.
+     * Colors map to 7 relationship tiers from dark red (Hostile) to dark green (Exalted).
      */
     public static int getReputationColor(int rep) {
-        if (rep >= 200) return 0xFFD700; // Gold
-        if (rep >= 150) return 0xDD88FF; // Purple
-        if (rep >= 100) return 0x55FF55; // Green
-        if (rep >= 50) return 0x88BBFF; // Blue
-        if (rep >= 20) return 0xCCCCCC; // Gray
-        return 0x888888; // Dark gray
+        if (rep >= 600) return 0x00AA00;   // Dark Green  — Exalted
+        if (rep >= 300) return 0x55FF55;   // Light Green — Honored
+        if (rep >= 100) return 0x5599FF;   // Blue        — Friendly
+        if (rep >= -99) return 0xAAAAAA;   // Gray        — Neutral
+        if (rep >= -299) return 0xFFFF55;  // Yellow      — Distrusted
+        if (rep >= -599) return 0xFF5555;  // Light Red   — Unfriendly
+        return 0xAA0000;                   // Dark Red    — Hostile
     }
 
     public void setSelectedTownId(String id) {
@@ -1439,7 +1444,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     int soldCount = (int) shipment.getItems().stream()
                             .filter(Shipment.ShipmentItem::isSold).count();
                     if (soldCount > 0) {
-                        be.addReputation(shipment.getTownId(), soldCount);
+                        be.addReputation(shipment.getTownId(), soldCount * 5);
                     }
                     TownData soldTown = TownRegistry.getTown(shipment.getTownId());
                     String soldName = soldTown != null ? soldTown.getDisplayName() : shipment.getTownId();

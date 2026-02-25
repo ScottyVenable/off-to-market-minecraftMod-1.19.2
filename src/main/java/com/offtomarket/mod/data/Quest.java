@@ -320,13 +320,13 @@ public class Quest {
             int xpReward = Math.max(5, Math.min(50, totalItemCost / 15));
             xpReward = (int) (xpReward * typeMult);
             
-            // Reputation reward - varies by quest type
+            // Reputation reward - varies by quest type (higher scale: max 1000, not 200)
             int repReward = switch (questType) {
-                case CHARITY -> 15 + rand.nextInt(11); // 15-25 for charity
-                case SPECIALTY -> 8 + rand.nextInt(8); // 8-15 for specialty
-                case RUSH -> 5 + rand.nextInt(6); // 5-10 for rush
-                case BULK -> 4 + rand.nextInt(4); // 4-7 for bulk
-                default -> 3 + rand.nextInt(5); // 3-7 for standard
+                case CHARITY -> 75 + rand.nextInt(51);    // 75-125 for charity
+                case SPECIALTY -> 40 + rand.nextInt(36);  // 40-75 for specialty
+                case RUSH -> 25 + rand.nextInt(26);       // 25-50 for rush
+                case BULK -> 20 + rand.nextInt(21);       // 20-40 for bulk
+                default -> 15 + rand.nextInt(21);         // 15-35 for standard
             };
 
             // Quest duration based on type

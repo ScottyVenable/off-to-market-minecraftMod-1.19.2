@@ -278,28 +278,50 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         if (stack.isEmpty() || basePrice <= 0) return basePrice;
         double price = basePrice;
 
-        // Enchantment markup — only if item is actually enchanted
-        if (enchantedMarkupEnabled && isEnchantmentApplicable(stack)) {
+        // Enchantment markup — auto-apply when item is actually enchanted
+        if (isEnchantmentApplicable(stack)) {
             price *= (1.0 + enchantedMarkupPercent / 100.0);
         }
 
-        // Rarity markup — only if RARE or EPIC
-        if (rareMarkupEnabled && isRarityApplicable(stack)) {
+        // Rarity markup — auto-apply when RARE or EPIC
+        if (isRarityApplicable(stack)) {
             price *= (1.0 + rareMarkupPercent / 100.0);
         }
 
-        // Durability-based discounts — only for damageable, damaged items
+        // Durability-based discounts — auto-apply for damageable, damaged items
         if (isDurabilityApplicable(stack)) {
-            if (damagedDiscountEnabled && isHeavilyDamaged(stack)) {
+            if (isHeavilyDamaged(stack)) {
                 // Heavily damaged: apply damaged discount
                 price *= (1.0 - damagedDiscountPercent / 100.0);
-            } else if (usedDiscountEnabled) {
+            } else {
                 // Partially used: apply used discount
                 price *= (1.0 - usedDiscountPercent / 100.0);
             }
         }
 
         return Math.max(1, (int) price);
+    }
+
+    /**
+     * Auto-price all occupied slots using PriceCalculator base value.
+     * Slots with a manually set price (rawPrice > 0) are left unchanged.
+     * Called when the player presses Apply in the Trading Bin settings panel.
+     */
+    public void applyAutoPricingToAllSlots() {
+        boolean changed = false;
+        for (int i = 0; i < BIN_SIZE; i++) {
+            ItemStack stack = getItem(i);
+            if (!stack.isEmpty() && getRawPriceForSlot(i) <= 0) {
+                int fair = PriceCalculator.getBaseValue(stack);
+                if (fair > 0) {
+                    slotPrices.put(i, fair);
+                    changed = true;
+                }
+            }
+        }
+        if (changed) {
+            setChanged();
+        }
     }
 
     /**

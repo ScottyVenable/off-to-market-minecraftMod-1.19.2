@@ -127,8 +127,30 @@ public class MarketListing {
                     var enchantData = generateRandomEnchantedBook(random);
                     nbt = enchantData.nbt;
                     displayName = enchantData.displayName;
+
+                // Special handling for potions, splash potions, and lingering potions
+                } else if (item instanceof net.minecraft.world.item.PotionItem) {
+                    qty = 1 + random.nextInt(6); // 1-6 potions
+                    nbt = generateRandomPotionNbt(random);
+                    net.minecraft.world.item.ItemStack tempStack = new net.minecraft.world.item.ItemStack(item);
+                    tempStack.setTag(nbt.copy());
+                    displayName = tempStack.getHoverName().getString();
+                    // Skip if name still contains "Uncraftable" (shouldn't happen with valid NBT)
+                    if (displayName.contains("Uncraftable")) continue;
+
+                // Special handling for tipped arrows
+                } else if (item instanceof net.minecraft.world.item.TippedArrowItem) {
+                    qty = 2 + random.nextInt(8); // 2-9 arrows
+                    nbt = generateRandomPotionNbt(random);
+                    net.minecraft.world.item.ItemStack tempStack = new net.minecraft.world.item.ItemStack(item);
+                    tempStack.setTag(nbt.copy());
+                    displayName = tempStack.getHoverName().getString();
+                    if (displayName.contains("Uncraftable")) continue;
+
                 } else {
                     displayName = new net.minecraft.world.item.ItemStack(item).getHoverName().getString();
+                    // Skip items that render as "Uncraftable" without NBT
+                    if (displayName.contains("Uncraftable")) continue;
                 }
 
                 int basePrice = PriceCalculator.getBaseValue(new net.minecraft.world.item.ItemStack(item));
@@ -346,6 +368,30 @@ public class MarketListing {
         }
 
         return new EnchantBookData(bookStack.getTag(), displayName);
+    }
+
+    // Valid potion types that produce proper display names
+    private static final String[] VALID_POTIONS = {
+        "minecraft:water", "minecraft:night_vision", "minecraft:long_night_vision",
+        "minecraft:invisibility", "minecraft:long_invisibility",
+        "minecraft:leaping", "minecraft:strong_leaping", "minecraft:long_leaping",
+        "minecraft:fire_resistance", "minecraft:long_fire_resistance",
+        "minecraft:swiftness", "minecraft:long_swiftness", "minecraft:strong_swiftness",
+        "minecraft:slowness", "minecraft:long_slowness", "minecraft:strong_slowness",
+        "minecraft:water_breathing", "minecraft:long_water_breathing",
+        "minecraft:healing", "minecraft:strong_healing",
+        "minecraft:harming", "minecraft:strong_harming",
+        "minecraft:poison", "minecraft:long_poison", "minecraft:strong_poison",
+        "minecraft:regeneration", "minecraft:long_regeneration", "minecraft:strong_regeneration",
+        "minecraft:strength", "minecraft:long_strength", "minecraft:strong_strength",
+        "minecraft:weakness", "minecraft:long_weakness",
+        "minecraft:luck"
+    };
+
+    private static CompoundTag generateRandomPotionNbt(Random random) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Potion", VALID_POTIONS[random.nextInt(VALID_POTIONS.length)]);
+        return tag;
     }
 
     private static String toRoman(int num) {

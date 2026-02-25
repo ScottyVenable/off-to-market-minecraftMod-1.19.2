@@ -1,5 +1,38 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.4.2 — UI Polish, Reputation Overhaul & Trading Bin Improvements
+
+### Reputation System
+- **Expanded rep range** — Reputation now ranges from -1000 to +1000 (was 0–200), supporting negative standing with towns.
+- **7 reputation tiers** — Hostile, Unfriendly, Distrusted, Neutral, Friendly, Honored, Exalted (was 5 tiers).
+- **Scaled rep rewards** — Quest reputation rewards scaled 5x (15–125 range); each sale now grants 5 rep per item sold (was 1).
+- **Bidirectional rep bar** — Reputation bar on the Towns tab now starts in the center for Neutral and fills left (negative) or right (positive).
+- **Town name colors** — Unselected town names in the left-page list are now tinted by that town's reputation color.
+
+### Market Board Fix
+- **No more "Uncraftable" items** — Potions, splash/lingering potions, and tipped arrows in town specialties now generate with valid random NBT (e.g., `{Potion: "minecraft:swiftness"}`). Items that still render as "Uncraftable" are skipped entirely.
+
+### Trading Bin — Fees Tab Improvements
+- **Auto-applied modifiers** — Enchantment markup, rarity markup, used discount, and damaged discount are now always auto-applied based on item properties. Checkboxes removed; colored indicators show applicability for the selected item.
+- **Apply button now auto-prices** — Pressing Apply in the Fees tab now also fills any unpriced slots with their calculated fair value.
+- **Enter key unfocuses inputs** — Pressing Enter in the Trading Tax or Min Markup fields now commits the value and unfocuses the input.
+- **Caravan Weight removed from Fees** — Weight display moved to caravan-specific UI; no longer shown in Fees panel.
+- **Scroll clipping fixed** — Max visible rows reduced from 9 to 8 so the bottom item never overlaps the Payout text.
+
+### Trading Bin — Right-Click Withdraw Menu
+- **Context menu on right-click** — Right-clicking a row in the Trading Bin list opens a small overlay with two options: "To Inventory" and "To Container".
+- **To Container** — Attempts to push the item into an adjacent container block entity; falls back to player inventory if no adjacent container has room.
+
+### Trading Post — Non-Trade Tabs
+- **Inventory hidden on non-Trade tabs** — Player inventory slots and label only render on the Trade tab, giving other tabs the full content height.
+- **Expanded content area** — Non-Trade tabs now use 193px of vertical height (was 112px shared with inventory).
+- **Income tab unified** — Best Towns and Top Items sections are now stacked in a single full-height scrollable panel instead of two side-by-side panels.
+
+### Build
+- **JAR naming** — Build output now named `offtomarket-vX.Y.Z-Forge-1.19.2.jar`.
+
+---
+
 ## Version 0.4.1 — Developer Documentation & README Refresh
 
 - Updated `.github/copilot-instructions.md`: expanded architecture notes, added Other Systems section (Quest, Worker, Diplomat, SupplyDemandManager), added README Maintenance and Versioning/Branch Strategy sections.

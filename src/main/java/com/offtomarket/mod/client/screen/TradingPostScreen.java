@@ -561,8 +561,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Title bar
         drawInsetPanel(poseStack, x + 4, y + 3, 376, 14);
 
-        // Content area
-        drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 376, CONTENT_H);
+        // Content area — taller on non-Trade tabs since inventory is hidden
+        int contentH = (currentTab == Tab.TRADE) ? CONTENT_H : 193;
+        drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 376, contentH);
 
         // Tab bar
         for (int i = 0; i < TAB_COUNT; i++) {
@@ -593,17 +594,19 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             case DIPLOMAT -> renderDiplomatBg(poseStack, x, y, mouseX, mouseY);
         }
 
-        // Divider above inventory
-        fill(poseStack, x + 4, y + 145, x + 380, y + 146, 0xFF3B2E1E);
+        // Divider above inventory and player inventory slots — only on Trade tab
+        if (currentTab == Tab.TRADE) {
+            fill(poseStack, x + 4, y + 145, x + 380, y + 146, 0xFF3B2E1E);
 
-        // Player inventory slot backgrounds
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                drawSlot(poseStack, x + 111 + col * 18, y + 148 + row * 18);
+            // Player inventory slot backgrounds
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 9; col++) {
+                    drawSlot(poseStack, x + 111 + col * 18, y + 148 + row * 18);
+                }
             }
-        }
-        for (int col = 0; col < 9; col++) {
-            drawSlot(poseStack, x + 111 + col * 18, y + 206);
+            for (int col = 0; col < 9; col++) {
+                drawSlot(poseStack, x + 111 + col * 18, y + 206);
+            }
         }
 
         if (DebugConfig.SHOW_UI_BOUNDS) {
@@ -717,14 +720,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     }
 
     private void renderIncomeBg(PoseStack ps, int x, int y) {
-        // Stats strip (y=35+20=55)
+        // Stats strip at top
         drawInsetPanel(ps, x + 6, y + 35, 372, 20);
-        // Left panel: Best Towns (y=57+83=140)
-        drawInsetPanel(ps, x + 6, y + 57, 183, 83);
-        fill(ps, x + 8,   y + 68, x + 187, y + 69, OtmGuiTheme.SEPARATOR);
-        // Right panel: Top Items
-        drawInsetPanel(ps, x + 191, y + 57, 187, 83);
-        fill(ps, x + 193, y + 68, x + 376, y + 69, OtmGuiTheme.SEPARATOR);
+        // Single unified scrollable panel covering the rest of the content area
+        drawInsetPanel(ps, x + 6, y + 57, 372, 165);
+        // Best Towns header separator
+        fill(ps, x + 8,   y + 68, x + 376, y + 69, OtmGuiTheme.SEPARATOR);
+        // Mid-section divider between Best Towns and Top Items
+        fill(ps, x + 8,   y + 134, x + 376, y + 135, OtmGuiTheme.SEPARATOR);
+        // Top Items header separator
+        fill(ps, x + 8,   y + 148, x + 376, y + 149, OtmGuiTheme.SEPARATOR);
     }
 
     private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
@@ -806,15 +811,22 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 int repBarY = y + 70;
                 int repBarW = 60;
                 int repBarH = 5;
+                int maxRep = 1000;
+                int halfW = repBarW / 2;
+                int centerX = repBarX + halfW;
                 // Border + bg
                 fill(ps, repBarX - 1, repBarY - 1, repBarX + repBarW + 1, repBarY + repBarH + 1, 0xFFBBA878);
                 fill(ps, repBarX, repBarY, repBarX + repBarW, repBarY + repBarH, 0xFF2A1F14);
-                // Fill (clamp at 200 = Exalted)
-                int maxRep = 200;
-                int fillW = Math.max(0, Math.min(repBarW, (int)(repBarW * (rep / (float) maxRep))));
-                if (fillW > 0) {
-                    int repColor = TradingPostBlockEntity.getReputationColor(rep);
-                    fill(ps, repBarX, repBarY, repBarX + fillW, repBarY + repBarH, repColor | 0xFF000000);
+                // Center tick
+                fill(ps, centerX, repBarY - 1, centerX + 1, repBarY + repBarH + 1, 0xAAFFFFFF);
+                // Bidirectional fill
+                int repColor = TradingPostBlockEntity.getReputationColor(rep);
+                if (rep >= 0) {
+                    int fillW = Math.min(halfW, (int)(halfW * rep / (float) maxRep));
+                    if (fillW > 0) fill(ps, centerX, repBarY, centerX + fillW, repBarY + repBarH, repColor | 0xFF000000);
+                } else {
+                    int fillW = Math.min(halfW, (int)(halfW * (-rep) / (float) maxRep));
+                    if (fillW > 0) fill(ps, centerX - fillW, repBarY, centerX, repBarY + repBarH, repColor | 0xFF000000);
                 }
             }
         }
@@ -1016,8 +1028,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             case DIPLOMAT -> renderDiplomatLabels(poseStack);
         }
 
-        // Inventory label
-        this.font.draw(poseStack, this.playerInventoryTitle, 111, 138, 0x404040);
+        // Inventory label — only on Trade tab
+        if (currentTab == Tab.TRADE) {
+            this.font.draw(poseStack, this.playerInventoryTitle, 111, 138, 0x404040);
+        }
     }
 
     // ==================== Trade Tab ====================
@@ -1512,7 +1526,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             } else if (!townUnlocked) {
                 textColor = 0x664444; // red-gray for locked
             } else {
-                textColor = 0x3B2A14; // normal brown
+                // Unlocked, unselected — tint name by reputation standing
+                textColor = (be != null)
+                        ? TradingPostBlockEntity.getReputationColor(be.getReputation(t.getId()))
+                        : 0x8B7355;
+                // Make it a bit darker so it doesn't overpower the selected entry
+                textColor = (textColor & 0xFEFEFE) >> 1; // halve each channel
+                // Ensure minimum legibility (floor at a medium brown)
+                if (((textColor >> 16) & 0xFF) < 0x22 && ((textColor >> 8) & 0xFF) < 0x22 && (textColor & 0xFF) < 0x22) {
+                    textColor = 0x3B2A14;
+                }
             }
 
             int drawY = 50 + i * rowH;
@@ -2650,6 +2673,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         int x = this.leftPos;
         int y = this.topPos;
+
+        // Block player-inventory slot clicks on non-Trade tabs (inventory is hidden)
+        if (currentTab != Tab.TRADE && mouseY >= y + 148) {
+            return true; // consume and ignore
+        }
 
         // Tab click detection (6 tabs)
         for (int i = 0; i < TAB_COUNT; i++) {
