@@ -1,6 +1,6 @@
 # Off to Market (Trading Deluxe) - Changelog
 
-## Version 0.2.6 — Developer Documentation & README Refresh
+## Version 0.4.1 — Developer Documentation & README Refresh
 
 - Updated `.github/copilot-instructions.md`: expanded architecture notes, added Other Systems section (Quest, Worker, Diplomat, SupplyDemandManager), added README Maintenance and Versioning/Branch Strategy sections.
 - Refreshed `README.md`: corrected version badge, replaced stale towns table with the actual 9 JSON-loaded towns, marked JSON town system as complete on roadmap.
