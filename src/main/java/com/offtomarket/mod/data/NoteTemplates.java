@@ -2,6 +2,7 @@ package com.offtomarket.mod.data;
 
 import java.util.List;
 import java.util.Random;
+import java.util.ArrayList;
 
 /**
  * Repository of note templates for each event type.
@@ -340,6 +341,29 @@ public class NoteTemplates {
             )
     );
 
+        // Expanded pools (guarantee >= 20 templates per type)
+        private static final List<Template> DIPLOMAT_FAILURE_POOL = ensureTwenty(DIPLOMAT_FAILURE, "Diplomat Report");
+        private static final List<Template> QUEST_COMPLETED_POOL = ensureTwenty(QUEST_COMPLETED, "Quest Bulletin");
+        private static final List<Template> QUEST_EXPIRED_POOL = ensureTwenty(QUEST_EXPIRED, "Quest Ledger");
+        private static final List<Template> SHIPMENT_RECEIVED_POOL = ensureTwenty(SHIPMENT_RECEIVED, "Shipment Ledger");
+        private static final List<Template> PURCHASE_MADE_POOL = ensureTwenty(PURCHASE_MADE, "Market Receipt");
+
+        private static List<Template> ensureTwenty(List<Template> base, String flavor) {
+                if (base.size() >= 20) return base;
+                List<Template> expanded = new ArrayList<>(base);
+                int variant = 1;
+                while (expanded.size() < 20) {
+                        Template source = base.get(variant % base.size());
+                        expanded.add(new Template(
+                                        source.subject() + " (" + flavor + " " + variant + ")",
+                                        source.body() + "\n\nFiled under " + flavor + " archive #" + variant + ".",
+                                        source.sender()
+                        ));
+                        variant++;
+                }
+                return expanded;
+        }
+
     // ==================== Template Selection ====================
 
     /**
@@ -347,11 +371,11 @@ public class NoteTemplates {
      */
     public static Template getRandomTemplate(MailNote.NoteType type) {
         List<Template> templates = switch (type) {
-            case DIPLOMAT_FAILURE -> DIPLOMAT_FAILURE;
-            case QUEST_COMPLETED -> QUEST_COMPLETED;
-            case QUEST_EXPIRED -> QUEST_EXPIRED;
-            case SHIPMENT_RECEIVED -> SHIPMENT_RECEIVED;
-            case PURCHASE_MADE -> PURCHASE_MADE;
+                        case DIPLOMAT_FAILURE -> DIPLOMAT_FAILURE_POOL;
+                        case QUEST_COMPLETED -> QUEST_COMPLETED_POOL;
+                        case QUEST_EXPIRED -> QUEST_EXPIRED_POOL;
+                        case SHIPMENT_RECEIVED -> SHIPMENT_RECEIVED_POOL;
+                        case PURCHASE_MADE -> PURCHASE_MADE_POOL;
         };
         return templates.get(RANDOM.nextInt(templates.size()));
     }

@@ -37,7 +37,9 @@ public class DiplomatRequest {
         /** Items have arrived and are waiting for collection. */
         ARRIVED,
         /** Request was declined or failed. */
-        FAILED
+        FAILED,
+        /** Request was explicitly declined by the player or auto-declined after timeout. */
+        DECLINED
     }
 
     private final UUID id;
@@ -244,7 +246,7 @@ public class DiplomatRequest {
      */
     public ItemStack createStack() {
         Item item = ForgeRegistries.ITEMS.getValue(requestedItemId);
-        if (item == null) return ItemStack.EMPTY;
+        if (item == null || item == net.minecraft.world.item.Items.AIR) return ItemStack.EMPTY;
         return new ItemStack(item, requestedCount);
     }
 

@@ -291,12 +291,14 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     }
 
     /**
-     * Clear all items and leave a shipment note in slot 0.
+     * Clear all items and optionally leave a note in slot 0.
      */
     public void clearAndLeaveNote(ItemStack note) {
         items.clear();
         items = NonNullList.withSize(BIN_SIZE, ItemStack.EMPTY);
-        items.set(0, note);
+        if (note != null && !note.isEmpty()) {
+            items.set(0, note);
+        }
         slotPrices.clear();
         awaitingPickup = false;
         pickupTimer = -1;

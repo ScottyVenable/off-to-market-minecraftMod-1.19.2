@@ -5,7 +5,6 @@ import com.offtomarket.mod.data.*;
 import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.item.CoinType;
-import com.offtomarket.mod.item.ShipmentNoteItem;
 import com.offtomarket.mod.menu.TradingPostMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import com.offtomarket.mod.registry.ModItems;
@@ -507,11 +506,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             demandTracker.recordSupply(town.getId(), si.getItemId().toString(), si.getCount());
         }
 
-        // Create note and clear bin
-        int maxMarketTicks = DebugConfig.getMaxMarketTime();
-        ItemStack note = ShipmentNoteItem.createNote(
-                town.getDisplayName(), itemsToShip, gameTime, travelTicks + pickupDelay, maxMarketTicks);
-        bin.clearAndLeaveNote(note);
+        // Clear bin after dispatch (shipment notices are now handled by mailbox notes)
+        bin.clearAndLeaveNote(ItemStack.EMPTY);
 
         syncToClient();
         return true;
@@ -630,8 +626,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         marketListings.remove(listing);
         syncToClient();
-        // ~25% chance to receive a purchase note
-        if (level != null && !level.isClientSide() && new Random().nextDouble() < 0.25) {
+        // Always issue purchase receipts to mailbox
+        if (level != null && !level.isClientSide()) {
             TownData purchaseTown = TownRegistry.getTown(listing.getTownId());
             String purchaseTownName = purchaseTown != null ? purchaseTown.getDisplayName() : listing.getTownId();
             deliverNoteToNearbyMailboxes(level, worldPosition,
@@ -1241,7 +1237,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 * getTravelTimeMultiplier());
 
         long travelToEnd = gameTime + baseTravelTicks;
-        long discussingEnd = travelToEnd + 600;
+        long discussingEnd = travelToEnd + 12000;
         long waitingEnd = discussingEnd + 300;
         long returnEnd = waitingEnd + baseTravelTicks;
 
@@ -1275,7 +1271,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 int cost = req.getProposedPrice();
                 if (!hasEnoughCoins(player, cost)) {
                     // Not enough coins - decline automatically
-                    req.setStatus(DiplomatRequest.Status.FAILED);
+                    req.setStatus(DiplomatRequest.Status.DECLINED);
                     TownData costTown = TownRegistry.getTown(req.getTownId());
                     String costTownName = costTown != null ? costTown.getDisplayName() : req.getTownId();
                     if (level != null && !level.isClientSide()) {
@@ -1300,12 +1296,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     /**
      * Decline a diplomat's proposed price.
-     * No coins are deducted, request is marked FAILED and eventually removed.
+     * No coins are deducted, request is marked DECLINED and eventually removed.
      */
     public boolean declineDiplomatProposal(UUID requestId) {
         for (DiplomatRequest req : activeDiplomatRequests) {
             if (req.getId().equals(requestId) && req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
-                req.setStatus(DiplomatRequest.Status.FAILED);
+                req.setStatus(DiplomatRequest.Status.DECLINED);
                 TownData decTown = TownRegistry.getTown(req.getTownId());
                 String decTownName = decTown != null ? decTown.getDisplayName() : req.getTownId();
                 if (level != null && !level.isClientSide()) {
@@ -1409,15 +1405,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                                         .withStyle(ChatFormatting.AQUA));
                         SoundHelper.playShipmentArrive(level, pos);
                         ToastHelper.notifyShipmentArrived(level, pos, arrName);
-                        // ~30% chance to receive a shipment note
-                        if (be.negotiationRandom.nextDouble() < 0.30) {
-                            String firstItem = shipment.getItems().isEmpty() ? "goods"
-                                    : shipment.getItems().get(0).getDisplayName();
-                            int totalItems = shipment.getItems().stream().mapToInt(Shipment.ShipmentItem::getCount).sum();
-                            deliverNoteToNearbyMailboxes(level, pos,
-                                    NoteTemplates.createNote(MailNote.NoteType.SHIPMENT_RECEIVED,
-                                            arrName, firstItem, totalItems, "", "", "", gameTime));
-                        }
+                        // Shipment notices removed in v0.3.0 (mailbox focuses on actionable receipts/updates).
                         changed = true;
                     }
                     break;
@@ -1534,38 +1522,24 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                         TownData reqTown = TownRegistry.getTown(req.getTownId());
                         String townName = reqTown != null ? reqTown.getDisplayName() : req.getTownId();
 
-                        // Check if town accepts based on supply score
-                        double chance = DiplomatRequest.getFulfillmentChance(req.getSupplyScore());
-                        if (be.negotiationRandom.nextDouble() < chance) {
-                            // Town accepts negotiation
-                            req.setStatus(DiplomatRequest.Status.DISCUSSING);
-                            notifyNearbyPlayers(level, pos,
-                                    Component.literal("\u2709 Diplomat arrived at " + townName + "! Accept or decline the proposal.")
-                                            .withStyle(ChatFormatting.YELLOW));
-                            SoundHelper.playDiplomatProposal(level, pos);
-                            ToastHelper.notifyDiplomatProposal(level, pos, townName);
-                        } else {
-                            // Town rejected — can't supply
-                            req.setStatus(DiplomatRequest.Status.FAILED);
-                            notifyNearbyPlayers(level, pos,
-                                    Component.literal("\u2718 " + townName + " couldn't fulfill your request for " + req.getItemDisplayName() + ".")
-                                            .withStyle(ChatFormatting.RED));
-                            deliverNoteToNearbyMailboxes(level, pos,
-                                    NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
-                                            townName, req.getItemDisplayName(), req.getRequestedCount(),
-                                            formatCoins(req.getProposedPrice()), "", "", gameTime));
-                        }
+                        // Requests now always reach proposal phase; difficult items cost more via premium.
+                        req.setStatus(DiplomatRequest.Status.DISCUSSING);
+                        notifyNearbyPlayers(level, pos,
+                            Component.literal("\u2709 Diplomat arrived at " + townName + "! Accept or decline the proposal.")
+                                .withStyle(ChatFormatting.YELLOW));
+                        SoundHelper.playDiplomatProposal(level, pos);
+                        ToastHelper.notifyDiplomatProposal(level, pos, townName);
                         changed = true;
                     }
                 }
                 case DISCUSSING -> {
-                    // Waiting for player to accept/decline - auto-fail if time runs out
+                        // Waiting for player to accept/decline - auto-decline if time runs out
                     if (gameTime >= req.getDiscussingEndTime()) {
-                        req.setStatus(DiplomatRequest.Status.FAILED);
+                        req.setStatus(DiplomatRequest.Status.DECLINED);
                         TownData reqTown = TownRegistry.getTown(req.getTownId());
                         String townName = reqTown != null ? reqTown.getDisplayName() : req.getTownId();
                         notifyNearbyPlayers(level, pos,
-                                Component.literal("\u2718 Diplomat proposal from " + townName + " expired!")
+                            Component.literal("\u2718 Diplomat proposal from " + townName + " auto-declined.")
                                         .withStyle(ChatFormatting.RED));
                         deliverNoteToNearbyMailboxes(level, pos,
                                 NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
@@ -1595,7 +1569,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                         changed = true;
                     }
                 }
-                case FAILED -> {
+                case FAILED, DECLINED -> {
                     // Mark for removal after a short delay (give player time to see the status)
                     if (gameTime >= req.getDiscussingEndTime() + 200) { // 10 seconds after failure
                         failedRequests.add(req);

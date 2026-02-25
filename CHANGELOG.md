@@ -7,73 +7,73 @@
 - **Searchable Inventory** — Type to filter bin contents by item name; filtered count displayed.
 - **Custom List Rendering** — Each row shows 12×12 item icon, truncated item name, and coin price (using CoinRenderer for colored denominations).
 - **Right-Click Deposit** — Players now deposit items by right-clicking the Trading Bin block while holding items; no drag-and-drop needed.
-- **Withdraw Button** — Click a list item to select, then click "Withdraw" to take it back into player inventory via `WithdrawBinItemPacket`.
+- **Withdraw Button** — Click a list item to select, then click Withdraw to take it back into player inventory via WithdrawBinItemPacket.
 - **Inspection Slot Removed** — Eliminated the dedicated inspection slot; pricing now done entirely through list selection.
 - **Player Inventory Removed** — Trading Bin menu no longer displays player inventory; all slots positioned off-screen.
-- **Persistent Price Book Tab** — Price setting UI remains in the right "Bin" tab with price input and auto-population when items are selected.
-- **Modifiers Tab Unchanged** — "Fees" tab continues to show crafting tax, min markup, auto-price mode, and per-item modifier toggles.
+- **Persistent Price Book Tab** — Price setting UI remains in the right Bin tab with price input and auto-population when items are selected.
+- **Modifiers Tab Unchanged** — Fees tab continues to show crafting tax, min markup, auto-price mode, and per-item modifier toggles.
 
 ### Market Board Improvements
 - **Town Column Repositioned** — Shifted left by 12px (dot x=132, arrow x=136, name x=144) with 84px truncation for better spacing.
-- **Refresh Cooldown System** — 5-minute cooldown between market refreshes (configurable via `MarketBoardBlockEntity.REFRESH_COOLDOWN_TICKS`).
-- **Countdown Display** — Refresh button shows "M:SS" countdown during cooldown; button disabled until refresh is available.
-- **Cheats Bypass** — New `DebugConfig.UNLIMITED_REFRESHES` flag allows unlimited refreshes when enabled.
-- **Server-Side Ticker** — Added `serverTick()` to `MarketBoardBlockEntity` for countdown decrement; registered via `getTicker()` in `MarketBoardBlock`.
+- **Refresh Cooldown System** — 5-minute cooldown between market refreshes (configurable via MarketBoardBlockEntity.REFRESH_COOLDOWN_TICKS).
+- **Countdown Display** — Refresh button shows M:SS countdown during cooldown; button disabled until refresh is available.
+- **Cheats Bypass** — New DebugConfig.UNLIMITED_REFRESHES flag allows unlimited refreshes when enabled.
+- **Server-Side Ticker** — Added serverTick() to MarketBoardBlockEntity for countdown decrement; registered via getTicker() in MarketBoardBlock.
 
 ### Bug Fixes
 - **Air Item Prevention** — Added guards at 4 points to prevent Items.AIR from being sold:
-  - `TradingBinBlockEntity.addItem()` — Guards against empty/air items in deposits
-  - `TradingBinBlockEntity.setPrice()` — Enhanced container methods with proper bounds checking
-  - `MarketListing.generateListings()` — Prevents air items from entering market listings
-  - `Shipment.ShipmentItem.createStack()` — Validates item isn't air before creating stacks
-  - `TradingPostBlockEntity.sendItemsToMarket()` — Guards against air in shipment processing
+  - TradingBinBlockEntity.addItem() — Guards against empty/air items in deposits
+  - TradingBinBlockEntity.setPrice() — Enhanced container methods with proper bounds checking
+  - MarketListing.generateListings() — Prevents air items from entering market listings
+  - Shipment.ShipmentItem.createStack() — Validates item isn't air before creating stacks
+  - TradingPostBlockEntity.sendItemsToMarket() — Guards against air in shipment processing
 - **Workers Tab Rendering** — Fixed text overlap by repositioning worker labels from rowY=6 to rowY=38+i×32 with compressed detail rendering.
 
 ### Reputation & Experience Balancing
 - **Worker XP Increase** — Increased from 1 XP per trip to 3 XP per trip (Worker.completedTrip()).
 - **Sales-Based Reputation** — Trading Posts now grant reputation on regular sales (in addition to quests):
   - Amount = number of items sold in the shipment (SoldCount)
-  - Applied on SOLD→COMPLETED state transition in `TradingPostBlockEntity`
+  - Applied on SOLD→COMPLETED state transition in TradingPostBlockEntity
   - Eliminates the slow reputation grind when relying only on quests
 
 ### Coin Text Coloring
 - **Colored Denominations** — Coin amounts now render with color codes across all screens:
-  - Gold: `§e` (yellow/gold)
-  - Silver: `§7` (light gray)
-  - Copper: `§6` (dark orange)
-- **Affected Screens** — TradingBinScreen, TradingPostScreen, MarketBoardScreen (all use updated `formatCoinText()`)
-- **Escape Sequences** — Uses `\u00A7e`, `\u00A77`, `\u00A76`, `\u00A7r` for robust rendering
+  - Gold: §e (yellow/gold)
+  - Silver: §7 (light gray)
+  - Copper: §6 (dark orange)
+- **Affected Screens** — TradingBinScreen, TradingPostScreen, MarketBoardScreen (all use updated formatCoinText())
+- **Escape Sequences** — Uses \u00A7e, \u00A77, \u00A76, \u00A7r for robust rendering
 
 ### Network Changes
 - **WithdrawBinItemPacket** — New packet for withdrawing items from Trading Bin to player inventory with validation.
-- **ModNetwork Registry** — Registered new packet in `ModNetwork.register()`.
+- **ModNetwork Registry** — Registered new packet in ModNetwork.register().
 
 ### Technical Details
 - **TradingBinMenu**: Simplified to 9 bin slots + 36 player slots, all positioned off-screen; handles shift-click moves programmatically.
-- **TradingBinScreen**: Complete rewrite (~1200 lines); features list filtering, item selection, price book management, modifier toggles.
+- **TradingBinScreen**: Complete rewrite (∼1200 lines); features list filtering, item selection, price book management, modifier toggles.
 - **TradingBinBlockEntity**: Added air guards in critical methods; container methods now include proper bounds checking.
-- **TradingBinBlock**: Updated `use()` to deposit held items before opening GUI; cleaned up `onRemove()` (removed inspection slot handling).
-- **MarketBoardBlockEntity**: Added cooldown timer system with `canRefresh()`, `getRefreshCooldown()`, and `serverTick()` methods.
-- **MarketBoardBlock**: Registered ticker via `getTicker()` for server-side tick processing.
+- **TradingBinBlock**: Updated use() to deposit held items before opening GUI; cleaned up onRemove() (removed inspection slot handling).
+- **MarketBoardBlockEntity**: Added cooldown timer system with canRefresh(), getRefreshCooldown(), and serverTick() methods.
+- **MarketBoardBlock**: Registered ticker via getTicker() for server-side tick processing.
 
 ## Version 0.2.4 — Workers System Expansion
 
 ### New Worker: Bookkeeper
 - **Third Worker Type** — The Bookkeeper manages trade finances, reducing overhead costs for all hired workers per trip.
-- **Cost Reduction Scaling** — Starts at ~8% reduction, scaling up to 35% (configurable) as the Bookkeeper levels up.
-- **Config Options** — `bookkeeperHireCost` (default 1040 CP) and `bookkeeperMaxCostReduction` (default 35%) added to mod config.
+- **Cost Reduction Scaling** — Starts at ∼8% reduction, scaling up to 35% (configurable) as the Bookkeeper levels up.
+- **Config Options** — bookkeeperHireCost (default 1040 CP) and bookkeeperMaxCostReduction (default 35%) added to mod config.
 
 ### Worker Level Titles & Perks
 - **Level Titles** — Workers now display ranked titles: Novice (1-2), Apprentice (3-4), Journeyman (5-6), Expert (7-8), Master (9), Grandmaster (10).
 - **Title Colors** — Each title tier has a distinct color from gray to gold.
 - **Perk Milestones** — Workers unlock named perks at levels 3, 6, and 9:
-  - *Negotiator*: Bulk Pricing → Silver Tongue → Trade Mastery
-  - *Trading Cart*: Quick Loading → Shortcut Finder → Express Routes
-  - *Bookkeeper*: Penny Pincher → Market Analyst → Financial Advisor
-- **Perk Effects** — Bookkeeper's "Penny Pincher" (Lv3) lets their own overhead costs be reduced; "Financial Advisor" (Lv9) adds +5% cost reduction.
+  - Negotiator: Bulk Pricing → Silver Tongue → Trade Mastery
+  - Trading Cart: Quick Loading → Shortcut Finder → Express Routes
+  - Bookkeeper: Penny Pincher → Market Analyst → Financial Advisor
+- **Perk Effects** — Bookkeeper's Penny Pincher (Lv3) lets their own overhead costs be reduced; Financial Advisor (Lv9) adds +5% cost reduction.
 
 ### Worker Dismissal
-- **Fire Workers** — Players can now dismiss hired workers via the "✖ Dismiss" button.
+- **Fire Workers** — Players can now dismiss hired workers via the ✖ Dismiss button.
 - **Partial Refund** — Firing returns 50% of the original hire cost.
 - **FireWorkerPacket** — New network packet handles dismissal with server-side distance validation.
 
@@ -90,14 +90,14 @@
 ### Worker System Improvements
 - **Config Integration** — All worker bonuses, hire costs, and level caps now read from mod config instead of hardcoded values.
 - **Lifetime Bonus Tracking** — Each worker tracks their cumulative contribution (saved to NBT).
-- **XP Return Value** — `addXp()` now returns levels gained for triggering level-up logic.
+- **XP Return Value** — addXp() now returns levels gained for triggering level-up logic.
 - **Robust NBT Loading** — Worker deserialization wrapped in try/catch for resilience against invalid data.
 
 ## Version 0.2.0 — Economy Overhaul & Requests System
 
 ### Economy Rebalance
 - **Material-Cost-Based Pricing** — Item prices now derive from actual crafting ingredient costs with recursive resolution, replacing the old flat value tiers.
-- **PriceCalculator Overhaul** — Complete rewrite of the pricing engine using `MaterialValues.java` as the single source of truth for raw material prices.
+- **PriceCalculator Overhaul** — Complete rewrite of the pricing engine using MaterialValues.java as the single source of truth for raw material prices.
 - **Crafting Tax & Shipping Fees** — Players can set crafting tax and shipping fees per Trading Bin through the new Config tab.
 - **Town Need Multipliers** — Dynamic price scaling based on town demand levels (Desperate → Oversaturated).
 
@@ -106,13 +106,13 @@
 - **8 Modifier Fields** — Crafting Tax, Shipping Fee, Tool Modifier, Armor Modifier, Weapon Modifier, Food Modifier, Potion Modifier, and Enchanted Modifier.
 - **Checkbox Toggles** — Enable/disable individual modifiers with visual checkboxes.
 - **Live Preview** — Price calculations update in real-time as settings are adjusted.
-- **Per-Bin Settings** — Each Trading Bin stores its own config in NBT via the extended `UpdateBinSettingsPacket` (now 12 fields).
+- **Per-Bin Settings** — Each Trading Bin stores its own config in NBT via the extended UpdateBinSettingsPacket (now 12 fields).
 
 ### Shipment & Order Improvements
 - **Order Cancel & Return** — Players can cancel active shipments; unsold items are returned instead of force-sold.
 - **Auto-Return After Market Time** — Unsold items automatically return after max market time (8 minutes) instead of being force-sold at a loss.
-- **Partial Sales** — Items can sell partially at market; earnings are tracked per-item with the new `ShipmentItem.pricePerItem` field.
-- **Price Adjustment** — `AdjustShipmentPricePacket` allows in-flight price changes on active shipments.
+- **Partial Sales** — Items can sell partially at market; earnings are tracked per-item with the new ShipmentItem.pricePerItem field.
+- **Price Adjustment** — AdjustShipmentPricePacket allows in-flight price changes on active shipments.
 - **Earnings in Returns** — Activity tab shows partial sale earnings alongside returned items.
 
 ### Towns Tab Redesign
@@ -127,35 +127,35 @@ The old diplomat item selection (limited to town surplus) has been completely re
 
 #### Backend
 - **Request Any Item** — Players can now request ANY item in any quantity, not just items from a town's surplus.
-- **Supply Scoring** — `DiplomatRequest.getSupplyScore()` evaluates each town's ability to fulfill a request (surplus=95, specialty=80, neutral=45, needs=25).
-- **Auto-Town Selection** — `findBestTownForItem()` automatically picks the best town based on supply score.
+- **Supply Scoring** — DiplomatRequest.getSupplyScore() evaluates each town's ability to fulfill a request (surplus=95, specialty=80, neutral=45, needs=25).
+- **Auto-Town Selection** — findBestTownForItem() automatically picks the best town based on supply score.
 - **Fulfillment Chance** — Towns have a percentage chance to successfully fulfill requests based on their supply score tier (95%/85%/60%/35%).
 - **Score-Based Premium** — Price premium scales with how difficult the request is for the selected town (1.0x–1.8x).
 - **CreateRequestPacket** — New network packet for submitting item requests from the UI.
 
 #### UI (Requests Tab)
-- **Item Search** — Type to search/filter through all registered items using the new `EditBox` search field.
+- **Item Search** — Type to search/filter through all registered items using the new EditBox search field.
 - **Scrollable Results** — Browse filtered items in a 6-row list with mouse wheel scrolling.
 - **Confirmation View** — After selecting an item, see the item name, quantity selector ([-] / [+]), estimated cost, best town, and fulfillment chance percentage (color-coded green/yellow/red).
-- **New Request Button** — Click "+ New Request" to enter creation mode; Send/Cancel buttons for confirmation.
+- **New Request Button** — Click + New Request to enter creation mode; Send/Cancel buttons for confirmation.
 - **Keyboard Support** — Full keyboard input for search, Escape to exit creation mode, prevents accidental screen close while typing.
 
 ### Travel Time for Quest Rewards
-- **DELIVERING Status** — Quests now have a new `DELIVERING` phase after all items are delivered: rewards travel back from the town before being collected.
+- **DELIVERING Status** — Quests now have a new DELIVERING phase after all items are delivered: rewards travel back from the town before being collected.
 - **Travel Time Calculation** — Reward travel time is based on town distance × trading cart speed multiplier, matching the shipment travel system.
 - **Automatic Reward Payout** — When the travel timer expires, rewards (bonus coins, trader XP, reputation) are automatically paid out with a notification.
-- **UI Indicators** — Quests in DELIVERING status show a "⇨ Xm Ys" countdown in the status column with an orange color.
-- **Tooltip Details** — Hovering DELIVERING quests shows "Rewards en route" with remaining time and "Rewards will arrive automatically."
+- **UI Indicators** — Quests in DELIVERING status show a ⇨ Xm Ys countdown in the status column with an orange color.
+- **Tooltip Details** — Hovering DELIVERING quests shows Rewards en route with remaining time and Rewards will arrive automatically.
 - **Backward Compatibility** — Legacy save data with DELIVERING quests that lack arrival time are auto-completed on load.
 
 ### Technical Changes
-- `Quest.java`: Added `DELIVERING` status enum, `rewardArrivalTime` field with NBT save/load, `getRewardTicksRemaining()`, `deliver()` now transitions to DELIVERING instead of COMPLETED
-- `TradingPostBlockEntity.java`: Added `formatTravelTime()` helper, DELIVERING→COMPLETED tick processing with reward payout, modified `deliverQuestItems()` for deferred rewards
-- `TradingPostScreen.java`: Requests creation UI (~300 lines), Towns tab cleanup (~100 lines removed), quest DELIVERING status rendering and tooltips
-- `DiplomatRequest.java`: Added `supplyScore` field, `getSupplyScore()`, `getScoreBasedPremium()`, `getFulfillmentChance()`
-- `CreateRequestPacket.java`: New network packet for item request submission
-- `ModNetwork.java`: Registered `CreateRequestPacket`
-- `UpdateBinSettingsPacket`: Extended from 4 to 12 fields for Trading Bin config
+- Quest.java: Added DELIVERING status enum, rewardArrivalTime field with NBT save/load, getRewardTicksRemaining(), deliver() now transitions to DELIVERING instead of COMPLETED
+- TradingPostBlockEntity.java: Added formatTravelTime() helper, DELIVERING→COMPLETED tick processing with reward payout, modified deliverQuestItems() for deferred rewards
+- TradingPostScreen.java: Requests creation UI (∼300 lines), Towns tab cleanup (∼100 lines removed), quest DELIVERING status rendering and tooltips
+- DiplomatRequest.java: Added supplyScore field, getSupplyScore(), getScoreBasedPremium(), getFulfillmentChance()
+- CreateRequestPacket.java: New network packet for item request submission
+- ModNetwork.java: Registered CreateRequestPacket
+- UpdateBinSettingsPacket: Extended from 4 to 12 fields for Trading Bin config
 
 ---
 
@@ -175,17 +175,17 @@ The old diplomat item selection (limited to town surplus) has been completely re
 #### Supply/Demand Trend Arrows (Market Board)
 - **Trend Tracking** — The economy system now tracks previous supply levels across daily refreshes to compute trends.
 - **Visual Trend Arrows** — Listing rows show a green ▲ when demand is rising (supply falling) or a red ▼ when demand is dropping (supply rising) next to the need level dot.
-- **Trend Tooltips** — Hovering over a listing shows "Demand trending UP/DOWN" or "Demand stable" in the tooltip.
+- **Trend Tooltips** — Hovering over a listing shows Demand trending UP/DOWN or Demand stable in the tooltip.
 - **Persistent Trend Data** — Previous supply levels are saved/loaded with town data so trends survive server restarts.
 
 #### Economy Dashboard Enhancements
-- **Market Trends Section** — The Stats panel on the Activity tab now includes a "Market Trends" section showing per-town summaries of how many items have rising vs. falling demand, with color-coded arrows and counts.
+- **Market Trends Section** — The Stats panel on the Activity tab now includes a Market Trends section showing per-town summaries of how many items have rising vs. falling demand, with color-coded arrows and counts.
 
 ### Technical Changes
-- Added `previousSupplyLevels` field and `SupplyTrend` enum to `TownData`
-- Added `snapshotSupplyLevels()` and `getTrend()` methods to `TownData`
-- `SupplyDemandManager.refreshTown()` now snapshots supply levels before applying daily drift
-- Town data NBT save/load updated to persist previous supply levels (`PrevSupplyLevels` tag)
+- Added previousSupplyLevels field and SupplyTrend enum to TownData
+- Added snapshotSupplyLevels() and getTrend() methods to TownData
+- SupplyDemandManager.refreshTown() now snapshots supply levels before applying daily drift
+- Town data NBT save/load updated to persist previous supply levels (PrevSupplyLevels tag)
 - Market Board listing layout adjusted: need dot at x=84, trend arrow at x=88, town name at x=96
 
 ---
@@ -244,14 +244,14 @@ When these mods are detected, specialized markets are automatically created:
 
 #### Quests System
 - Towns now generate trade quests based on their needs
-- Accept quests from the new **Quests tab** in the Trading Post
+- Accept quests from the new Quests tab in the Trading Post
 - Deliver requested items to earn bonus coins and trader XP
 - Quests refresh each dawn and expire after 2-4 Minecraft days
 - Quest rewards scale by town type (Village 1x, Town 1.3x, City 1.6x)
 - Up to 5 active quests at a time
 
 #### Workers System
-- Hire workers from the new **Workers tab** in the Trading Post
+- Hire workers from the new Workers tab in the Trading Post
 - **Negotiator**: Negotiates better sale prices (5-25% bonus, scales with level)
   - Hire cost: 500 CP (5 gold)
   - Per-trip cost: 12-30 CP (scales with level)
@@ -268,7 +268,7 @@ When these mods are detected, specialized markets are automatically created:
 - Diplomat premium pricing by town type (Village +50%, Town +65%, City +80%)
 - Diplomat requests go through 3 phases: Negotiating → In Transit → Arrived
 - Travel time is 1.5x normal, reduced by Trading Cart bonus
-- View and collect requests from the new **Diplomat tab**
+- View and collect requests from the new Diplomat tab
 
 ### UI Improvements
 
@@ -329,3 +329,4 @@ When these mods are detected, specialized markets are automatically created:
 - Guide Book with mod documentation
 - Trading Bin for quick item selling
 - Debug configuration system for testing
+

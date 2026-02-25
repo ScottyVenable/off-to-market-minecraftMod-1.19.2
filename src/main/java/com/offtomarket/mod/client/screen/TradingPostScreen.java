@@ -36,16 +36,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     // ==================== Tab System ====================
 
-    private enum Tab { TRADE, ACTIVITY, TOWNS, QUESTS, WORKERS, DIPLOMAT }
+    private enum Tab { TRADE, ACTIVITY, INCOME, TOWNS, QUESTS, WORKERS, DIPLOMAT }
     private Tab currentTab = Tab.TRADE;
-    private static final String[] TAB_NAMES = {"Trade", "Activity", "Towns", "Quests", "Workers", "Requests"};
+    private static final String[] TAB_NAMES = {"Trade", "Activity", "Income", "Towns", "Quests", "Workers", "Requests"};
 
-    // Tab layout (6 tabs across 376px — 60px each with 1px gap)
+    // Tab layout (7 tabs across 376px)
     private static final int TAB_Y = 18;
     private static final int TAB_H = 14;
-    private static final int TAB_W = 60;
-    private static final int TAB_COUNT = 6;
-    private static final int[] TAB_X = {8, 69, 130, 191, 252, 313};
+    private static final int TAB_W = 52;
+    private static final int TAB_COUNT = 7;
+    private static final int[] TAB_X = {8, 61, 114, 167, 220, 273, 326};
 
     private static final int CONTENT_TOP = 32;
     private static final int CONTENT_H = 112;
@@ -54,7 +54,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private int selectedTownIndex = 0;
     private int activityScrollOffset = 0;
-    private boolean showingEconomyDashboard = false;
     private int townViewPage = 0;
     private int townContentScroll = 0; // scroll offset for town needs/surplus content
     private int townListScroll = 0;    // scroll offset for town list (left page)
@@ -71,6 +70,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private int hoveredTownRow = -1; // hover index for town list on left page
 
+    private enum ActivitySort { NEWEST, OLDEST, TYPE }
+    private enum QuestSort { STATUS, REWARD, TIME_LEFT }
+    private enum RequestSort { STATUS, PRICE, TIME_LEFT }
+    private ActivitySort activitySort = ActivitySort.NEWEST;
+    private QuestSort questSort = QuestSort.STATUS;
+    private RequestSort requestSort = RequestSort.STATUS;
+
     // Request creation mode (Requests tab)
     private boolean creatingRequest = false;
     private EditBox requestSearchBox;
@@ -79,6 +85,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private int hoveredRequestItem = -1;
     private ResourceLocation requestSelectedItem = null;
     private int requestQuantity = 1;
+    private EditBox requestQuantityBox;
     private static final int VISIBLE_REQUEST_ITEMS = 6;
 
     // Shipment cancel confirmation
@@ -90,11 +97,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private Button prevTownBtn, nextTownBtn, sendBtn, collectBtn;
     // Activity tab (shipments + orders)
     private Button activityScrollUpBtn, activityScrollDownBtn;
-    private Button economyToggleBtn;
+    private Button activitySortBtn;
     // Towns tab
     // sendDiplomatBtn/cancelDiplomatBtn removed — request creation moved to Requests tab
     // Quests tab
     private Button questScrollUpBtn, questScrollDownBtn;
+    private Button questSortBtn;
     // Workers tab
     private Button hireNegotiatorBtn, hireCartBtn, hireBookkeeperBtn;
     private Button fireWorkerBtn;
@@ -102,6 +110,20 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // Diplomat tab
     private Button diplomatScrollUpBtn, diplomatScrollDownBtn;
     private Button newRequestBtn, sendRequestBtn, cancelRequestBtn;
+    private Button requestSortBtn;
+
+    /** Tracks what type each visible activity row is: true = shipment, false = order */
+    private final boolean[] activityRowIsShipment = new boolean[VISIBLE_ACTIVITY];
+    /** Maps visible row index to underlying data index */
+    private final int[] activityRowDataIndex = new int[VISIBLE_ACTIVITY];
+    private int selectedActivityRow = -1;
+    private boolean selectedActivityIsShipment;
+    private int selectedActivityDataIndex = -1;
+
+    /** Maps visible quest row to underlying quest index */
+    private final int[] questRowDataIndex = new int[VISIBLE_QUESTS];
+    /** Maps visible diplomat row to underlying request index */
+    private final int[] diplomatRowDataIndex = new int[VISIBLE_DIPLOMAT];
 
     public TradingPostScreen(TradingPostMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -177,11 +199,19 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         activityScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> activityScrollOffset++));
 
-        economyToggleBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
-                Component.literal("\uD83D\uDCCA Stats"), btn -> {
-            showingEconomyDashboard = !showingEconomyDashboard;
-            btn.setMessage(Component.literal(showingEconomyDashboard ? "\u25C0 Activity" : "\uD83D\uDCCA Stats"));
-            updateButtonVisibility();
+        activitySortBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
+                Component.literal("Sort: New"), btn -> {
+            activitySort = switch (activitySort) {
+                case NEWEST -> ActivitySort.OLDEST;
+                case OLDEST -> ActivitySort.TYPE;
+                case TYPE -> ActivitySort.NEWEST;
+            };
+            btn.setMessage(Component.literal("Sort: " + switch (activitySort) {
+                case NEWEST -> "New";
+                case OLDEST -> "Old";
+                case TYPE -> "Type";
+            }));
+            activityScrollOffset = 0;
         }));
 
         // Towns tab: diplomat selection buttons removed — request creation moved to Requests tab
@@ -195,6 +225,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         questScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> questScrollOffset++));
+
+        questSortBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
+                Component.literal("Sort: Sts"), btn -> {
+            questSort = switch (questSort) {
+                case STATUS -> QuestSort.REWARD;
+                case REWARD -> QuestSort.TIME_LEFT;
+                case TIME_LEFT -> QuestSort.STATUS;
+            };
+            btn.setMessage(Component.literal("Sort: " + switch (questSort) {
+                case STATUS -> "Sts";
+                case REWARD -> "Rew";
+                case TIME_LEFT -> "Time";
+            }));
+            questScrollOffset = 0;
+        }));
 
         // ==== Workers tab buttons ====
 
@@ -250,9 +295,24 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         diplomatScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
                 Component.literal("\u25BC"), btn -> diplomatScrollOffset++));
 
+        requestSortBtn = addRenderableWidget(new Button(x + 236, y + 33, 60, 12,
+                Component.literal("Sort: Sts"), btn -> {
+            requestSort = switch (requestSort) {
+                case STATUS -> RequestSort.PRICE;
+                case PRICE -> RequestSort.TIME_LEFT;
+                case TIME_LEFT -> RequestSort.STATUS;
+            };
+            btn.setMessage(Component.literal("Sort: " + switch (requestSort) {
+                case STATUS -> "Sts";
+                case PRICE -> "Cost";
+                case TIME_LEFT -> "Time";
+            }));
+            diplomatScrollOffset = 0;
+        }));
+
         // "New Request" button — opens request creation mode on Requests tab
         newRequestBtn = addRenderableWidget(new Button(x + 298, y + 33, 65, 12,
-                Component.literal("+ New Request"), btn -> {
+                Component.literal("New Request"), btn -> {
             creatingRequest = true;
             requestSelectedItem = null;
             requestQuantity = 1;
@@ -268,6 +328,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         sendRequestBtn = addRenderableWidget(new Button(x + 5, y + 127, 80, 12,
                 Component.literal("\u2714 Send Request"), btn -> {
             if (requestSelectedItem != null) {
+                if (requestQuantityBox != null && requestQuantityBox.isVisible()) {
+                    try {
+                        requestQuantity = Math.max(1, Math.min(64, Integer.parseInt(requestQuantityBox.getValue())));
+                    } catch (NumberFormatException ignored) {
+                        requestQuantity = 1;
+                    }
+                    requestQuantityBox.setValue(String.valueOf(requestQuantity));
+                }
                 TradingPostBlockEntity tpbe = menu.getBlockEntity();
                 if (tpbe != null) {
                     ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
@@ -298,6 +366,26 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         requestSearchBox.setResponder(text -> updateRequestFilteredItems());
         addRenderableWidget(requestSearchBox);
 
+        requestQuantityBox = new EditBox(this.font, x + 90, y + 66, 34, 10,
+                Component.literal("Qty"));
+        requestQuantityBox.setMaxLength(2);
+        requestQuantityBox.setFilter(s -> s.isEmpty() || s.matches("\\d{1,2}"));
+        requestQuantityBox.setValue("1");
+        requestQuantityBox.setVisible(false);
+        requestQuantityBox.setResponder(text -> {
+            if (text == null || text.isEmpty()) return;
+            try {
+                requestQuantity = Math.max(1, Math.min(64, Integer.parseInt(text)));
+                if (!String.valueOf(requestQuantity).equals(text)) {
+                    requestQuantityBox.setValue(String.valueOf(requestQuantity));
+                }
+            } catch (NumberFormatException ignored) {
+                requestQuantity = 1;
+                requestQuantityBox.setValue("1");
+            }
+        });
+        addRenderableWidget(requestQuantityBox);
+
         updateButtonVisibility();
     }
 
@@ -307,11 +395,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
         currentTab = tab;
         creatingRequest = false;
-        showingEconomyDashboard = false;
+        selectedActivityRow = -1;
         confirmCancelShipmentId = null; // Clear cancel confirmation on tab switch
-        if (economyToggleBtn != null) {
-            economyToggleBtn.setMessage(Component.literal("\uD83D\uDCCA Stats"));
-        }
         updateButtonVisibility();
     }
 
@@ -327,9 +412,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         sendBtn.visible = trade;
         collectBtn.visible = trade;
 
-        activityScrollUpBtn.visible = activity && !showingEconomyDashboard;
-        activityScrollDownBtn.visible = activity && !showingEconomyDashboard;
-        economyToggleBtn.visible = activity;
+        activityScrollUpBtn.visible = activity;
+        activityScrollDownBtn.visible = activity;
+        activitySortBtn.visible = activity;
 
         // Hide coin exchange slots (no longer have a coins tab)
         updateCoinSlotPositions(false);
@@ -339,6 +424,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         questScrollUpBtn.visible = quests;
         questScrollDownBtn.visible = quests;
+        questSortBtn.visible = quests;
 
         TradingPostBlockEntity be = menu.getBlockEntity();
         // Workers tab: show hire button for selected unhired worker, fire button for selected hired worker
@@ -358,12 +444,22 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         diplomatScrollUpBtn.visible = diplomat && !creatingRequest;
         diplomatScrollDownBtn.visible = diplomat && !creatingRequest;
+        requestSortBtn.visible = diplomat && !creatingRequest;
         newRequestBtn.visible = diplomat && !creatingRequest;
         sendRequestBtn.visible = diplomat && creatingRequest && requestSelectedItem != null;
         cancelRequestBtn.visible = diplomat && creatingRequest;
         if (requestSearchBox != null) {
             requestSearchBox.setVisible(diplomat && creatingRequest);
             requestSearchBox.active = diplomat && creatingRequest;
+        }
+        if (requestQuantityBox != null) {
+            boolean showQty = diplomat && creatingRequest && requestSelectedItem != null;
+            requestQuantityBox.setVisible(showQty);
+            requestQuantityBox.active = showQty;
+            if (showQty && requestQuantity <= 0) {
+                requestQuantity = 1;
+                requestQuantityBox.setValue("1");
+            }
         }
     }
 
@@ -444,7 +540,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Content area
         drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 376, CONTENT_H);
 
-        // Tab bar (6 tabs)
+        // Tab bar
         for (int i = 0; i < TAB_COUNT; i++) {
             boolean selected = currentTab.ordinal() == i;
             int tx = x + TAB_X[i];
@@ -463,6 +559,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         switch (currentTab) {
             case TRADE -> renderTradeBg(poseStack, x, y, mouseX, mouseY);
             case ACTIVITY -> renderActivityBg(poseStack, x, y, mouseX, mouseY);
+            case INCOME -> renderIncomeBg(poseStack, x, y);
             case TOWNS -> {
                 renderTownsBg(poseStack, x, y);
                 updateTownsDiplomatHover(x, y, mouseX, mouseY);
@@ -483,6 +580,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
         for (int col = 0; col < 9; col++) {
             drawSlot(poseStack, x + 111 + col * 18, y + 206);
+        }
+
+        if (DebugConfig.SHOW_UI_BOUNDS) {
+            hLine(poseStack, x + 4, x + 380, y + CONTENT_TOP, 0x66FF0000);
+            hLine(poseStack, x + 4, x + 380, y + CONTENT_TOP + CONTENT_H, 0x66FF0000);
+            vLine(poseStack, x + 4, y + CONTENT_TOP, y + CONTENT_TOP + CONTENT_H, 0x6600FFFF);
+            vLine(poseStack, x + 380, y + CONTENT_TOP, y + CONTENT_TOP + CONTENT_H, 0x6600FFFF);
         }
     }
 
@@ -519,26 +623,53 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     // ==================== Activity Tab (Unified Shipments + Orders) ====================
 
-    /** Tracks what type each visible activity row is: true = shipment, false = order */
-    private boolean[] activityRowIsShipment = new boolean[VISIBLE_ACTIVITY];
-    /** Maps visible row index to underlying data index */
-    private int[] activityRowDataIndex = new int[VISIBLE_ACTIVITY];
+    private static class ActivityEntry {
+        final boolean isShipment;
+        final int dataIndex;
+        final long sortTime;
 
-    private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
-        if (showingEconomyDashboard) {
-            hoveredActivityRow = -1; // Reset so stale hover can't trigger click actions
-            return; // Dashboard draws its own content
+        private ActivityEntry(boolean isShipment, int dataIndex, long sortTime) {
+            this.isShipment = isShipment;
+            this.dataIndex = dataIndex;
+            this.sortTime = sortTime;
+        }
+    }
+
+    private List<ActivityEntry> getSortedActivity(TradingPostBlockEntity be) {
+        List<ActivityEntry> entries = new ArrayList<>();
+        List<Shipment> shipments = be.getActiveShipments();
+        for (int i = 0; i < shipments.size(); i++) {
+            entries.add(new ActivityEntry(true, i, shipments.get(i).getDepartureTime()));
+        }
+        List<BuyOrder> orders = be.getActiveBuyOrders();
+        for (int i = 0; i < orders.size(); i++) {
+            entries.add(new ActivityEntry(false, i, orders.get(i).getOrderTime()));
         }
 
+        switch (activitySort) {
+            case NEWEST -> entries.sort(Comparator.comparingLong((ActivityEntry e) -> e.sortTime).reversed());
+            case OLDEST -> entries.sort(Comparator.comparingLong(e -> e.sortTime));
+            case TYPE -> entries.sort(Comparator
+                    .comparing((ActivityEntry e) -> e.isShipment ? 0 : 1)
+                    .thenComparing((ActivityEntry e) -> e.sortTime, Comparator.reverseOrder()));
+        }
+        return entries;
+    }
+
+    private void renderIncomeBg(PoseStack ps, int x, int y) {
+        drawInsetPanel(ps, x + 6, y + 35, 372, 105);
+        fill(ps, x + 10, y + 48, x + 374, y + 49, 0xFF2A1F14);
+    }
+
+    private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         // Header row background
         fill(ps, x + 5, y + 46, x + 361, y + 56, 0xFF2C2318);
+        fill(ps, x + 5, y + 129, x + 361, y + 141, 0xFF2C2318);
 
         // Activity rows with hover
         hoveredActivityRow = -1;
         TradingPostBlockEntity be = menu.getBlockEntity();
-        int totalShipments = be != null ? be.getActiveShipments().size() : 0;
-        int totalOrders = be != null ? be.getActiveBuyOrders().size() : 0;
-        int totalActivity = totalShipments + totalOrders;
+        int totalActivity = be != null ? getSortedActivity(be).size() : 0;
 
         for (int i = 0; i < VISIBLE_ACTIVITY; i++) {
             int rowY = y + 57 + i * 12;
@@ -563,13 +694,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     }
 
     private void renderTownsBg(PoseStack ps, int x, int y) {
-        // Book-style page panel
-        // Left page (parchment) — town list
-        fill(ps, x + 6, y + 35, x + 186, y + 140, 0xFFD8C8A0);
-        fill(ps, x + 7, y + 36, x + 185, y + 139, 0xFFF0E6C8);
+        // Left page panel (dark themed)
+        drawInsetPanel(ps, x + 6, y + 35, 180, 105);
 
         // Header underline
-        fill(ps, x + 10, y + 48, x + 182, y + 49, 0xFFBBA878);
+        fill(ps, x + 10, y + 48, x + 182, y + 49, 0xFF2A1F14);
 
         // Town list row backgrounds (selection/hover highlights)
         List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
@@ -582,19 +711,18 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int rowY = listStartY + i * rowH;
             if (townIdx == townViewPage) {
                 // Selected — dark bg with gold left accent
-                fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFF8B7355);
+                fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFF5A4A30);
                 fill(ps, x + 8, rowY, x + 10, rowY + rowH, 0xFFFFD700);
             } else if (i == hoveredTownRow) {
                 // Hovered
-                fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFFBBA878);
+                fill(ps, x + 8, rowY, x + 184, rowY + rowH, 0xFF4A3D2B);
             }
         }
 
         // Center spine
         fill(ps, x + 186, y + 35, x + 190, y + 140, 0xFF6B5A3E);
-        // Right page (parchment) — detail view
-        fill(ps, x + 190, y + 35, x + 378, y + 140, 0xFFD8C8A0);
-        fill(ps, x + 191, y + 36, x + 377, y + 139, 0xFFF0E6C8);
+        // Right page detail panel (dark themed)
+        drawInsetPanel(ps, x + 190, y + 35, 188, 105);
 
         // Right page section dividers
         fill(ps, x + 196, y + 57, x + 372, y + 58, 0xFFBBA878); // below name/meta
@@ -614,7 +742,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 int repBarH = 5;
                 // Border + bg
                 fill(ps, repBarX - 1, repBarY - 1, repBarX + repBarW + 1, repBarY + repBarH + 1, 0xFFBBA878);
-                fill(ps, repBarX, repBarY, repBarX + repBarW, repBarY + repBarH, 0xFFD8C8A0);
+                fill(ps, repBarX, repBarY, repBarX + repBarW, repBarY + repBarH, 0xFF2A1F14);
                 // Fill (clamp at 200 = Exalted)
                 int maxRep = 200;
                 int fillW = Math.max(0, Math.min(repBarW, (int)(repBarW * (rep / (float) maxRep))));
@@ -815,6 +943,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         switch (currentTab) {
             case TRADE -> renderTradeLabels(poseStack);
             case ACTIVITY -> renderActivityLabels(poseStack);
+            case INCOME -> renderIncomeLabels(poseStack);
             case TOWNS -> renderTownsLabels(poseStack);
             case QUESTS -> renderQuestsLabels(poseStack);
             case WORKERS -> renderWorkersLabels(poseStack);
@@ -902,12 +1031,35 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     // ==================== Activity Tab (Unified Shipments + Orders) ====================
 
-    private void renderActivityLabels(PoseStack poseStack) {
-        if (showingEconomyDashboard) {
-            renderEconomyDashboard(poseStack);
-            return;
-        }
+    private void renderIncomeLabels(PoseStack poseStack) {
+        renderEconomyDashboard(poseStack);
 
+        TradingPostBlockEntity be = menu.getBlockEntity();
+        if (be == null) return;
+
+        int y = 128;
+        this.font.draw(poseStack, "Worker Wages / Trip", 8, y, 0xBEA876);
+        y += 10;
+
+        double reduction = be.getBookkeeperCostReduction();
+        for (Worker.WorkerType type : Worker.WorkerType.values()) {
+            Worker worker = be.getWorker(type);
+            if (!worker.isHired()) continue;
+
+            int raw = worker.getPerTripCost();
+            double applyReduction = switch (type) {
+                case BOOKKEEPER -> worker.hasPerk(3) ? reduction : 0.0;
+                default -> reduction;
+            };
+            int adjusted = (int) Math.max(1, raw * (1.0 - applyReduction));
+
+            this.font.draw(poseStack, worker.getType().getDisplayName() + ":", 10, y, 0x999999);
+            this.font.draw(poseStack, formatCoinText(adjusted), 96, y, 0xCCCCCC);
+            y += 9;
+        }
+    }
+
+    private void renderActivityLabels(PoseStack poseStack) {
         this.font.draw(poseStack, "Activity", 8, 36, 0xFFD700);
 
         TradingPostBlockEntity be = menu.getBlockEntity();
@@ -915,7 +1067,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         List<Shipment> shipments = be.getActiveShipments();
         List<BuyOrder> orders = be.getActiveBuyOrders();
-        int totalActivity = shipments.size() + orders.size();
+        List<ActivityEntry> activity = getSortedActivity(be);
+        int totalActivity = activity.size();
 
         if (totalActivity == 0) {
             this.font.draw(poseStack, "No active shipments or orders.", 10, 60, 0x888888);
@@ -944,25 +1097,62 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int yOff = 58;
         int displayed = 0;
 
-        // Combined iteration: shipments first, then orders
         for (int i = activityScrollOffset; displayed < VISIBLE_ACTIVITY && i < totalActivity; i++, displayed++) {
-            boolean isShipment = i < shipments.size();
-            activityRowIsShipment[displayed] = isShipment;
+            ActivityEntry entry = activity.get(i);
+            activityRowIsShipment[displayed] = entry.isShipment;
+            activityRowDataIndex[displayed] = entry.dataIndex;
 
-            if (isShipment) {
-                int shipIdx = i;
-                activityRowDataIndex[displayed] = shipIdx;
-                Shipment s = shipments.get(shipIdx);
+            if (entry.isShipment) {
+                Shipment s = shipments.get(entry.dataIndex);
                 renderActivityShipmentRow(poseStack, s, be, yOff);
             } else {
-                int orderIdx = i - shipments.size();
-                activityRowDataIndex[displayed] = orderIdx;
-                BuyOrder order = orders.get(orderIdx);
+                BuyOrder order = orders.get(entry.dataIndex);
                 renderActivityOrderRow(poseStack, order, be, yOff);
             }
 
             yOff += 12;
         }
+
+        if (selectedActivityDataIndex >= 0) {
+            String detail = getSelectedActivityDetail(be);
+            if (!detail.isEmpty()) {
+                this.font.draw(poseStack, "Details:", 8, 131, 0xBEA876);
+                String detailText = detail;
+                if (this.font.width(detailText) > 300) {
+                    while (this.font.width(detailText + "..") > 300 && detailText.length() > 3) {
+                        detailText = detailText.substring(0, detailText.length() - 1);
+                    }
+                    detailText += "..";
+                }
+                this.font.draw(poseStack, detailText, 50, 131, 0xAAAAAA);
+            }
+        }
+    }
+
+    private String getSelectedActivityDetail(TradingPostBlockEntity be) {
+        if (selectedActivityDataIndex < 0) return "";
+        if (selectedActivityIsShipment) {
+            List<Shipment> shipments = be.getActiveShipments();
+            if (selectedActivityDataIndex >= shipments.size()) return "";
+            Shipment shipment = shipments.get(selectedActivityDataIndex);
+            int soldCount = 0;
+            int totalCount = shipment.getItems().size();
+            for (Shipment.ShipmentItem item : shipment.getItems()) {
+                if (item.isSold()) soldCount++;
+            }
+            TownData town = TownRegistry.getTown(shipment.getTownId());
+            String townName = town != null ? town.getDisplayName() : shipment.getTownId();
+            return "Shipment to " + townName + " | Sold " + soldCount + "/" + totalCount +
+                    " | Earnings " + formatCoinText(Math.max(0, shipment.getTotalEarnings()));
+        }
+
+        List<BuyOrder> orders = be.getActiveBuyOrders();
+        if (selectedActivityDataIndex >= orders.size()) return "";
+        BuyOrder order = orders.get(selectedActivityDataIndex);
+        TownData town = TownRegistry.getTown(order.getTownId());
+        String townName = town != null ? town.getDisplayName() : order.getTownId();
+        return order.getItemDisplayName() + " x" + order.getCount() + " from " + townName
+                + " | Paid " + formatCoinText(Math.max(0, order.getTotalPaid()));
     }
 
     private void renderActivityShipmentRow(PoseStack ps, Shipment s, TradingPostBlockEntity be, int yOff) {
@@ -1507,6 +1697,28 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     // ==================== Quests Tab ====================
 
+    private List<Integer> getSortedQuestIndices(TradingPostBlockEntity be) {
+        List<Quest> quests = be.getActiveQuests();
+        List<Integer> indices = new ArrayList<>();
+        for (int i = 0; i < quests.size(); i++) {
+            indices.add(i);
+        }
+
+        long now = be.getLevel() != null ? be.getLevel().getGameTime() : 0;
+        switch (questSort) {
+            case STATUS -> indices.sort(Comparator
+                    .comparingInt((Integer i) -> quests.get(i).getStatus().ordinal())
+                    .thenComparingLong(i -> quests.get(i).getCreatedTime()).reversed());
+            case REWARD -> indices.sort(Comparator
+                    .comparingInt((Integer i) -> quests.get(i).getRewardCoins()).reversed()
+                    .thenComparingLong(i -> quests.get(i).getCreatedTime()).reversed());
+            case TIME_LEFT -> indices.sort(Comparator
+                    .comparingLong((Integer i) -> quests.get(i).getTicksRemaining(now))
+                    .thenComparingLong(i -> quests.get(i).getCreatedTime()).reversed());
+        }
+        return indices;
+    }
+
     private void renderQuestsLabels(PoseStack poseStack) {
         this.font.draw(poseStack, "Trade Quests", 8, 36, 0xFFD700);
 
@@ -1514,6 +1726,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (be == null) return;
 
         List<Quest> quests = be.getActiveQuests();
+        List<Integer> sorted = getSortedQuestIndices(be);
         int maxScroll = Math.max(0, quests.size() - VISIBLE_QUESTS);
         questScrollOffset = Math.min(questScrollOffset, maxScroll);
 
@@ -1541,8 +1754,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         int yOff = 59;
         int displayed = 0;
-        for (int i = questScrollOffset; i < quests.size() && displayed < VISIBLE_QUESTS; i++, displayed++) {
-            Quest quest = quests.get(i);
+        for (int i = questScrollOffset; i < sorted.size() && displayed < VISIBLE_QUESTS; i++, displayed++) {
+            int dataIndex = sorted.get(i);
+            questRowDataIndex[displayed] = dataIndex;
+            Quest quest = quests.get(dataIndex);
             
             // Quest type badge (colored)
             String typeLabel = switch (quest.getQuestType()) {
@@ -1770,6 +1985,32 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     // ==================== Diplomat Tab ====================
 
+    private List<Integer> getSortedRequestIndices(TradingPostBlockEntity be) {
+        List<DiplomatRequest> requests = be.getActiveDiplomatRequests();
+        List<Integer> indices = new ArrayList<>();
+        for (int i = 0; i < requests.size(); i++) {
+            indices.add(i);
+        }
+
+        long now = be.getLevel() != null ? be.getLevel().getGameTime() : 0;
+        switch (requestSort) {
+            case STATUS -> indices.sort(Comparator
+                    .comparingInt((Integer i) -> requests.get(i).getStatus().ordinal())
+                    .thenComparingLong(i -> requests.get(i).getRequestTime()).reversed());
+            case PRICE -> indices.sort(Comparator
+                    .comparingInt((Integer i) -> {
+                        DiplomatRequest r = requests.get(i);
+                        return r.getStatus() == DiplomatRequest.Status.DISCUSSING
+                                ? r.getProposedPrice() : r.getFinalCost();
+                    }).reversed()
+                    .thenComparingLong(i -> requests.get(i).getRequestTime()).reversed());
+            case TIME_LEFT -> indices.sort(Comparator
+                    .comparingLong((Integer i) -> requests.get(i).getTicksRemaining(now))
+                    .thenComparingLong(i -> requests.get(i).getRequestTime()).reversed());
+        }
+        return indices;
+    }
+
     private void renderDiplomatLabels(PoseStack poseStack) {
         if (creatingRequest) {
             renderRequestCreationLabels(poseStack);
@@ -1782,12 +2023,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (be == null) return;
 
         List<DiplomatRequest> requests = be.getActiveDiplomatRequests();
+        List<Integer> sorted = getSortedRequestIndices(be);
         int maxScroll = Math.max(0, requests.size() - VISIBLE_DIPLOMAT);
         diplomatScrollOffset = Math.min(diplomatScrollOffset, maxScroll);
 
         if (requests.isEmpty()) {
             this.font.draw(poseStack, "No active requests.", 10, 60, 0x888888);
-            this.font.draw(poseStack, "Click '+ New Request' to", 10, 72, 0x888888);
+            this.font.draw(poseStack, "Click 'New Request' to", 10, 72, 0x888888);
             this.font.draw(poseStack, "request items from towns.", 10, 84, 0x888888);
             return;
         }
@@ -1808,8 +2050,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         int yOff = 59;
         int displayed = 0;
-        for (int i = diplomatScrollOffset; i < requests.size() && displayed < VISIBLE_DIPLOMAT; i++, displayed++) {
-            DiplomatRequest req = requests.get(i);
+        for (int i = diplomatScrollOffset; i < sorted.size() && displayed < VISIBLE_DIPLOMAT; i++, displayed++) {
+            int dataIndex = sorted.get(i);
+            diplomatRowDataIndex[displayed] = dataIndex;
+            DiplomatRequest req = requests.get(dataIndex);
 
             // Item name with count
             String itemName = req.getItemDisplayName();
@@ -1847,7 +2091,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     showProgress = true;
                 }
                 case DISCUSSING -> {
-                    status = formatCoinText(req.getProposedPrice());
+                    status = formatCoinText(req.getProposedPrice()) + " (" + ticksToTime(req.getTicksRemaining(gameTime)) + ")";
                     statusColor = 0xFFCC44;
                 }
                 case WAITING_FOR_GOODS -> {
@@ -1869,7 +2113,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     statusColor = 0x55FF55;
                 }
                 default -> {
-                    status = "Failed";
+                    status = req.getStatus() == DiplomatRequest.Status.DECLINED ? "Declined" : "Failed";
                     statusColor = 0xFF4444;
                 }
             }
@@ -2165,8 +2409,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         TradingPostBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
         List<Quest> quests = be.getActiveQuests();
-        int idx = questScrollOffset + hoveredQuestRow;
-        if (idx >= quests.size()) return;
+        int idx = hoveredQuestRow >= 0 && hoveredQuestRow < VISIBLE_QUESTS
+            ? questRowDataIndex[hoveredQuestRow] : -1;
+        if (idx < 0 || idx >= quests.size()) return;
 
         Quest quest = quests.get(idx);
         List<Component> tooltip = new ArrayList<>();
@@ -2247,8 +2492,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         TradingPostBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
         List<DiplomatRequest> requests = be.getActiveDiplomatRequests();
-        int idx = diplomatScrollOffset + hoveredDiplomatRow;
-        if (idx >= requests.size()) return;
+        int idx = hoveredDiplomatRow >= 0 && hoveredDiplomatRow < VISIBLE_DIPLOMAT
+            ? diplomatRowDataIndex[hoveredDiplomatRow] : -1;
+        if (idx < 0 || idx >= requests.size()) return;
 
         DiplomatRequest req = requests.get(idx);
         List<Component> tooltip = new ArrayList<>();
@@ -2271,6 +2517,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             case DISCUSSING -> {
                 tooltip.add(Component.literal("Proposed Price: " + formatCoinText(req.getProposedPrice()))
                         .withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("Auto-declines in: " + ticksToTime(req.getTicksRemaining(gameTime)))
+                    .withStyle(ChatFormatting.YELLOW));
                 tooltip.add(Component.literal("(Includes +" + formatCoinText(req.getDiplomatPremium()) + " premium)")
                         .withStyle(ChatFormatting.DARK_GRAY));
                 tooltip.add(Component.literal("\u2714 Click checkmark to accept")
@@ -2296,7 +2544,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 tooltip.add(Component.literal("\u2714 Click to collect!")
                         .withStyle(ChatFormatting.GREEN));
             }
-            case FAILED -> tooltip.add(Component.literal("\u2716 Request failed or declined")
+                case DECLINED -> tooltip.add(Component.literal("\u2716 Request declined")
+                    .withStyle(ChatFormatting.RED));
+                case FAILED -> tooltip.add(Component.literal("\u2716 Request failed")
                     .withStyle(ChatFormatting.RED));
         }
 
@@ -2399,6 +2649,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     if (itemIdx < requestFilteredItems.size()) {
                         requestSelectedItem = requestFilteredItems.get(itemIdx);
                         requestQuantity = 1;
+                        if (requestQuantityBox != null) requestQuantityBox.setValue("1");
                         updateButtonVisibility();
                         SoundHelper.playUIClick();
                         return true;
@@ -2411,11 +2662,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     if (localX >= 30 && localX <= 46) {
                         // [-] button
                         if (requestQuantity > 1) requestQuantity--;
+                        if (requestQuantityBox != null) requestQuantityBox.setValue(String.valueOf(requestQuantity));
                         return true;
                     }
                     if (localX >= 62 && localX <= 78) {
                         // [+] button
                         if (requestQuantity < 64) requestQuantity++;
+                        if (requestQuantityBox != null) requestQuantityBox.setValue(String.valueOf(requestQuantity));
                         return true;
                     }
                 }
@@ -2423,6 +2676,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 if (localY >= 50 && localY <= 60 && localX >= 8 && localX <= 358) {
                     requestSelectedItem = null;
                     requestQuantity = 1;
+                    if (requestQuantityBox != null) requestQuantityBox.setValue("1");
                     if (requestSearchBox != null) requestSearchBox.setFocus(true);
                     updateButtonVisibility();
                     return true;
@@ -2442,6 +2696,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (be != null && hoveredActivityRow < VISIBLE_ACTIVITY) {
                 boolean isShipment = activityRowIsShipment[hoveredActivityRow];
                 int dataIdx = activityRowDataIndex[hoveredActivityRow];
+                selectedActivityRow = hoveredActivityRow;
+                selectedActivityIsShipment = isShipment;
+                selectedActivityDataIndex = dataIdx;
+                boolean statusClick = (mouseX - x) >= 258;
                 if (isShipment) {
                     List<Shipment> shipments = be.getActiveShipments();
                     if (dataIdx < shipments.size()) {
@@ -2459,7 +2717,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                                 }
                                 return true;
                             }
-                        } else if (button == 0) {
+                        } else if (button == 0 && statusClick) {
                             // Left-click actions
                             if (shipment.getId().equals(confirmCancelShipmentId)) {
                                 // Confirming cancel
@@ -2482,10 +2740,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                                 return true;
                             }
                         }
+                        return true;
                     }
                 } else {
                     // It's an order - check if collectible (left-click only)
-                    if (button == 0) {
+                    if (button == 0 && statusClick) {
                         List<BuyOrder> orders = be.getActiveBuyOrders();
                         if (dataIdx < orders.size()) {
                             BuyOrder order = orders.get(dataIdx);
@@ -2497,6 +2756,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                             }
                         }
                     }
+                    return true;
                 }
             }
             // Clear cancel confirmation if clicked elsewhere in activity tab
@@ -2513,8 +2773,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null) {
                 List<Quest> quests = be.getActiveQuests();
-                int idx = questScrollOffset + hoveredQuestRow;
-                if (idx < quests.size()) {
+                int idx = hoveredQuestRow < VISIBLE_QUESTS ? questRowDataIndex[hoveredQuestRow] : -1;
+                if (idx >= 0 && idx < quests.size()) {
                     Quest quest = quests.get(idx);
                     if (quest.getStatus() == Quest.Status.AVAILABLE) {
                         ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
@@ -2536,8 +2796,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null) {
                 List<DiplomatRequest> requests = be.getActiveDiplomatRequests();
-                int idx = diplomatScrollOffset + hoveredDiplomatRow;
-                if (idx < requests.size()) {
+                int idx = hoveredDiplomatRow < VISIBLE_DIPLOMAT ? diplomatRowDataIndex[hoveredDiplomatRow] : -1;
+                if (idx >= 0 && idx < requests.size()) {
                     DiplomatRequest req = requests.get(idx);
                     if (req.getStatus() == DiplomatRequest.Status.ARRIVED) {
                         ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
@@ -2599,10 +2859,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (currentTab == Tab.ACTIVITY && !showingEconomyDashboard) {
+        if (currentTab == Tab.ACTIVITY) {
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null) {
-                int totalActivity = be.getActiveShipments().size() + be.getActiveBuyOrders().size();
+                int totalActivity = getSortedActivity(be).size();
                 int maxScroll = Math.max(0, totalActivity - VISIBLE_ACTIVITY);
                 if (delta > 0 && activityScrollOffset > 0) {
                     activityScrollOffset--;
@@ -2694,6 +2954,20 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 return true;
             }
         }
+        if (creatingRequest && requestSelectedItem != null && requestQuantityBox != null) {
+            if (requestQuantityBox.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) {
+                try {
+                    requestQuantity = Math.max(1, Math.min(64, Integer.parseInt(requestQuantityBox.getValue())));
+                } catch (NumberFormatException ignored) {
+                    requestQuantity = 1;
+                }
+                requestQuantityBox.setValue(String.valueOf(requestQuantity));
+                return true;
+            }
+        }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
@@ -2701,6 +2975,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     public boolean charTyped(char codePoint, int modifiers) {
         if (creatingRequest && requestSearchBox != null && requestSelectedItem == null) {
             if (requestSearchBox.charTyped(codePoint, modifiers)) {
+                return true;
+            }
+        }
+        if (creatingRequest && requestSelectedItem != null && requestQuantityBox != null) {
+            if (requestQuantityBox.charTyped(codePoint, modifiers)) {
                 return true;
             }
         }

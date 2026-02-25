@@ -199,6 +199,11 @@ public class PriceCalculator {
         put(Items.EMERALD,            new ValueTier(210, 750));
         put(Items.NETHERITE_SCRAP,    TIER_PRECIOUS);
         put(Items.NETHERITE_INGOT,    TIER_LEGENDARY);
+        put(Items.CRYING_OBSIDIAN,    new ValueTier(180, 620));
+        put(Items.ANCIENT_DEBRIS,     new ValueTier(520, 1750));
+        put(Items.SHULKER_SHELL,      new ValueTier(300, 1100));
+        put(Items.ECHO_SHARD,         new ValueTier(420, 1450));
+        put(Items.RECOVERY_COMPASS,   new ValueTier(1200, 4200));
 
         // ---- Blocks of material ----
         put(Items.IRON_BLOCK,         new ValueTier(360, 1260));
@@ -745,9 +750,9 @@ public class PriceCalculator {
     private static ValueTier rarityFallback(ItemStack stack) {
         Rarity rarity = stack.getRarity();
         return switch (rarity) {
-            case EPIC     -> new ValueTier(220, 750);
-            case RARE     -> new ValueTier(65, 220);
-            case UNCOMMON -> new ValueTier(25, 85);
+            case EPIC     -> new ValueTier(520, 1800);
+            case RARE     -> new ValueTier(180, 620);
+            case UNCOMMON -> new ValueTier(40, 140);
             default       -> TIER_COMMON; // COMMON
         };
     }
@@ -802,6 +807,25 @@ public class PriceCalculator {
 
         // 5. Rarity fallback
         tier = rarityFallback(stack);
+
+        // Guarantee a sane minimum floor for rare/epic and hard-to-acquire items
+        // so they don't collapse to junk-tier prices from weak path heuristics.
+        String path = "";
+        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        if (rl != null) path = rl.getPath().toLowerCase();
+
+        if (stack.getRarity() == Rarity.RARE || stack.getRarity() == Rarity.EPIC
+                || path.contains("ancient_debris")
+                || path.contains("crying_obsidian")
+                || path.contains("echo_shard")
+                || path.contains("recovery_compass")
+                || path.contains("nether_star")
+                || path.contains("elytra")) {
+            if (tier.basePrice() < TIER_RARE_DROP.basePrice()) {
+                tier = new ValueTier(TIER_RARE_DROP.basePrice(), Math.max(TIER_RARE_DROP.maxPrice(), tier.maxPrice()));
+            }
+        }
+
         if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
         return tier;
     }

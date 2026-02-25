@@ -25,6 +25,9 @@ public class DebugConfig {
     /** Show the debug HUD overlay on screen */
     public static boolean SHOW_DEBUG_HUD = false;
 
+    /** Draw menu layout guides / bounds for UI alignment debugging */
+    public static boolean SHOW_UI_BOUNDS = false;
+
     /** Enable verbose console logging for trade events */
     public static boolean VERBOSE_LOGGING = false;
 
