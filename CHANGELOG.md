@@ -1,5 +1,24 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.4.9 — Expanded In-Game Commands
+
+### New Command — /otm help
+- Added `/otm help` to print a full, categorized list of all `/otm` commands with short descriptions.
+- Added `/otm help <topic>` for detailed help per category: `debug`, `grant`, `settings`, `town`, `price`, `menu`.
+
+### New Command — /otm town
+- Added `/otm town list` to display a formatted table of all registered towns (ID, name, type, distance, min level).
+- Added `/otm town info <id>` to show full details for a specific town: description, need levels (color-coded), and specialty/sell items.
+
+### New Command — /otm price
+- Added `/otm price` to look up the base and max CP price of the item in the player's main hand.
+- Output includes coin breakdown (gold/silver/copper) and item rarity.
+
+### New Command — /otm debug uibounds
+- Added `/otm debug uibounds` to toggle the UI bounding box overlay (maps to `DebugConfig.SHOW_UI_BOUNDS`).
+
+---
+
 ## Version 0.4.8 — UI Polish, Bug Fixes & Master Ledger
 
 ### Bug Fix — Send to Market Button Always Active
