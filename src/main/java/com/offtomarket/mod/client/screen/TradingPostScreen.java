@@ -1096,30 +1096,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private void renderIncomeLabels(PoseStack poseStack) {
         renderEconomyDashboard(poseStack);
-
-        TradingPostBlockEntity be = menu.getBlockEntity();
-        if (be == null) return;
-
-        int y = 128;
-        this.font.draw(poseStack, "Worker Wages / Trip", 8, y, 0xBEA876);
-        y += 10;
-
-        double reduction = be.getBookkeeperCostReduction();
-        for (Worker.WorkerType type : Worker.WorkerType.values()) {
-            Worker worker = be.getWorker(type);
-            if (!worker.isHired()) continue;
-
-            int raw = worker.getPerTripCost();
-            double applyReduction = switch (type) {
-                case BOOKKEEPER -> worker.hasPerk(3) ? reduction : 0.0;
-                default -> reduction;
-            };
-            int adjusted = (int) Math.max(1, raw * (1.0 - applyReduction));
-
-            this.font.draw(poseStack, worker.getType().getDisplayName() + ":", 10, y, 0x999999);
-            this.font.draw(poseStack, formatCoinText(adjusted), 96, y, 0xCCCCCC);
-            y += 9;
-        }
     }
 
     private void renderActivityLabels(PoseStack poseStack) {
@@ -1302,20 +1278,22 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         this.font.draw(ps, destDisplay, 40, yOff, 0xCCCCCC);
         this.font.draw(ps, status, 358 - statusW, yOff, statusColor);
 
-        // Progress bar for IN_TRANSIT shipments
+        // Progress bar below the row text
         if (s.getStatus() == Shipment.Status.IN_TRANSIT) {
             long totalTravel = s.getArrivalTime() - s.getDepartureTime();
             long elapsed = be.getLevel().getGameTime() - s.getDepartureTime();
             float progress = totalTravel > 0 ? Math.min(1.0f, (float) elapsed / totalTravel) : 1.0f;
-            int barX = 40;
-            int barY2 = yOff + 9;
-            int barW = 316;
-            int barH = 2;
-            fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF2A2A2A);
-            if (progress > 0) {
-                int fillW = Math.max(1, (int) (barW * progress));
-                fill(ps, barX, barY2, barX + fillW, barY2 + barH, 0xFF88BBFF);
-            }
+            int barX = 40; int barY2 = yOff + 9; int barW = 316; int barH = 3;
+            fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF3A3A3A);
+            if (progress > 0) fill(ps, barX, barY2, barX + Math.max(1, (int)(barW * progress)), barY2 + barH, 0xFF88BBFF);
+        } else if (s.getStatus() == Shipment.Status.RETURNING) {
+            long travelTime = s.getArrivalTime() - s.getDepartureTime();
+            long returnStart = s.getReturnArrivalTime() - travelTime;
+            long elapsed = be.getLevel().getGameTime() - returnStart;
+            float progress = travelTime > 0 ? Math.min(1.0f, (float) elapsed / travelTime) : 1.0f;
+            int barX = 40; int barY2 = yOff + 9; int barW = 316; int barH = 3;
+            fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF3A3A3A);
+            if (progress > 0) fill(ps, barX, barY2, barX + Math.max(1, (int)(barW * progress)), barY2 + barH, 0xFFFFAA88);
         }
     }
 
@@ -1355,15 +1333,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             long totalTravel = order.getArrivalTime() - order.getOrderTime();
             long elapsed = be.getLevel().getGameTime() - order.getOrderTime();
             float progress = totalTravel > 0 ? Math.min(1.0f, (float) elapsed / totalTravel) : 1.0f;
-            int barX = 40;
-            int barY2 = yOff + 9;
-            int barW = 316;
-            int barH = 2;
-            fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF2A2A2A);
-            if (progress > 0) {
-                int fillW = Math.max(1, (int) (barW * progress));
-                fill(ps, barX, barY2, barX + fillW, barY2 + barH, 0xFF88BBFF);
-            }
+            int barX = 40; int barY2 = yOff + 9; int barW = 316; int barH = 3;
+            fill(ps, barX, barY2, barX + barW, barY2 + barH, 0xFF3A3A3A);
+            if (progress > 0) fill(ps, barX, barY2, barX + Math.max(1, (int)(barW * progress)), barY2 + barH, 0xFF88BBFF);
         }
     }
 
@@ -1448,50 +1420,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
-        // Supply/Demand Trends section
-        Collection<TownData> allTowns = TownRegistry.getAllTowns();
-        boolean hasTrends = false;
-        for (TownData t : allTowns) {
-            if (!t.getSupplyLevels().isEmpty() && !t.getPreviousSupplyLevels().isEmpty()) {
-                hasTrends = true;
-                break;
-            }
-        }
-        if (hasTrends) {
-            drawY += 6;
-            this.font.draw(ps, "Market Trends", 8, drawY, 0xFFD700);
-            drawY += 10;
-            for (TownData t : allTowns) {
-                Map<String, Integer> supplies = t.getSupplyLevels();
-                if (supplies.isEmpty()) continue;
-                // Count rising/falling/stable items
-                int rising = 0, falling = 0;
-                for (String key : supplies.keySet()) {
-                    TownData.SupplyTrend trend = t.getTrend(key);
-                    if (trend == TownData.SupplyTrend.RISING) rising++;
-                    else if (trend == TownData.SupplyTrend.FALLING) falling++;
-                }
-                if (rising == 0 && falling == 0) continue; // all stable, skip
-
-                String tName = t.getDisplayName();
-                if (this.font.width(tName) > 60) {
-                    while (this.font.width(tName + "..") > 60 && tName.length() > 2) {
-                        tName = tName.substring(0, tName.length() - 1);
-                    }
-                    tName += "..";
-                }
-                this.font.draw(ps, tName, 10, drawY, 0xCCCCCC);
-                // Show trend counts
-                if (falling > 0) {
-                    this.font.draw(ps, "\u25B2" + falling, 130, drawY, 0x44CC44); // demand rising
-                }
-                if (rising > 0) {
-                    this.font.draw(ps, "\u25BC" + rising, 165, drawY, 0xCC4444); // demand falling
-                }
-                drawY += 9;
-                if (drawY > 165) break; // don't overflow
-            }
-        }
+        // Supply/Demand Trends removed from Income tab to prevent overflow.
+        // (Trends are visible on the Towns tab per-town detail panel.)
 
         // Hint
         if (lifetime == 0) {

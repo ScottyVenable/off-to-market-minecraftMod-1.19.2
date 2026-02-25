@@ -142,13 +142,21 @@ public class Shipment {
         private int pricePerItem; // in copper pieces (mutable for price adjustments)
         private final String displayName;
         private boolean sold;
+        /** Full item NBT (e.g. potion type), preserved so returned items are identical. */
+        private final CompoundTag itemNbt;
 
-        public ShipmentItem(ResourceLocation itemId, int count, int pricePerItem, String displayName) {
+        public ShipmentItem(ResourceLocation itemId, int count, int pricePerItem, String displayName, CompoundTag itemNbt) {
             this.itemId = itemId;
             this.count = count;
             this.pricePerItem = pricePerItem;
             this.displayName = displayName;
             this.sold = false;
+            this.itemNbt = itemNbt != null && !itemNbt.isEmpty() ? itemNbt.copy() : null;
+        }
+
+        /** Backward-compatible constructor for items with no special NBT. */
+        public ShipmentItem(ResourceLocation itemId, int count, int pricePerItem, String displayName) {
+            this(itemId, count, pricePerItem, displayName, null);
         }
 
         public ResourceLocation getItemId() { return itemId; }
@@ -167,7 +175,9 @@ public class Shipment {
         public ItemStack createStack() {
             Item item = getItem();
             if (item == null || item == Items.AIR) return ItemStack.EMPTY;
-            return new ItemStack(item, count);
+            ItemStack stack = new ItemStack(item, count);
+            if (itemNbt != null) stack.setTag(itemNbt.copy());
+            return stack;
         }
 
         public CompoundTag save() {
@@ -177,15 +187,18 @@ public class Shipment {
             tag.putInt("Price", pricePerItem);
             tag.putString("Name", displayName);
             tag.putBoolean("Sold", sold);
+            if (itemNbt != null) tag.put("Nbt", itemNbt.copy());
             return tag;
         }
 
         public static ShipmentItem load(CompoundTag tag) {
+            CompoundTag nbt = tag.contains("Nbt") ? tag.getCompound("Nbt") : null;
             ShipmentItem item = new ShipmentItem(
                     new ResourceLocation(tag.getString("ItemId")),
                     tag.getInt("Count"),
                     tag.getInt("Price"),
-                    tag.getString("Name")
+                    tag.getString("Name"),
+                    nbt
             );
             item.sold = tag.getBoolean("Sold");
             return item;

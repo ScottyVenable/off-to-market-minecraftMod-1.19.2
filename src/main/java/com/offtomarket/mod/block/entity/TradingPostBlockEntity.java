@@ -473,7 +473,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem()),
                         stack.getCount(),
                         price,
-                        stack.getHoverName().getString()
+                        stack.getHoverName().getString(),
+                        stack.getTag() // preserve NBT (e.g. potion type) so returned items are identical
                 ));
                 itemsToShip.add(stack.copy());
             }
@@ -1020,7 +1021,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         int maxTotal = 5;
         if (activeQuests.size() >= maxTotal) return;
 
-        List<TownData> towns = TownRegistry.getAvailableTowns(traderLevel);
+        List<TownData> towns = new java.util.ArrayList<>(TownRegistry.getAvailableTowns(traderLevel));
         java.util.Random rand = new java.util.Random();
         java.util.Collections.shuffle(towns, rand);
 
@@ -1479,9 +1480,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             changed = true;
         }
 
-        // Dawn-based market refresh (once per Minecraft day at sunrise)
+        // Dawn-based market refresh (once per Minecraft day at sunrise).
+        // Use getDayTime() (not getGameTime()) so that sleeping — which advances
+        // the day/night cycle without a matching increase in raw game ticks — still
+        // triggers the daily refresh correctly.
         long dayTime = level.getDayTime() % 24000;
-        long dayNumber = level.getGameTime() / 24000;
+        long dayNumber = level.getDayTime() / 24000;
         if (be.lastRefreshDay < 0 || be.marketListings.isEmpty()) {
             // First time or empty: do initial refresh
             be.lastRefreshDay = dayNumber;
@@ -1630,7 +1634,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     || q.getStatus() == Quest.Status.COMPLETED);
         }
 
-        // Dawn-based quest refresh (same as market refresh, once per day)
+        // Dawn-based quest refresh (same as market refresh, once per day).
+        // Also uses getDayTime() / 24000 so sleeping properly triggers a refresh.
         if (be.lastQuestRefreshDay < 0 || be.activeQuests.isEmpty()) {
             be.lastQuestRefreshDay = dayNumber;
             be.refreshQuests(gameTime);
