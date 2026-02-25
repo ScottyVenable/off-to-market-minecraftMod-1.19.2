@@ -11,7 +11,8 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Container/Menu for the Trading Bin.
- * Shows 9 item slots for placing items to sell, plus the player inventory.
+ * All slots are positioned off-screen; the GUI uses a custom list view.
+ * Shift-click still moves items between bin and player inventory.
  */
 public class TradingBinMenu extends AbstractContainerMenu {
     private final TradingBinBlockEntity blockEntity;
@@ -25,31 +26,23 @@ public class TradingBinMenu extends AbstractContainerMenu {
         super(ModMenuTypes.TRADING_BIN.get(), containerId);
         this.blockEntity = be;
 
-        // Trading Bin slots (3x3 grid)
-        // Use a dummy container on client side so slot count matches server
-        net.minecraft.world.Container container = be != null ? be : new SimpleContainer(TradingBinBlockEntity.TOTAL_SIZE);
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 3; col++) {
-                this.addSlot(new Slot(container, col + row * 3, 62 + col * 18, 17 + row * 18));
-            }
+        net.minecraft.world.Container container = be != null ? be : new SimpleContainer(TradingBinBlockEntity.BIN_SIZE);
+
+        // Bin slots (off-screen — rendered as a custom list in the screen)
+        for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
+            this.addSlot(new Slot(container, i, -9999, -9999));
         }
 
-        // Inspection slot (in right panel)
-        this.addSlot(new Slot(container, TradingBinBlockEntity.INSPECT_SLOT, 184, 34) {
-            @Override
-            public int getMaxStackSize() { return 64; }
-        });
-
-        // Player inventory (3 rows of 9)
+        // Player inventory (off-screen — not visible in the management GUI)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(inv, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                this.addSlot(new Slot(inv, col + row * 9 + 9, -9999, -9999));
             }
         }
 
-        // Player hotbar
+        // Player hotbar (off-screen)
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(inv, col, 8 + col * 18, 142));
+            this.addSlot(new Slot(inv, col, -9999, -9999));
         }
     }
 
@@ -64,24 +57,18 @@ public class TradingBinMenu extends AbstractContainerMenu {
             ItemStack slotStack = slot.getItem();
             result = slotStack.copy();
 
-            int binSlots = TradingBinBlockEntity.BIN_SIZE;      // 9
-            int inspectSlot = TradingBinBlockEntity.INSPECT_SLOT; // 9 in container, 9 in menu
-            int playerStart = inspectSlot + 1;                    // 10
-            int playerEnd = playerStart + 36;                     // 46
+            int binEnd = TradingBinBlockEntity.BIN_SIZE;      // 9
+            int playerStart = binEnd;                          // 9
+            int playerEnd = playerStart + 36;                  // 45
 
-            if (index < binSlots) {
+            if (index < binEnd) {
                 // Moving from bin to player inventory
                 if (!this.moveItemStackTo(slotStack, playerStart, playerEnd, true)) {
                     return ItemStack.EMPTY;
                 }
-            } else if (index == inspectSlot) {
-                // Moving from inspection to player inventory
-                if (!this.moveItemStackTo(slotStack, playerStart, playerEnd, true)) {
-                    return ItemStack.EMPTY;
-                }
             } else {
-                // Moving from player inventory to bin (NOT to inspection slot)
-                if (!this.moveItemStackTo(slotStack, 0, binSlots, false)) {
+                // Moving from player inventory to bin
+                if (!this.moveItemStackTo(slotStack, 0, binEnd, false)) {
                     return ItemStack.EMPTY;
                 }
             }

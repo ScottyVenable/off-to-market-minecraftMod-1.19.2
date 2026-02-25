@@ -110,7 +110,7 @@ public class Worker {
      */
     public void completedTrip() {
         totalTrips++;
-        addXp(1);
+        addXp(3);
     }
 
     // ==================== Level Titles ====================

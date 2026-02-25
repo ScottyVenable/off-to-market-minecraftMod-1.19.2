@@ -212,6 +212,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         scrollDownBtn.visible = listing;
         refreshBtn.visible = !cartView;
 
+        // Disable refresh button during cooldown (unless cheat is enabled)
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null && !be.canRefresh()) {
+            refreshBtn.active = false;
+        } else {
+            refreshBtn.active = true;
+        }
+
         cartToggleBtn.visible = !qtyOverlay;
         cartToggleBtn.setMessage(Component.literal("Cart (" + cart.size() + ")"));
 
@@ -226,6 +234,16 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         qtyPlus10Btn.visible = qtyOverlay;
         addToCartBtn.visible = qtyOverlay;
         cancelQtyBtn.visible = qtyOverlay;
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        // Update refresh button active state each tick
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            refreshBtn.active = be.canRefresh();
+        }
     }
 
     // ==================== Cart Logic ====================
@@ -343,15 +361,15 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private String formatCoinText(int copperPieces) {
         if (DebugConfig.isGoldOnlyMode()) {
             int gp = Math.max(1, (copperPieces + 99) / 100);
-            return gp + "g";
+            return "\u00A7e" + gp + "g\u00A7r";
         }
         int gp = copperPieces / 100;
         int sp = (copperPieces % 100) / 10;
         int cp = copperPieces % 10;
         StringBuilder sb = new StringBuilder();
-        if (gp > 0) sb.append(gp).append("g");
-        if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append(sp).append("s"); }
-        if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append(cp).append("c"); }
+        if (gp > 0) sb.append("\u00A7e").append(gp).append("g\u00A7r");
+        if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append("\u00A77").append(sp).append("s\u00A7r"); }
+        if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append("\u00A76").append(cp).append("c\u00A7r"); }
         return sb.toString();
     }
 
@@ -453,10 +471,10 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         // Sort column underline
         if (sortMode != SortMode.NONE) {
             int hlX1 = x + switch (sortMode) {
-                case NAME -> 5; case TOWN -> 143; case QTY -> 233; case PRICE -> 259; default -> 5;
+                case NAME -> 5; case TOWN -> 131; case QTY -> 233; case PRICE -> 259; default -> 5;
             };
             int hlX2 = x + switch (sortMode) {
-                case NAME -> 142; case TOWN -> 232; case QTY -> 258; case PRICE -> 340; default -> 142;
+                case NAME -> 130; case TOWN -> 232; case QTY -> 258; case PRICE -> 340; default -> 130;
             };
             fill(poseStack, hlX1, y + 29, hlX2, y + 30, 0xFFFFD700);
         }
@@ -533,6 +551,19 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             drawCenteredString(poseStack, this.font, "Market Board", 96, 6, 0xFFD700);
         }
 
+        // Refresh cooldown timer (next to refresh button)
+        if (!showingCart) {
+            MarketBoardBlockEntity rbe = menu.getBlockEntity();
+            if (rbe != null && rbe.getRefreshCooldown() > 0 && !DebugConfig.UNLIMITED_REFRESHES) {
+                int remainTicks = rbe.getRefreshCooldown();
+                int totalSeconds = remainTicks / 20;
+                int minutes = totalSeconds / 60;
+                int seconds = totalSeconds % 60;
+                String countdownStr = String.format("%d:%02d", minutes, seconds);
+                this.font.draw(poseStack, countdownStr, 245, 6, 0xFF8888);
+            }
+        }
+
         if (showingCart) {
             renderCartLabels(poseStack);
         } else {
@@ -559,7 +590,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // Sortable headers
         drawSortHeader(poseStack, "Item", 17, 22, SortMode.NAME);
-        drawSortHeader(poseStack, "Town", 144, 22, SortMode.TOWN);
+        drawSortHeader(poseStack, "Town", 132, 22, SortMode.TOWN);
         drawSortHeader(poseStack, "Qty", 234, 22, SortMode.QTY);
         drawSortHeader(poseStack, "Price Ea.", 260, 22, SortMode.PRICE);
 
@@ -587,8 +618,8 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 }
                 itemName += "..";
             }
-            if (this.font.width(townName) > 72) {
-                while (this.font.width(townName + "..") > 72 && townName.length() > 3) {
+            if (this.font.width(townName) > 84) {
+                while (this.font.width(townName + "..") > 84 && townName.length() > 3) {
                     townName = townName.substring(0, townName.length() - 1);
                 }
                 townName += "..";
@@ -606,21 +637,21 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             if (town != null && listingItem != null) {
                 NeedLevel need = town.getNeedLevel(listingItem);
                 int dotColor = 0xFF000000 | need.getColor();
-                this.font.draw(poseStack, "\u25CF", 144, yOff, dotColor); // filled circle
+                this.font.draw(poseStack, "\u25CF", 132, yOff, dotColor); // filled circle
 
                 // Supply trend arrow
                 String itemKey = listing.getItemId().toString();
                 TownData.SupplyTrend trend = town.getTrend(itemKey);
                 if (trend == TownData.SupplyTrend.FALLING) {
                     // Supply falling = demand rising → green up arrow
-                    this.font.draw(poseStack, "\u25B2", 148, yOff, 0xFF44CC44);
+                    this.font.draw(poseStack, "\u25B2", 136, yOff, 0xFF44CC44);
                 } else if (trend == TownData.SupplyTrend.RISING) {
                     // Supply rising = demand falling → red down arrow
-                    this.font.draw(poseStack, "\u25BC", 148, yOff, 0xFFCC4444);
+                    this.font.draw(poseStack, "\u25BC", 136, yOff, 0xFFCC4444);
                 }
             }
 
-            this.font.draw(poseStack, townName, 156, yOff, 0xAAAAAA);
+            this.font.draw(poseStack, townName, 144, yOff, 0xAAAAAA);
             this.font.draw(poseStack, String.valueOf(listing.getCount()), 234, yOff, 0xCCCCCC);
             CoinRenderer.renderCompactCoinValue(poseStack, this.font, 260, yOff, priceEach);
 
@@ -911,7 +942,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 // Listing view: header click for sorting
                 if (relY >= 20 && relY <= 30 && relX >= 5 && relX <= 363) {
                     SortMode clickedMode = SortMode.NONE;
-                    if (relX < 143) clickedMode = SortMode.NAME;
+                    if (relX < 131) clickedMode = SortMode.NAME;
                     else if (relX < 233) clickedMode = SortMode.TOWN;
                     else if (relX < 259) clickedMode = SortMode.QTY;
                     else if (relX < 341) clickedMode = SortMode.PRICE;

@@ -1622,7 +1622,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         com.offtomarket.mod.data.Worker.WorkerType[] wTypes = com.offtomarket.mod.data.Worker.WorkerType.values();
         for (int i = 0; i < wTypes.length; i++) {
             com.offtomarket.mod.data.Worker w = be.getWorker(wTypes[i]);
-            int rowY = 6 + i * 32; // relative to content, rows start at y+38 abs → label y = 38-32+i*32 = 6+i*32
+            int rowY = 38 + i * 32; // match bg rows at y+38+i*32 absolute → label y = 38+i*32
             int textColor = (i == selectedWorkerIndex) ? 0xFFD700 : 0xCCCCCC;
 
             // Worker symbol + name
@@ -1655,7 +1655,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Right panel: Selected worker detail
         if (selectedWorkerIndex < 0 || selectedWorkerIndex >= wTypes.length) return;
         com.offtomarket.mod.data.Worker worker = be.getWorker(wTypes[selectedWorkerIndex]);
-        renderWorkerDetail(poseStack, 156, 4, worker);
+        renderWorkerDetail(poseStack, 156, 36, worker);
     }
 
     private void renderWorkerDetail(PoseStack poseStack, int px, int py, com.offtomarket.mod.data.Worker worker) {
@@ -1668,17 +1668,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             List<FormattedCharSequence> descLines = this.font.split(
                     Component.literal(worker.getType().getDescription()), 210);
             for (int i = 0; i < descLines.size(); i++) {
-                this.font.draw(poseStack, descLines.get(i), px, py + 16 + i * 10, 0x999999);
+                this.font.draw(poseStack, descLines.get(i), px, py + 12 + i * 10, 0x999999);
             }
-            this.font.draw(poseStack, "Hire Cost: " + formatCoinText(worker.getHireCost()), px, py + 42, 0xFFAA44);
+            this.font.draw(poseStack, "Hire Cost: " + formatCoinText(worker.getHireCost()), px, py + 36, 0xFFAA44);
 
             // Show what this worker does at each level
-            this.font.draw(poseStack, "Perks:", px, py + 56, 0x888888);
+            this.font.draw(poseStack, "Perks:", px, py + 48, 0x888888);
             int[] milestones = {3, 6, 9};
             for (int i = 0; i < milestones.length; i++) {
                 String perkName = worker.getPerkName(milestones[i]);
                 if (perkName != null) {
-                    this.font.draw(poseStack, "Lv" + milestones[i] + ": " + perkName, px + 4, py + 66 + i * 10, 0x777777);
+                    this.font.draw(poseStack, "Lv" + milestones[i] + ": " + perkName, px + 4, py + 57 + i * 10, 0x777777);
                 }
             }
             return;
@@ -1693,12 +1693,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int maxLvl = com.offtomarket.mod.data.Worker.getMaxLevel();
         boolean isMax = worker.getLevel() >= maxLvl;
         String lvlText = "Level " + worker.getLevel() + (isMax ? " (MAX)" : "");
-        this.font.draw(poseStack, lvlText, px, py + 16, 0xCCCCCC);
+        this.font.draw(poseStack, lvlText, px, py + 12, 0xCCCCCC);
 
         if (!isMax) {
             int xpNeeded = worker.getXpForNextLevel();
             int barX = px;
-            int barY = py + 27;
+            int barY = py + 22;
             int barW = 218;
             fill(poseStack, barX - 1, barY - 1, barX + barW + 1, barY + 7, 0xFF1A1209);
             fill(poseStack, barX, barY, barX + barW, barY + 6, 0xFF2A2A2A);
@@ -1706,16 +1706,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (frac > 0) {
                 int fillW = Math.max(1, (int)(barW * frac));
                 fill(poseStack, barX, barY, barX + fillW, barY + 6, 0xFF55CC55);
-                // Highlight sheen on top edge
                 fill(poseStack, barX, barY, barX + fillW, barY + 1, 0xFF77DD77);
             }
             String xpText = worker.getXp() + "/" + xpNeeded;
             int xpW = this.font.width(xpText);
             this.font.draw(poseStack, xpText, px + (barW - xpW) / 2, barY - 1, 0xCCCCCC);
         } else {
-            // Full gold bar at max level
             int barX = px;
-            int barY = py + 27;
+            int barY = py + 22;
             int barW = 218;
             fill(poseStack, barX - 1, barY - 1, barX + barW + 1, barY + 7, 0xFF1A1209);
             fill(poseStack, barX, barY, barX + barW, barY + 6, 0xFFCCAA33);
@@ -1726,21 +1724,19 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             this.font.draw(poseStack, maxText, px + (barW - mW) / 2, barY - 1, 0xFFD700);
         }
 
-        // Current bonus (highlighted)
-        this.font.draw(poseStack, worker.getBonusDisplay(), px, py + 38, 0x88CC88);
-
-        // Next level preview
+        // Current bonus + next level preview
+        this.font.draw(poseStack, worker.getBonusDisplay(), px, py + 32, 0x88CC88);
         if (!isMax) {
             String nextPreview = "Next: " + worker.getNextLevelBonusPreview();
-            this.font.draw(poseStack, nextPreview, px + 120, py + 38, 0x666666);
+            this.font.draw(poseStack, nextPreview, px + 120, py + 32, 0x666666);
         }
 
         // Stats row
-        this.font.draw(poseStack, "Cost/trip: " + formatCoinText(worker.getPerTripCost()), px, py + 50, 0xAAAAAA);
-        this.font.draw(poseStack, "Trips: " + worker.getTotalTrips(), px + 120, py + 50, 0x888888);
+        this.font.draw(poseStack, "Cost/trip: " + formatCoinText(worker.getPerTripCost()), px, py + 42, 0xAAAAAA);
+        this.font.draw(poseStack, "Trips: " + worker.getTotalTrips(), px + 120, py + 42, 0x888888);
 
-        // Perks section
-        int perkY = py + 62;
+        // Perks section (compact: 8px per line)
+        int perkY = py + 52;
         this.font.draw(poseStack, "Perks:", px, perkY, 0xBBAAAA);
         int[] milestones = {3, 6, 9};
         for (int i = 0; i < milestones.length; i++) {
@@ -1748,9 +1744,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (perkName == null) continue;
             boolean unlocked = worker.hasPerk(milestones[i]);
             int perkColor = unlocked ? 0x88CC88 : 0x555555;
-            String indicator = unlocked ? "\u2714 " : "\u2022 "; // ✔ or •
+            String indicator = unlocked ? "\u2714 " : "\u2022 ";
             this.font.draw(poseStack, indicator + perkName + " (Lv" + milestones[i] + ")",
-                    px + 4, perkY + 10 + i * 9, perkColor);
+                    px + 4, perkY + 9 + i * 8, perkColor);
         }
 
         // Lifetime stats
@@ -1758,7 +1754,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             String lifetimeLabel = worker.getLifetimeBonusDisplay() + ": ";
             String lifetimeValue;
             if (worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.TRADING_CART) {
-                // Convert ticks to readable time
                 long ticks = worker.getLifetimeBonusValue();
                 long seconds = ticks / 20;
                 if (seconds >= 60) {
@@ -1769,7 +1764,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             } else {
                 lifetimeValue = formatCoinText((int) Math.min(worker.getLifetimeBonusValue(), Integer.MAX_VALUE));
             }
-            this.font.draw(poseStack, lifetimeLabel + lifetimeValue, px, perkY + 38, 0x776655);
+            this.font.draw(poseStack, lifetimeLabel + lifetimeValue, px, perkY + 34, 0x776655);
         }
     }
 
@@ -2047,15 +2042,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private String formatCoinText(int copperPieces) {
         if (DebugConfig.isGoldOnlyMode()) {
             int gp = Math.max(1, (copperPieces + 99) / 100);
-            return gp + "g";
+            return "\u00A7e" + gp + "g\u00A7r";
         }
         int gp = copperPieces / 100;
         int sp = (copperPieces % 100) / 10;
         int cp = copperPieces % 10;
         StringBuilder sb = new StringBuilder();
-        if (gp > 0) sb.append(gp).append("g");
-        if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append(sp).append("s"); }
-        if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append(cp).append("c"); }
+        if (gp > 0) sb.append("\u00A7e").append(gp).append("g\u00A7r");
+        if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append("\u00A77").append(sp).append("s\u00A7r"); }
+        if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append("\u00A76").append(cp).append("c\u00A7r"); }
         return sb.toString();
     }
 

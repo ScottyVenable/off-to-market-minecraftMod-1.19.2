@@ -169,5 +169,10 @@ public class ModNetwork {
                 DeleteAllReadNotesPacket::encode, DeleteAllReadNotesPacket::decode,
                 DeleteAllReadNotesPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, WithdrawBinItemPacket.class,
+                WithdrawBinItemPacket::encode, WithdrawBinItemPacket::decode,
+                WithdrawBinItemPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

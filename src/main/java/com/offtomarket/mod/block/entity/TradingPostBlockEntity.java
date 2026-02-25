@@ -466,7 +466,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
             ItemStack stack = bin.getItem(i);
-            if (!stack.isEmpty()) {
+            if (!stack.isEmpty() && stack.getItem() != net.minecraft.world.item.Items.AIR) {
                 int basePrice = PriceCalculator.getBaseValue(stack);
                 int price = bin.getSetPrice(i);
                 if (price <= 0) price = basePrice; // default to base price
@@ -1447,6 +1447,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     // Archive AFTER adjusting earnings so history tracks final amounts
                     be.archiveShipment(shipment);
                     be.addTraderXp(DebugConfig.getXpPerSale());
+                    // Award reputation for regular sales (count of sold item types)
+                    int soldCount = (int) shipment.getItems().stream()
+                            .filter(Shipment.ShipmentItem::isSold).count();
+                    if (soldCount > 0) {
+                        be.addReputation(shipment.getTownId(), soldCount);
+                    }
                     TownData soldTown = TownRegistry.getTown(shipment.getTownId());
                     String soldName = soldTown != null ? soldTown.getDisplayName() : shipment.getTownId();
                     notifyNearbyPlayers(level, pos,

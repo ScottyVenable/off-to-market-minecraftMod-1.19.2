@@ -3,6 +3,7 @@ package com.offtomarket.mod.block.entity;
 import com.offtomarket.mod.data.MarketListing;
 import com.offtomarket.mod.data.TownData;
 import com.offtomarket.mod.data.TownRegistry;
+import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.menu.MarketBoardMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -17,6 +18,7 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -29,6 +31,9 @@ import java.util.*;
  */
 public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider {
 
+    /** Refresh cooldown in ticks (5 minutes = 6000 ticks at 20 tps) */
+    public static final int REFRESH_COOLDOWN_TICKS = 6000;
+
     private final List<MarketListing> listings = new ArrayList<>();
     private int refreshTimer = 0;
 
@@ -40,7 +45,19 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
         return listings;
     }
 
+    /** Returns remaining cooldown ticks before refresh is allowed. */
+    public int getRefreshCooldown() {
+        return refreshTimer;
+    }
+
+    /** Returns true if the market board can be refreshed right now. */
+    public boolean canRefresh() {
+        return refreshTimer <= 0 || DebugConfig.UNLIMITED_REFRESHES;
+    }
+
     public void refreshListings() {
+        if (!canRefresh()) return;
+
         listings.clear();
         Random rand = new Random();
         long gameTime = level != null ? level.getGameTime() : 0;
@@ -48,7 +65,17 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
         for (TownData town : TownRegistry.getAllTowns()) {
             listings.addAll(MarketListing.generateListings(town, gameTime, rand));
         }
+        refreshTimer = REFRESH_COOLDOWN_TICKS;
         syncToClient();
+    }
+
+    public static void serverTick(Level level, BlockPos pos, BlockState state, MarketBoardBlockEntity be) {
+        if (be.refreshTimer > 0) {
+            be.refreshTimer--;
+            if (be.refreshTimer == 0) {
+                be.syncToClient(); // notify client that refresh is available
+            }
+        }
     }
 
     // ==================== Client Sync ====================

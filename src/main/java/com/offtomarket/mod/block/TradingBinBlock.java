@@ -55,6 +55,14 @@ public class TradingBinBlock extends BaseEntityBlock {
         if (!level.isClientSide()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TradingBinBlockEntity tbbe) {
+                // Deposit held item into the bin before opening the GUI
+                ItemStack held = player.getItemInHand(hand);
+                if (!held.isEmpty()) {
+                    ItemStack toDeposit = held.copy();
+                    if (tbbe.addItem(toDeposit)) {
+                        player.setItemInHand(hand, ItemStack.EMPTY);
+                    }
+                }
                 NetworkHooks.openScreen((ServerPlayer) player, tbbe, pos);
             }
         }
@@ -67,11 +75,6 @@ public class TradingBinBlock extends BaseEntityBlock {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TradingBinBlockEntity tbbe) {
                 Containers.dropContents(level, pos, tbbe.getItems());
-                // Drop inspection slot item too
-                ItemStack inspectItem = tbbe.getItem(TradingBinBlockEntity.INSPECT_SLOT);
-                if (!inspectItem.isEmpty()) {
-                    Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), inspectItem);
-                }
             }
         }
         super.onRemove(state, level, pos, newState, isMoving);

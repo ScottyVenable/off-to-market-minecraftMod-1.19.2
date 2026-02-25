@@ -116,7 +116,7 @@ public class MarketListing {
         for (int i = 0; i < Math.min(count, specialties.size()); i++) {
             ResourceLocation itemId = specialties.get(i);
             net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
-            if (item != null) {
+            if (item != null && item != net.minecraft.world.item.Items.AIR) {
                 int qty = 1 + random.nextInt(16);
                 CompoundTag nbt = null;
                 String displayName;

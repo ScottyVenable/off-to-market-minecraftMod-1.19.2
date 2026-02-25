@@ -101,6 +101,9 @@ public class DebugConfig {
     /** When set true, skip pickup delay (items ship immediately) */
     public static boolean SKIP_PICKUP_DELAY = false;
 
+    /** When set true, allows unlimited market board refreshes (no cooldown) */
+    public static boolean UNLIMITED_REFRESHES = false;
+
     // ===================== State Inspection =====================
     /** Read-only: last tick's active shipment count (updated by DebugHooks) */
     public static int WATCH_ACTIVE_SHIPMENTS = 0;

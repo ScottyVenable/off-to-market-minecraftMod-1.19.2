@@ -6,6 +6,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
@@ -165,7 +166,8 @@ public class Shipment {
 
         public ItemStack createStack() {
             Item item = getItem();
-            return item != null ? new ItemStack(item, count) : ItemStack.EMPTY;
+            if (item == null || item == Items.AIR) return ItemStack.EMPTY;
+            return new ItemStack(item, count);
         }
 
         public CompoundTag save() {

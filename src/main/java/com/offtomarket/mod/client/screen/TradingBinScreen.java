@@ -2,28 +2,35 @@ package com.offtomarket.mod.client.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
 import com.offtomarket.mod.data.PriceCalculator;
 import com.offtomarket.mod.menu.TradingBinMenu;
 import com.offtomarket.mod.network.ModNetwork;
 import com.offtomarket.mod.network.SetPricePacket;
 import com.offtomarket.mod.network.UpdateBinSettingsPacket;
+import com.offtomarket.mod.network.WithdrawBinItemPacket;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.PacketDistributor;
 
-public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
-    private static final ResourceLocation TEXTURE =
-            new ResourceLocation(OffToMarket.MODID, "textures/gui/trading_bin.png");
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
-    /** Active tab: 0 = Bin (price book), 1 = Config (modifiers & settings). */
+/**
+ * Trading Bin GUI — management-only interface.
+ * Left panel: searchable list of bin contents.
+ * Right panel: Price Book / Fees tabs.
+ * Players deposit items by right-clicking the block while holding items.
+ */
+public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
+
+    /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings). */
     private int activeTab = 0;
     private Button binTabButton;
     private Button configTabButton;
@@ -31,15 +38,20 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     // ---- Bin tab widgets ----
     private EditBox priceInput;
     private Button setButton;
+    private Button withdrawButton;
 
-    /** Track what was in the inspection slot last frame to auto-populate price input. */
-    private ItemStack lastInspectionItem = ItemStack.EMPTY;
-
-    /**
-     * Currently selected slot for pricing (0-8 = bin slots, 9 = inspect slot).
-     * -1 means no selection (defaults to inspect slot behavior).
-     */
+    // ---- Search & list ----
+    private EditBox searchInput;
     private int selectedSlot = -1;
+    private ItemStack lastSelectedItem = ItemStack.EMPTY;
+    private final List<Integer> filteredSlots = new ArrayList<>();
+
+    // ---- List layout ----
+    private static final int LIST_LEFT = 6;
+    private static final int LIST_TOP = 36;
+    private static final int LIST_WIDTH = 166;
+    private static final int ROW_HEIGHT = 14;
+    private static final int MAX_VISIBLE = 9;
 
     // ---- Config tab widgets ----
     private EditBox taxInput;
@@ -63,7 +75,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         int x = this.leftPos;
         int y = this.topPos;
 
-        // ---- Tab buttons inside right-panel tab bar ----
+        // ---- Tab buttons (right panel tab bar) ----
         binTabButton = addRenderableWidget(new Button(x + 183, y + 4, 96, 12,
                 Component.literal("\u00A7e\u00A7lBin"), btn -> {
             activeTab = 0; updateTabVisibility(); updateTabLabels();
@@ -73,33 +85,54 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             activeTab = 1; updateTabVisibility(); updateTabLabels();
         }));
 
-        // ---- Bin tab widgets ----
+        // ---- Search input (left panel, below title) ----
+        searchInput = new EditBox(this.font, x + LIST_LEFT, y + 20, LIST_WIDTH, 12,
+                Component.literal("Search"));
+        searchInput.setMaxLength(20);
+        searchInput.setResponder(text -> {
+            updateFilteredSlots();
+            if (selectedSlot >= 0 && !filteredSlots.contains(selectedSlot)) {
+                selectedSlot = -1;
+                lastSelectedItem = ItemStack.EMPTY;
+                updateTabVisibility();
+            }
+        });
+        this.addWidget(searchInput);
 
-        // Price input field (inside the right panel)
-        this.priceInput = new EditBox(this.font, x + 184, y + 102, 108, 14,
+        // ---- Bin tab widgets (right panel) ----
+        priceInput = new EditBox(this.font, x + 184, y + 102, 108, 14,
                 Component.literal("Price"));
-        this.priceInput.setMaxLength(6);
-        this.priceInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
-        this.addWidget(this.priceInput);
+        priceInput.setMaxLength(6);
+        priceInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
+        this.addWidget(priceInput);
 
-        // Set Price button (adjacent to price input)
         setButton = addRenderableWidget(new Button(x + 296, y + 102, 78, 14,
                 Component.literal("Set Price"), btn -> {
             if (!priceInput.getValue().isEmpty()) {
                 TradingBinBlockEntity be = menu.getBlockEntity();
-                if (be != null) {
+                if (be != null && selectedSlot >= 0) {
                     int price = Integer.parseInt(priceInput.getValue());
-                    int targetSlot = selectedSlot >= 0 ? selectedSlot : TradingBinBlockEntity.INSPECT_SLOT;
                     ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                            new SetPricePacket(be.getBlockPos(), targetSlot, price));
+                            new SetPricePacket(be.getBlockPos(), selectedSlot, price));
                 }
             }
         }));
 
-        // ---- Fees tab widgets (settings) ----
+        withdrawButton = addRenderableWidget(new Button(x + 184, y + 148, 80, 14,
+                Component.literal("Withdraw"), btn -> {
+            TradingBinBlockEntity be = menu.getBlockEntity();
+            if (be != null && selectedSlot >= 0 && selectedSlot < TradingBinBlockEntity.BIN_SIZE) {
+                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                        new WithdrawBinItemPacket(be.getBlockPos(), selectedSlot));
+                selectedSlot = -1;
+                lastSelectedItem = ItemStack.EMPTY;
+                updateTabVisibility();
+            }
+        }));
+
+        // ---- Fees tab widgets ----
         TradingBinBlockEntity be = menu.getBlockEntity();
 
-        // Crafting Tax % input
         taxInput = new EditBox(this.font, x + 260, y + 32, 42, 12,
                 Component.literal("Tax"));
         taxInput.setMaxLength(3);
@@ -107,7 +140,6 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         taxInput.setValue(be != null ? String.valueOf(be.getCraftingTaxPercent()) : "15");
         this.addWidget(taxInput);
 
-        // Min Markup % input
         markupInput = new EditBox(this.font, x + 260, y + 46, 42, 12,
                 Component.literal("Markup"));
         markupInput.setMaxLength(3);
@@ -115,7 +147,6 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         markupInput.setValue(be != null ? String.valueOf(be.getMinMarkupPercent()) : "0");
         this.addWidget(markupInput);
 
-        // Auto-Price Mode cycling button
         String modeLabel = be != null ? be.getAutoPriceMode().getDisplayName() : "Auto Fair";
         autoPriceModeButton = addRenderableWidget(new Button(x + 184, y + 64, 106, 14,
                 Component.literal(modeLabel), btn -> {
@@ -126,55 +157,57 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             }
         }));
 
-        // Apply Settings button
         applySettingsBtn = addRenderableWidget(new Button(x + 294, y + 64, 80, 14,
-                Component.literal("Apply"), btn -> {
-            sendSettingsToServer();
-        }));
+                Component.literal("Apply"), btn -> sendSettingsToServer()));
 
+        updateFilteredSlots();
         updateTabVisibility();
     }
 
-    // ==================== Item & Tab Helpers ====================
+    // ==================== List & Selection Helpers ====================
 
-    /**
-     * Get the currently selected item for pricing.
-     * Returns the item in the selected slot, or the inspection slot if nothing selected.
-     */
-    private ItemStack getSelectedItem() {
+    /** Rebuild the list of bin slot indices that match the current search filter. */
+    private void updateFilteredSlots() {
+        filteredSlots.clear();
         TradingBinBlockEntity be = menu.getBlockEntity();
-        if (be == null) return ItemStack.EMPTY;
-
-        if (selectedSlot >= 0 && selectedSlot < TradingBinBlockEntity.BIN_SIZE) {
-            return be.getItem(selectedSlot);
-        } else if (selectedSlot == TradingBinBlockEntity.INSPECT_SLOT) {
-            return be.getItem(TradingBinBlockEntity.INSPECT_SLOT);
+        if (be == null) return;
+        String filter = searchInput != null ? searchInput.getValue().toLowerCase(Locale.ROOT) : "";
+        for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
+            ItemStack stack = be.getItem(i);
+            if (!stack.isEmpty()) {
+                if (filter.isEmpty() ||
+                    stack.getHoverName().getString().toLowerCase(Locale.ROOT).contains(filter)) {
+                    filteredSlots.add(i);
+                }
+            }
         }
-        // Default to inspection slot
-        return be.getItem(TradingBinBlockEntity.INSPECT_SLOT);
     }
 
-    /**
-     * Update tab button labels to show active tab.
-     */
+    /** Get the currently selected item for pricing. */
+    private ItemStack getSelectedItem() {
+        TradingBinBlockEntity be = menu.getBlockEntity();
+        if (be == null || selectedSlot < 0 || selectedSlot >= TradingBinBlockEntity.BIN_SIZE) {
+            return ItemStack.EMPTY;
+        }
+        return be.getItem(selectedSlot);
+    }
+
+    /** Update tab button labels to show active state. */
     private void updateTabLabels() {
         binTabButton.setMessage(Component.literal(activeTab == 0 ? "\u00A7e\u00A7lBin" : "\u00A77Bin"));
         configTabButton.setMessage(Component.literal(activeTab == 1 ? "\u00A7e\u00A7lFees" : "\u00A77Fees"));
     }
 
-    /**
-     * Toggle visibility of widgets based on active tab.
-     */
+    /** Toggle widget visibility based on active tab and selection state. */
     private void updateTabVisibility() {
-        ItemStack selectedItem = getSelectedItem();
-        boolean hasSelectedItem = !selectedItem.isEmpty();
-
-        // Bin tab widgets: visible only on Bin tab AND an item is selected
+        ItemStack selected = getSelectedItem();
+        boolean hasItem = !selected.isEmpty();
         boolean binActive = (activeTab == 0);
-        priceInput.visible = binActive && hasSelectedItem;
-        setButton.visible = binActive && hasSelectedItem;
 
-        // Config tab widgets
+        priceInput.visible = binActive && hasItem;
+        setButton.visible = binActive && hasItem;
+        withdrawButton.visible = binActive && hasItem;
+
         boolean configActive = (activeTab == 1);
         taxInput.visible = configActive;
         markupInput.visible = configActive;
@@ -182,18 +215,13 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         applySettingsBtn.visible = configActive;
     }
 
-    /**
-     * Send current settings to the server.
-     */
+    /** Send current fee/modifier settings to the server. */
     private void sendSettingsToServer() {
         TradingBinBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
-
-        int tax = 15;
-        int markup = 0;
+        int tax = 15, markup = 0;
         try { tax = Integer.parseInt(taxInput.getValue()); } catch (NumberFormatException ignored) {}
         try { markup = Integer.parseInt(markupInput.getValue()); } catch (NumberFormatException ignored) {}
-
         ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                 new UpdateBinSettingsPacket(be.getBlockPos(), tax, markup,
                         be.getAutoPriceMode().ordinal(),
@@ -201,6 +229,29 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                         be.isUsedDiscountEnabled(), be.getUsedDiscountPercent(),
                         be.isDamagedDiscountEnabled(), be.getDamagedDiscountPercent(),
                         be.isRareMarkupEnabled(), be.getRareMarkupPercent()));
+    }
+
+    // ==================== Container Tick ====================
+
+    @Override
+    public void containerTick() {
+        super.containerTick();
+        if (searchInput != null) searchInput.tick();
+        if (priceInput != null) priceInput.tick();
+        if (taxInput != null) taxInput.tick();
+        if (markupInput != null) markupInput.tick();
+
+        updateFilteredSlots();
+
+        // Deselect if item was withdrawn or removed
+        if (selectedSlot >= 0) {
+            TradingBinBlockEntity be = menu.getBlockEntity();
+            if (be == null || be.getItem(selectedSlot).isEmpty()) {
+                selectedSlot = -1;
+                lastSelectedItem = ItemStack.EMPTY;
+                updateTabVisibility();
+            }
+        }
     }
 
     // ==================== Drawing Helpers ====================
@@ -221,16 +272,6 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         fill(ps, x + 1, y + 1, x + w - 1, y + h - 1, 0xFF3E3226);
     }
 
-    /** Inspection slot with dark wood styling. */
-    private void drawInspectionSlot(PoseStack ps, int x, int y) {
-        fill(ps, x - 2, y - 2, x + 18, y + 18, 0xFF1A1209);
-        fill(ps, x - 1, y - 1, x + 17, y + 17, 0xFF2A1F14);
-        fill(ps, x, y, x + 16, y + 16, 0xFF3E3226);
-        // Top-left highlight edges
-        fill(ps, x, y, x + 16, y + 1, 0xFF4A3D2B);
-        fill(ps, x, y, x + 1, y + 16, 0xFF4A3D2B);
-    }
-
     /** Horizontal divider line across the right panel content area. */
     private void drawDivider(PoseStack ps, int x, int y) {
         fill(ps, x + 183, y, x + 379, y + 1, 0xFF2A1F14);
@@ -242,40 +283,99 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     protected void renderBg(PoseStack poseStack, float partialTick, int mouseX, int mouseY) {
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        RenderSystem.setShaderTexture(0, TEXTURE);
 
         int x = this.leftPos;
         int y = this.topPos;
 
-        // Blit the main dispenser-based texture (176x166) for left side
-        this.blit(poseStack, x, y, 0, 0, 176, 166);
+        // ---- Left panel: dark wood (replaces vanilla dispenser texture) ----
+        drawPanel(poseStack, x, y, 178, 166);
+        drawInsetPanel(poseStack, x + 3, y + 18, 172, 14);     // search bar area
+        drawInsetPanel(poseStack, x + 3, y + 34, 172, 130);    // list area
 
-        // ---- Right panel: dark wood style ----
+        // ---- Right panel: dark wood ----
         drawPanel(poseStack, x + 178, y, 206, 166);
         drawInsetPanel(poseStack, x + 181, y + 3, 200, 14);    // tab bar
         drawInsetPanel(poseStack, x + 181, y + 19, 200, 145);  // content area
 
-        // Update widget visibility each frame (inspection item may change)
         updateTabVisibility();
 
+        // Search input
+        searchInput.render(poseStack, mouseX, mouseY, partialTick);
+
+        // ---- List rows (backgrounds and text) ----
+        TradingBinBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            int listX = x + LIST_LEFT;
+            int listY = y + LIST_TOP;
+
+            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
+                int slot = filteredSlots.get(i);
+                ItemStack stack = be.getItem(slot);
+                if (stack.isEmpty()) continue;
+
+                int rowY = listY + i * ROW_HEIGHT;
+                boolean isSelected = (slot == selectedSlot);
+                boolean isHovered = mouseX >= listX && mouseX < listX + LIST_WIDTH
+                        && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
+
+                // Row background highlight
+                if (isSelected) {
+                    fill(poseStack, listX, rowY, listX + LIST_WIDTH, rowY + ROW_HEIGHT, 0x80FFD700);
+                } else if (isHovered) {
+                    fill(poseStack, listX, rowY, listX + LIST_WIDTH, rowY + ROW_HEIGHT, 0x40FFFFFF);
+                }
+
+                // Subtle separator line between rows
+                if (i > 0) {
+                    fill(poseStack, listX + 1, rowY, listX + LIST_WIDTH - 1, rowY + 1, 0x20FFFFFF);
+                }
+
+                // Item name (offset for icon rendered later in render())
+                String name = stack.getHoverName().getString();
+                int maxNameW = 88;
+                if (this.font.width(name) > maxNameW) {
+                    while (this.font.width(name + "..") > maxNameW && name.length() > 3)
+                        name = name.substring(0, name.length() - 1);
+                    name += "..";
+                }
+                this.font.draw(poseStack, name, listX + 16, rowY + 3,
+                        isSelected ? 0xFFD700 : 0xCCCCCC);
+
+                // Price (right-aligned, using CoinRenderer)
+                int price = be.getSetPrice(slot);
+                if (price <= 0) price = PriceCalculator.getBaseValue(stack);
+                int priceW = CoinRenderer.getCompactCoinValueWidth(this.font, price);
+                CoinRenderer.renderCompactCoinValue(poseStack, this.font,
+                        listX + LIST_WIDTH - priceW - 2, rowY + 3, price);
+            }
+
+            // Empty state message
+            if (filteredSlots.isEmpty()) {
+                if (searchInput != null && !searchInput.getValue().isEmpty()) {
+                    drawCenteredString(poseStack, this.font, "No matches", x + 89, y + 80, 0x666666);
+                } else {
+                    drawCenteredString(poseStack, this.font, "Bin is empty", x + 89, y + 74, 0x666666);
+                    drawCenteredString(poseStack, this.font, "Right-click the bin", x + 89, y + 90, 0x555555);
+                    drawCenteredString(poseStack, this.font, "while holding items", x + 89, y + 102, 0x555555);
+                    drawCenteredString(poseStack, this.font, "to deposit them.", x + 89, y + 114, 0x555555);
+                }
+            }
+        }
+
+        // ---- Right panel tab content ----
         if (activeTab == 1) {
-            // ---- Fees tab background ----
-            drawDivider(poseStack, x, y + 62);   // below fee inputs
-            drawDivider(poseStack, x, y + 80);   // above modifiers
-            drawDivider(poseStack, x, y + 139);  // below modifiers
+            // Fees tab
+            drawDivider(poseStack, x, y + 62);
+            drawDivider(poseStack, x, y + 80);
+            drawDivider(poseStack, x, y + 139);
             taxInput.render(poseStack, mouseX, mouseY, partialTick);
             markupInput.render(poseStack, mouseX, mouseY, partialTick);
         } else {
-            // ---- Bin tab background ----
-            drawInspectionSlot(poseStack, x + 184, y + 34);
-
-            // Section dividers
-            drawDivider(poseStack, x, y + 54);   // below item info
-            drawDivider(poseStack, x, y + 86);   // before set price section
-
-            // Render price input field
+            // Bin tab
+            drawDivider(poseStack, x, y + 54);
+            drawDivider(poseStack, x, y + 86);
             if (priceInput.visible) {
-                this.priceInput.render(poseStack, mouseX, mouseY, partialTick);
+                priceInput.render(poseStack, mouseX, mouseY, partialTick);
             }
         }
     }
@@ -284,24 +384,26 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
     @Override
     protected void renderLabels(PoseStack poseStack, int mouseX, int mouseY) {
-        // Title (left side, vanilla style)
-        this.font.draw(poseStack, this.title, 8, 6, 0x404040);
+        // Left panel title
+        this.font.draw(poseStack, "\u00A7e\u00A7lTrading Bin", 8, 6, 0xFFD700);
+
+        // Item count indicator
+        this.font.draw(poseStack, "\u00A77" + filteredSlots.size() + "/" +
+                TradingBinBlockEntity.BIN_SIZE, 130, 6, 0x888888);
 
         if (activeTab == 1) {
             renderConfigLabels(poseStack);
         } else {
             renderPriceBookLabels(poseStack);
         }
-
-        // Inventory label (left side)
-        this.font.draw(poseStack, this.playerInventoryTitle, 8, 73, 0x404040);
+        // No inventory label — player inventory is not displayed
     }
 
     private void renderConfigLabels(PoseStack poseStack) {
         // Header
         drawCenteredString(poseStack, this.font, "\u00A7lFees", 280, 21, 0xFFD700);
 
-        // Fee setting labels (inputs rendered in renderBg)
+        // Fee setting labels
         this.font.draw(poseStack, "Trading Tax:", 184, 35, 0xCCCCCC);
         this.font.draw(poseStack, "%", 304, 35, 0x999999);
         this.font.draw(poseStack, "Min Markup:", 184, 49, 0xCCCCCC);
@@ -326,7 +428,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             this.font.draw(poseStack, "\u00A77(" + itemName + ")", 235, 83, 0x777777);
         }
 
-        // Modifier checkboxes with per-item applicability validation
+        // Modifier checkboxes with per-item applicability
         int cbX = 184;
         boolean enchApplicable = !hasItem || TradingBinBlockEntity.isEnchantmentApplicable(inspectStack);
         boolean usedApplicable = !hasItem || TradingBinBlockEntity.isDurabilityApplicable(inspectStack);
@@ -347,7 +449,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                 "Rare +" + cbe.getRareMarkupPercent() + "%",
                 rareApplicable ? 0xFF8888FF : 0xFF555555, rareApplicable);
 
-        // Applicability indicators when an item is selected
+        // Applicability indicators
         if (hasItem) {
             int indX = 310;
             this.font.draw(poseStack, enchApplicable ? "\u00A7a\u2713" : "\u00A78n/a", indX, 94, 0xFFFFFF);
@@ -356,7 +458,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             this.font.draw(poseStack, rareApplicable ? "\u00A7a\u2713" : "\u00A78n/a", indX, 127, 0xFFFFFF);
         }
 
-        // Summary section: price breakdown when an item is selected
+        // Summary: price breakdown for selected item
         if (hasItem) {
             int baseValue = PriceCalculator.getBaseValue(inspectStack);
             int modifiedPrice = cbe.applyPriceModifiers(inspectStack, baseValue);
@@ -383,16 +485,11 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         ItemStack selectedStack = getSelectedItem();
 
         // Auto-populate price input when the selected item changes
-        if (!ItemStack.matches(selectedStack, lastInspectionItem)) {
-            lastInspectionItem = selectedStack.copy();
+        if (!ItemStack.matches(selectedStack, lastSelectedItem)) {
+            lastSelectedItem = selectedStack.copy();
             if (!selectedStack.isEmpty()) {
-                int price;
-                if (selectedSlot >= 0 && selectedSlot < TradingBinBlockEntity.BIN_SIZE) {
-                    price = be.getSetPrice(selectedSlot);
-                    if (price <= 0) price = be.getRememberedPrice(selectedStack);
-                } else {
-                    price = be.getRememberedPrice(selectedStack);
-                }
+                int price = be.getSetPrice(selectedSlot);
+                if (price <= 0) price = be.getRememberedPrice(selectedStack);
                 int displayPrice = price > 0 ? price : PriceCalculator.getBaseValue(selectedStack);
                 priceInput.setValue(String.valueOf(displayPrice));
             } else {
@@ -408,9 +505,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     }
 
     private void renderItemPriceInfo(PoseStack poseStack, TradingBinBlockEntity be, ItemStack stack) {
-        // ---- Item info section (above first divider y=54) ----
-
-        // Item name (to the right of the inspection slot)
+        // Item name (next to the icon rendered in render())
         String itemName = stack.getHoverName().getString();
         int maxNameW = 168;
         if (this.font.width(itemName) > maxNameW) {
@@ -421,8 +516,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }
         this.font.draw(poseStack, itemName, 204, 37, 0xFFD700);
 
-        // ---- Price breakdown section (y=58 to y=86) ----
-
+        // ---- Price breakdown (y=58 to y=86) ----
         int taxPercent = be.getCraftingTaxPercent();
         PriceCalculator.PriceBreakdown bd = PriceCalculator.getBreakdown(stack, null, taxPercent);
 
@@ -436,66 +530,55 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         this.font.draw(poseStack, "Max:  " + formatCoinText(bd.maxPrice()), 184, nextY, 0x888888);
 
         // ---- Set price section (y=90+) ----
-
         this.font.draw(poseStack, "Set Price:", 184, 90, 0xCCCCCC);
 
-        // Parse current price from input
         int price = 0;
         if (!priceInput.getValue().isEmpty()) {
             try { price = Integer.parseInt(priceInput.getValue()); } catch (NumberFormatException ignored) {}
         }
-
         if (price <= 0) return;
 
-        // ---- Results section (y=120+) ----
-
+        // ---- Results: price bar (y=120+) ----
         PriceCalculator.PriceRating rating = PriceCalculator.getPriceRating(
                 price, bd.materialCost(), bd.maxPrice());
 
-        // Price position bar
         int barX = 184;
         int barY = 120;
         int barW = 190;
         int barH = 5;
-        // Bar border
         fill(poseStack, barX, barY, barX + barW, barY + barH, 0xFF1A1209);
-        // Bar background
         fill(poseStack, barX + 1, barY + 1, barX + barW - 1, barY + barH - 1, 0xFF2A2A2A);
-        // Filled portion colored by rating
         if (bd.maxPrice() > 0) {
             float ratio = Math.min(1.0f, (float) price / bd.maxPrice());
             int fillW = Math.max(1, (int) ((barW - 2) * ratio));
             fill(poseStack, barX + 1, barY + 1, barX + 1 + fillW, barY + barH - 1,
                     rating.getColor() | 0xFF000000);
         }
-        // Base value marker (white tick on bar)
+        // Base value marker (white tick)
         if (bd.maxPrice() > 0 && bd.materialCost() > 0) {
             float baseFrac = Math.min(1.0f, (float) bd.materialCost() / bd.maxPrice());
             int baseMarkerX = barX + 1 + (int) ((barW - 2) * baseFrac);
             fill(poseStack, baseMarkerX, barY - 1, baseMarkerX + 1, barY + barH + 1, 0xAAFFFFFF);
         }
 
-        // Rating label
         this.font.draw(poseStack, rating.getLabel(), 184, 128, rating.getColor());
 
-        // Estimated sell speed
         String est = TradingBinBlockEntity.getEstimatedMarketTime(
                 price, bd.materialCost(), bd.maxPrice());
         this.font.draw(poseStack, "Sells: " + est, 184, 140, 0x888888);
     }
 
     private void renderEmptyHint(PoseStack poseStack) {
-        drawCenteredString(poseStack, this.font, "Place an item in the", 280, 58, 0x888888);
-        drawCenteredString(poseStack, this.font, "slot above, or click", 280, 70, 0x888888);
-        drawCenteredString(poseStack, this.font, "a bin item to view", 280, 82, 0x888888);
-        drawCenteredString(poseStack, this.font, "and set its price.", 280, 94, 0x888888);
+        drawCenteredString(poseStack, this.font, "Select an item from", 280, 58, 0x888888);
+        drawCenteredString(poseStack, this.font, "the list to view and", 280, 70, 0x888888);
+        drawCenteredString(poseStack, this.font, "set its price.", 280, 82, 0x888888);
     }
 
     // ==================== Mouse Handling ====================
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Config tab: check modifier checkbox clicks
+        // Config tab: modifier checkbox clicks
         if (button == 0 && activeTab == 1) {
             TradingBinBlockEntity be = menu.getBlockEntity();
             if (be != null) {
@@ -514,56 +597,43 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                             case 2 -> be.setDamagedDiscountEnabled(!be.isDamagedDiscountEnabled());
                             case 3 -> be.setRareMarkupEnabled(!be.isRareMarkupEnabled());
                         }
-                        sendSettingsToServer(); // persist toggle immediately
+                        sendSettingsToServer();
                         return true;
                     }
                 }
             }
         }
 
-        // Bin tab: check if clicked on a bin slot (left click)
-        if (button == 0 && activeTab == 0) {
-            TradingBinBlockEntity be = menu.getBlockEntity();
-            if (be != null) {
-                int x = this.leftPos;
-                int y = this.topPos;
+        // List row clicks (any tab — list is always visible on the left)
+        if (button == 0) {
+            int x = this.leftPos;
+            int y = this.topPos;
+            int listX = x + LIST_LEFT;
+            int listY = y + LIST_TOP;
 
-                // Check bin slots (3x3 grid starting at 62,17)
-                for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
-                    int slotX = x + 62 + (i % 3) * 18;
-                    int slotY = y + 17 + (i / 3) * 18;
+            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
+                int slot = filteredSlots.get(i);
+                int rowY = listY + i * ROW_HEIGHT;
 
-                    if (mouseX >= slotX && mouseX < slotX + 16 &&
-                        mouseY >= slotY && mouseY < slotY + 16) {
-                        ItemStack stack = be.getItem(i);
-                        if (!stack.isEmpty()) {
-                            if (selectedSlot == i) {
-                                // Second click on same slot: deselect
-                                selectedSlot = -1;
-                                lastInspectionItem = ItemStack.EMPTY;
-                                updateTabVisibility();
-                                break; // let super handle the pickup
-                            }
-                            selectedSlot = i;
-                            lastInspectionItem = ItemStack.EMPTY; // Force price input update
-                            updateTabVisibility();
-                            return true;
+                if (mouseX >= listX && mouseX < listX + LIST_WIDTH
+                        && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
+                    TradingBinBlockEntity be = menu.getBlockEntity();
+                    if (be != null && !be.getItem(slot).isEmpty()) {
+                        if (selectedSlot == slot) {
+                            // Toggle deselect
+                            selectedSlot = -1;
+                            lastSelectedItem = ItemStack.EMPTY;
+                        } else {
+                            selectedSlot = slot;
+                            lastSelectedItem = ItemStack.EMPTY; // force price input update
                         }
+                        updateTabVisibility();
+                        return true;
                     }
-                }
-
-                // Check inspection slot (at 184, 34)
-                int inspectX = x + 184;
-                int inspectY = y + 34;
-                if (mouseX >= inspectX && mouseX < inspectX + 16 &&
-                    mouseY >= inspectY && mouseY < inspectY + 16) {
-                    selectedSlot = TradingBinBlockEntity.INSPECT_SLOT;
-                    lastInspectionItem = ItemStack.EMPTY; // Force price input update
-                    updateTabVisibility();
-                    return true;
                 }
             }
         }
+
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -571,22 +641,40 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Enter key in price input triggers the Set action
+        // Enter in price input → set price
         if (keyCode == 257 && priceInput.isFocused() && !priceInput.getValue().isEmpty()) {
             TradingBinBlockEntity be = menu.getBlockEntity();
-            if (be != null) {
+            if (be != null && selectedSlot >= 0) {
                 int price = Integer.parseInt(priceInput.getValue());
-                int targetSlot = selectedSlot >= 0 ? selectedSlot : TradingBinBlockEntity.INSPECT_SLOT;
                 ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                        new SetPricePacket(be.getBlockPos(), targetSlot, price));
+                        new SetPricePacket(be.getBlockPos(), selectedSlot, price));
             }
             return true;
         }
-        // Enter in tax/markup inputs triggers Apply
+
+        // Enter in fee inputs → apply settings
         if (keyCode == 257 && (taxInput.isFocused() || markupInput.isFocused())) {
             sendSettingsToServer();
             return true;
         }
+
+        // Prevent inventory close / intercept keys while typing in any EditBox
+        if (searchInput.isFocused() || priceInput.isFocused()
+                || taxInput.isFocused() || markupInput.isFocused()) {
+            if (keyCode == 256) { // Escape: unfocus all inputs
+                searchInput.setFocus(false);
+                priceInput.setFocus(false);
+                taxInput.setFocus(false);
+                markupInput.setFocus(false);
+                return true;
+            }
+            // Delegate to focused widget and consume the event
+            if (searchInput.isFocused()) return searchInput.keyPressed(keyCode, scanCode, modifiers) || true;
+            if (priceInput.isFocused()) return priceInput.keyPressed(keyCode, scanCode, modifiers) || true;
+            if (taxInput.isFocused()) return taxInput.keyPressed(keyCode, scanCode, modifiers) || true;
+            if (markupInput.isFocused()) return markupInput.keyPressed(keyCode, scanCode, modifiers) || true;
+        }
+
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
@@ -597,69 +685,69 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         renderBackground(poseStack);
         super.render(poseStack, mouseX, mouseY, partialTick);
 
-        // Render price overlays on bin items
+        // Render item icons in the list (after bg, on top of row backgrounds)
         TradingBinBlockEntity be = menu.getBlockEntity();
         if (be != null) {
-            poseStack.pushPose();
-            poseStack.translate(0, 0, 300);
-
             int x = this.leftPos;
             int y = this.topPos;
 
-            // Selection highlight on selected bin slot (yellow border)
-            if (selectedSlot >= 0 && selectedSlot < TradingBinBlockEntity.BIN_SIZE) {
-                int slotX = x + 62 + (selectedSlot % 3) * 18 - 1;
-                int slotY = y + 17 + (selectedSlot / 3) * 18 - 1;
-                fill(poseStack, slotX, slotY, slotX + 18, slotY + 1, 0xFFFFFF00);       // Top
-                fill(poseStack, slotX, slotY + 17, slotX + 18, slotY + 18, 0xFFFFFF00); // Bottom
-                fill(poseStack, slotX, slotY, slotX + 1, slotY + 18, 0xFFFFFF00);       // Left
-                fill(poseStack, slotX + 17, slotY, slotX + 18, slotY + 18, 0xFFFFFF00); // Right
+            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
+                int slot = filteredSlots.get(i);
+                ItemStack stack = be.getItem(slot);
+                if (stack.isEmpty()) continue;
+
+                int iconX = x + LIST_LEFT + 1;
+                int iconY = y + LIST_TOP + i * ROW_HEIGHT + 1;
+
+                // Render 12x12 item icon (scaled from 16x16)
+                RenderSystem.getModelViewStack().pushPose();
+                RenderSystem.getModelViewStack().translate(iconX, iconY, 100);
+                RenderSystem.getModelViewStack().scale(0.75f, 0.75f, 1.0f);
+                RenderSystem.applyModelViewMatrix();
+                this.itemRenderer.renderAndDecorateItem(stack, 0, 0);
+                this.itemRenderer.renderGuiItemDecorations(this.font, stack, 0, 0, null);
+                RenderSystem.getModelViewStack().popPose();
+                RenderSystem.applyModelViewMatrix();
             }
 
-            // Selection highlight on inspection slot (gold border)
-            if (selectedSlot == TradingBinBlockEntity.INSPECT_SLOT) {
-                int slotX = x + 184 - 2;
-                int slotY = y + 34 - 2;
-                fill(poseStack, slotX, slotY, slotX + 20, slotY + 1, 0xFFFFD700);       // Top
-                fill(poseStack, slotX, slotY + 19, slotX + 20, slotY + 20, 0xFFFFD700); // Bottom
-                fill(poseStack, slotX, slotY, slotX + 1, slotY + 20, 0xFFFFD700);       // Left
-                fill(poseStack, slotX + 19, slotY, slotX + 20, slotY + 20, 0xFFFFD700); // Right
-            }
-
-            // Price overlays on each bin item
-            for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
-                ItemStack stack = be.getItem(i);
-                if (!stack.isEmpty()) {
-                    int price = be.getSetPrice(i);
-                    if (price <= 0) price = PriceCalculator.getBaseValue(stack);
-
-                    int fairValue = PriceCalculator.getBaseValue(stack);
-                    int maxPrice = PriceCalculator.getMaxPrice(stack);
-                    PriceCalculator.PriceRating rating = PriceCalculator.getPriceRating(price, fairValue, maxPrice);
-                    int bgColor = switch (rating) {
-                        case WILL_NOT_SELL -> 0xBBAA0000;
-                        case OVERPRICED    -> 0xBB884400;
-                        default            -> 0xBB000000;
-                    };
-
-                    int totalW = CoinRenderer.getPrimaryValueWidth(this.font, price);
-                    int px = x + 62 + (i % 3) * 18 + 16 - totalW;
-                    int py = y + 17 + (i / 3) * 18 + 9;
-                    fill(poseStack, px - 1, py - 1, px + totalW + 1, py + 9, bgColor);
-                    CoinRenderer.renderPrimaryValue(poseStack, this.font, px, py, price);
+            // Render selected item icon in right panel (bin tab, next to item name)
+            if (activeTab == 0) {
+                ItemStack selected = getSelectedItem();
+                if (!selected.isEmpty()) {
+                    this.itemRenderer.renderAndDecorateItem(selected, x + 184, y + 34);
                 }
             }
-
-            poseStack.popPose();
         }
 
-        renderTooltip(poseStack, mouseX, mouseY);
+        // Tooltip handling: list item hover takes priority
+        boolean showedListTooltip = false;
+        if (be != null) {
+            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
+                int slot = filteredSlots.get(i);
+                int rowY = this.topPos + LIST_TOP + i * ROW_HEIGHT;
+
+                if (mouseX >= this.leftPos + LIST_LEFT
+                        && mouseX < this.leftPos + LIST_LEFT + LIST_WIDTH
+                        && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
+                    ItemStack stack = be.getItem(slot);
+                    if (!stack.isEmpty()) {
+                        this.renderTooltip(poseStack, stack, mouseX, mouseY);
+                        showedListTooltip = true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!showedListTooltip) {
+            this.renderTooltip(poseStack, mouseX, mouseY);
+        }
     }
 
     // ==================== Utility Methods ====================
 
     /**
-     * Format copper pieces as a coin string (e.g., "1g 5s 3c").
+     * Format copper pieces as a coin string with color codes (e.g., "§e1g§r §72s§r §63c§r").
      */
     private static String formatCoinText(int copper) {
         int g = copper / 100;
@@ -667,38 +755,34 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         int c = copper % 10;
 
         StringBuilder sb = new StringBuilder();
-        if (g > 0) sb.append(g).append("g ");
-        if (s > 0) sb.append(s).append("s ");
-        if (c > 0 || sb.length() == 0) sb.append(c).append("c");
+        if (g > 0) sb.append("\u00A7e").append(g).append("g\u00A7r ");
+        if (s > 0) sb.append("\u00A77").append(s).append("s\u00A7r ");
+        if (c > 0 || sb.length() == 0) sb.append("\u00A76").append(c).append("c\u00A7r");
         return sb.toString().trim();
     }
 
     /**
      * Draw a custom checkbox with label, styled for the dark panel.
      */
-    private void drawCheckbox(PoseStack ps, int x, int y, boolean checked, String label, int color, boolean applicable) {
-        // Outer border
+    private void drawCheckbox(PoseStack ps, int x, int y, boolean checked, String label,
+                               int color, boolean applicable) {
         fill(ps, x, y, x + CB_SIZE, y + CB_SIZE, 0xFF1A1209);
         if (applicable) {
-            // Normal: dark green when checked, neutral when unchecked
             fill(ps, x + 1, y + 1, x + CB_SIZE - 1, y + CB_SIZE - 1, checked ? 0xFF336633 : 0xFF3E3226);
             if (checked) {
                 fill(ps, x + 2, y + 2, x + CB_SIZE - 2, y + CB_SIZE - 2, 0xFF55FF55);
             }
         } else {
-            // Dimmed: modifier does not apply to the current item
             fill(ps, x + 1, y + 1, x + CB_SIZE - 1, y + CB_SIZE - 1, checked ? 0xFF333333 : 0xFF2A2A2A);
             if (checked) {
                 fill(ps, x + 2, y + 2, x + CB_SIZE - 2, y + CB_SIZE - 2, 0xFF666666);
             }
         }
-        // Label text
         this.font.draw(ps, label, x + CB_SIZE + 3, y, color);
     }
 
     /**
      * Y positions of modifier checkboxes for hit testing.
-     * Returns: [enchantedY, usedY, damagedY, rareY].
      */
     private static int[] getCheckboxYPositions() {
         return new int[]{94, 105, 116, 127};

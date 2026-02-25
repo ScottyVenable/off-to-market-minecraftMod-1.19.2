@@ -35,13 +35,11 @@ import java.util.Map;
  */
 public class TradingBinBlockEntity extends BlockEntity implements Container, MenuProvider {
     public static final int BIN_SIZE = 9;
-    public static final int INSPECT_SLOT = 9;
-    public static final int TOTAL_SIZE = 10;
+    /** @deprecated Inspection slot removed — pricing now done via list selection. */
+    @Deprecated public static final int INSPECT_SLOT = -1;
+    public static final int TOTAL_SIZE = BIN_SIZE;
 
     private NonNullList<ItemStack> items = NonNullList.withSize(BIN_SIZE, ItemStack.EMPTY);
-
-    // Inspection slot: holds an item for price checking/setting in the book panel
-    private ItemStack inspectionItem = ItemStack.EMPTY;
 
     // Prices set by the player for each slot (in copper pieces, 0 = use default)
     private final Map<Integer, Integer> slotPrices = new HashMap<>();
@@ -102,29 +100,7 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     }
 
     public void setPrice(int slot, int price) {
-        if (slot == INSPECT_SLOT) {
-            // Set price for the item TYPE in the inspection slot
-            if (!inspectionItem.isEmpty()) {
-                String key = getItemKey(inspectionItem);
-                if (key != null) {
-                    if (price <= 0) {
-                        priceMemory.remove(key);
-                    } else {
-                        priceMemory.put(key, price);
-                    }
-                    // Propagate to all bin slots with matching items
-                    for (int i = 0; i < BIN_SIZE; i++) {
-                        if (!items.get(i).isEmpty() && key.equals(getItemKey(items.get(i)))) {
-                            if (price <= 0) {
-                                slotPrices.remove(i);
-                            } else {
-                                slotPrices.put(i, price);
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
+        if (slot >= 0 && slot < BIN_SIZE) {
             if (price <= 0) {
                 slotPrices.remove(slot);
             } else {
@@ -331,6 +307,7 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
      * Add an item to the first available slot (used for returned items).
      */
     public boolean addItem(ItemStack stack) {
+        if (stack.isEmpty() || stack.getItem() == net.minecraft.world.item.Items.AIR) return false;
         for (int i = 0; i < BIN_SIZE; i++) {
             if (items.get(i).isEmpty()) {
                 items.set(i, stack);
@@ -374,19 +351,13 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
 
     @Override
     public ItemStack getItem(int slot) {
-        if (slot == INSPECT_SLOT) return inspectionItem;
+        if (slot < 0 || slot >= BIN_SIZE) return ItemStack.EMPTY;
         return items.get(slot);
     }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
-        if (slot == INSPECT_SLOT) {
-            if (inspectionItem.isEmpty()) return ItemStack.EMPTY;
-            ItemStack result = inspectionItem.split(amount);
-            if (inspectionItem.isEmpty()) inspectionItem = ItemStack.EMPTY;
-            setChanged();
-            return result;
-        }
+        if (slot < 0 || slot >= BIN_SIZE) return ItemStack.EMPTY;
         ItemStack result = ContainerHelper.removeItem(items, slot, amount);
         if (!result.isEmpty()) setChanged();
         return result;
@@ -394,21 +365,13 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        if (slot == INSPECT_SLOT) {
-            ItemStack result = inspectionItem;
-            inspectionItem = ItemStack.EMPTY;
-            return result;
-        }
+        if (slot < 0 || slot >= BIN_SIZE) return ItemStack.EMPTY;
         return ContainerHelper.takeItem(items, slot);
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        if (slot == INSPECT_SLOT) {
-            inspectionItem = stack;
-            setChanged();
-            return;
-        }
+        if (slot < 0 || slot >= BIN_SIZE) return;
         items.set(slot, stack);
         if (stack.getCount() > getMaxStackSize()) {
             stack.setCount(getMaxStackSize());
@@ -468,7 +431,6 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     @Override
     public void clearContent() {
         items.clear();
-        inspectionItem = ItemStack.EMPTY;
     }
 
     // ==================== Client Sync ====================
@@ -542,9 +504,6 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         tag.putBoolean("RareMarkupEnabled", rareMarkupEnabled);
         tag.putInt("RareMarkupPercent", rareMarkupPercent);
 
-        if (!inspectionItem.isEmpty()) {
-            tag.put("InspectionItem", inspectionItem.save(new CompoundTag()));
-        }
     }
 
     @Override
@@ -592,8 +551,5 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
             }
         }
 
-        inspectionItem = tag.contains("InspectionItem")
-                ? ItemStack.of(tag.getCompound("InspectionItem"))
-                : ItemStack.EMPTY;
     }
 }
