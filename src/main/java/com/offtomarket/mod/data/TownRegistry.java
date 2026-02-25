@@ -433,8 +433,14 @@ public class TownRegistry {
         setNeed("peenam", "minecraft:chicken", NeedLevel.SURPLUS);
     }
 
-    private static void register(TownData town) {
+    /**
+     * Register a town. Called by TownLoader (JSON files), ModCompatibility (dynamic towns),
+     * or the static initializer. Overwrites any existing town with the same ID,
+     * so JSON definitions always take priority over hardcoded fallbacks.
+     */
+    public static void register(TownData town) {
         TOWNS.put(town.getId(), town);
+        invalidateTownCaches();
     }
 
     /**

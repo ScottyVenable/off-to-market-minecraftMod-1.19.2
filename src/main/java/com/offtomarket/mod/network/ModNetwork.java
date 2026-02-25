@@ -179,5 +179,10 @@ public class ModNetwork {
                 UpgradeCaravanWeightPacket::encode, UpgradeCaravanWeightPacket::decode,
                 UpgradeCaravanWeightPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, OpenCustomMenuPacket.class,
+                OpenCustomMenuPacket::encode, OpenCustomMenuPacket::decode,
+                OpenCustomMenuPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 }

@@ -1,0 +1,29 @@
+{
+  "_comment": "Copy this file, rename it to your-town-id.json, fill it in, then add the filename to _index.json.",
+
+  "id": "my_town",
+  "displayName": "My Town Name",
+  "description": "A short flavour text description shown in the Market Board listing.",
+
+  "_distance_help": "Abstract travel distance 1 (nearby) to 10 (very far). Farther towns add a price premium.",
+  "distance": 3,
+
+  "_type_help": "One of: VILLAGE, TOWN, CITY, MARKET, OUTPOST. Affects price bias of listings.",
+  "type": "TOWN",
+
+  "_level_help": "Minimum trader level (1-5) before this town appears in the list.",
+  "minTraderLevel": 1,
+
+  "_sells_help": "Items this town lists on the Market Board. Use full registry IDs.",
+  "sells": [
+    "minecraft:example_item",
+    "minecraft:another_item"
+  ],
+
+  "_needLevels_help": "Demand level per item. Options: DESPERATE (2x), HIGH_NEED (1.5x), MODERATE_NEED (1.25x), BALANCED (1x, default), SURPLUS (0.75x), OVERSATURATED (0.5x). Items not listed default to BALANCED.",
+  "needLevels": {
+    "minecraft:iron_ingot": "DESPERATE",
+    "minecraft:bread": "HIGH_NEED",
+    "minecraft:wheat": "OVERSATURATED"
+  }
+}

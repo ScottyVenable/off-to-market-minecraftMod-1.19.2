@@ -1,0 +1,50 @@
+{
+  "_comment": "Copy this file, rename it, fill it in, then add the filename to _index.json. Test in-game with: /otm menu open your-menu-id",
+
+  "id": "my_menu",
+  "title": "My Menu Title",
+  "subtitle": "Optional subtitle text shown under the title",
+
+  "_entries_help": "Each entry is a row in the scrollable list. All fields except 'item' are optional.",
+  "entries": [
+    {
+      "_comment": "Category dividers group rows visually. Set 'category' on the FIRST entry of each group.",
+      "item": "minecraft:oak_planks",
+      "category": "Building Materials",
+      "label": "Oak Planks",
+      "description": "Versatile building block from oak wood.",
+      "price": 3,
+      "stock": 64
+    },
+    {
+      "item": "minecraft:stone_bricks",
+      "label": "Stone Bricks",
+      "description": "Durable carved stonework.",
+      "price": 5,
+      "stock": 32
+    },
+    {
+      "item": "minecraft:iron_ingot",
+      "category": "Metals",
+      "label": "Iron Ingot",
+      "description": "Smelted from raw iron ore.",
+      "price": 20,
+      "stock": -1
+    },
+    {
+      "item": "minecraft:golden_carrot",
+      "category": "Food",
+      "label": "Golden Carrot",
+      "description": "Highly nutritious. Great saturation.",
+      "price": 15,
+      "stock": 10
+    },
+    {
+      "item": "minecraft:book",
+      "category": "Info Only",
+      "label": "Town Charter",
+      "description": "Displayed for reference. No price = info row.",
+      "price": 0
+    }
+  ]
+}

@@ -5,14 +5,19 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.offtomarket.mod.config.ModConfig;
+import com.offtomarket.mod.content.CustomMenuRegistry;
 import com.offtomarket.mod.data.PriceCalculator;
+import com.offtomarket.mod.network.ModNetwork;
+import com.offtomarket.mod.network.OpenCustomMenuPacket;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraftforge.network.PacketDistributor;
 
 /**
  * In-game debug commands under /otm.
@@ -231,6 +236,32 @@ public class DebugCommands {
                             runBalanceTest(ctx.getSource());
                             return 1;
                         }))
+
+                // /otm menu open <id> — open a custom menu screen on the requesting player's client
+                .then(Commands.literal("menu")
+                        .then(Commands.literal("open")
+                                .then(Commands.argument("menuId", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            String menuId = StringArgumentType.getString(ctx, "menuId");
+                                            if (CustomMenuRegistry.get(menuId) == null) {
+                                                ctx.getSource().sendFailure(Component.literal(
+                                                    "[OTM] Unknown menu id '" + menuId + "'. Available: "
+                                                    + CustomMenuRegistry.getAllIds()));
+                                                return 0;
+                                            }
+                                            if (!(ctx.getSource().getEntity() instanceof ServerPlayer player)) {
+                                                ctx.getSource().sendFailure(Component.literal(
+                                                    "[OTM] Must be a player."));
+                                                return 0;
+                                            }
+                                            ModNetwork.CHANNEL.send(
+                                                PacketDistributor.PLAYER.with(() -> player),
+                                                new OpenCustomMenuPacket(menuId));
+                                            ctx.getSource().sendSuccess(Component.literal(
+                                                "Opening menu '" + menuId + "' ...")
+                                                .withStyle(ChatFormatting.GREEN), false);
+                                            return 1;
+                                        }))))
         );
     }
 

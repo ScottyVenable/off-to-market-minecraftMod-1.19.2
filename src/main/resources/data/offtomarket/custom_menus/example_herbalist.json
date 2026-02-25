@@ -1,0 +1,59 @@
+{
+  "_comment": "Working example: a small herbalist shop. Test with: /otm menu open example_herbalist",
+  "id": "example_herbalist",
+  "title": "Elara's Herbalist Shop",
+  "subtitle": "Brewed with care from the finest wild herbs",
+  "entries": [
+    {
+      "item": "minecraft:golden_carrot",
+      "category": "Tonics & Restoratives",
+      "label": "Golden Carrot Tonic",
+      "description": "Restores vitality. Excellent saturation.",
+      "price": 15,
+      "stock": 12
+    },
+    {
+      "item": "minecraft:honey_bottle",
+      "label": "Raw Honey",
+      "description": "Clears poison. Sweet and soothing.",
+      "price": 8,
+      "stock": 20
+    },
+    {
+      "item": "minecraft:potion",
+      "label": "Herbal Potion",
+      "description": "A basic restorative brew.",
+      "price": 25,
+      "stock": 6
+    },
+    {
+      "item": "minecraft:sweet_berries",
+      "category": "Ingredients",
+      "label": "Sweet Berries",
+      "description": "Freshly foraged. Not yet processed.",
+      "price": 3,
+      "stock": -1
+    },
+    {
+      "item": "minecraft:dried_kelp",
+      "label": "Dried Sea Kelp",
+      "description": "Rich in minerals. Used in coastal remedies.",
+      "price": 2,
+      "stock": -1
+    },
+    {
+      "item": "minecraft:nether_wart",
+      "label": "Nether Wart",
+      "description": "Rare fungus. Base for advanced potions.",
+      "price": 18,
+      "stock": 8
+    },
+    {
+      "item": "minecraft:brewing_stand",
+      "category": "Services",
+      "label": "Custom Brewing",
+      "description": "Bring your own ingredients. Ask at the counter.",
+      "price": 0
+    }
+  ]
+}

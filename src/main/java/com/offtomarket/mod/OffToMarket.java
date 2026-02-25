@@ -3,6 +3,8 @@ package com.offtomarket.mod;
 import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.config.ModConfig;
 import com.offtomarket.mod.config.ModdedItemConfig;
+import com.offtomarket.mod.content.CustomMenuLoader;
+import com.offtomarket.mod.content.TownLoader;
 import com.offtomarket.mod.data.ModCompatibility;
 import com.offtomarket.mod.data.SupplyDemandManager;
 import com.offtomarket.mod.debug.DebugCommands;
@@ -53,7 +55,12 @@ public class OffToMarket {
         event.enqueueWork(() -> {
             ModNetwork.register();
             ModdedItemConfig.loadAllConfigs();
-            
+
+            // Load towns from JSON definitions (overrides any hardcoded fallbacks)
+            TownLoader.loadAll();
+            // Load custom menu definitions for /otm menu open <id>
+            CustomMenuLoader.loadAll();
+
             // Initialize mod compatibility - discovers items from other mods
             ModCompatibility.initialize();
             LOGGER.info("Discovered {} mods with tradeable items", ModCompatibility.getLoadedModsWithItems().size());
