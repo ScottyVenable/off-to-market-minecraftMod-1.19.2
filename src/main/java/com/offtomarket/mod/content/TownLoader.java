@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.data.NeedLevel;
 import com.offtomarket.mod.data.TownData;
+import com.offtomarket.mod.data.TownLetter;
 import com.offtomarket.mod.data.TownRegistry;
 import net.minecraft.resources.ResourceLocation;
 
@@ -126,6 +127,29 @@ public class TownLoader {
             }
         }
 
+        // Build letters map
+        Map<String, List<TownLetter>> letters = new LinkedHashMap<>();
+        if (def.letters != null) {
+            for (Map.Entry<String, List<TownDefinition.LetterDef>> entry : def.letters.entrySet()) {
+                String eventKey = entry.getKey();
+                if (eventKey == null || eventKey.startsWith("_") || entry.getValue() == null) continue;
+                List<TownLetter> parsed = new ArrayList<>();
+                for (TownDefinition.LetterDef ld : entry.getValue()) {
+                    if (ld == null) continue;
+                    parsed.add(new TownLetter(
+                            ld.sender,
+                            ld.subject,
+                            ld.body,
+                            ld.minReputation == 0 ? Integer.MIN_VALUE : ld.minReputation,
+                            ld.maxReputation == 0 ? Integer.MAX_VALUE : ld.maxReputation,
+                            ld.chanceWeight,
+                            ld.tags
+                    ));
+                }
+                if (!parsed.isEmpty()) letters.put(eventKey, parsed);
+            }
+        }
+
         return new TownData(
                 def.id.trim(),
                 def.displayName != null ? def.displayName : def.id,
@@ -138,7 +162,8 @@ public class TownLoader {
                 Math.max(1, def.minTraderLevel),
                 needLevels,
                 new HashMap<>(),   // supplyLevels  (runtime, not persisted in JSON)
-                new HashMap<>()    // previousSupplyLevels (runtime)
+                new HashMap<>(),   // previousSupplyLevels (runtime)
+                letters
         );
     }
 

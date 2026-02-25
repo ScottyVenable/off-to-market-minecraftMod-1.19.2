@@ -2,27 +2,145 @@
     "id": "beaus_botany_shop",
     "displayName": "Beau's Botany Shop",
     "description": "A small shop nestled in a lush garden, run by the eccentric botanist Beau. Specializes in plants, flowers, and nature-related items.",
-  
     "_distance_help": "Abstract travel distance 1 (nearby) to 10 (very far). Farther towns add a price premium.",
     "distance": 3,
-  
+
     "_type_help": "One of: VILLAGE, TOWN, CITY, MARKET, OUTPOST. Affects price bias of listings.",
     "type": "MARKET",
-  
+
     "_level_help": "Minimum trader level (1-5) before this town appears in the list.",
     "minTraderLevel": 2,
-  
+
     "_sells_help": "Items this town lists on the Market Board. Use full registry IDs.",
     "sells": [
-      "minecraft:rose",
-      "minecraft:another_item"
-    ],
-  
+          "minecraft:dandelion",
+          "minecraft:poppy",
+          "minecraft:blue_orchid",
+          "minecraft:allium",
+          "minecraft:azure_bluet",
+          "minecraft:red_tulip",
+          "minecraft:orange_tulip",
+          "minecraft:white_tulip",
+          "minecraft:pink_tulip",
+          "minecraft:oxeye_daisy",
+          "minecraft:cornflower",
+          "minecraft:lily_of_the_valley",
+          "minecraft:wither_rose",
+          "minecraft:sunflower",
+          "minecraft:lilac",
+          "minecraft:rose_bush",
+          "minecraft:peony",
+          "minecraft:tall_grass",
+          "minecraft:large_fern",
+          "minecraft:oak_sapling",
+          "minecraft:spruce_sapling",
+          "minecraft:birch_sapling",
+          "minecraft:jungle_sapling",
+          "minecraft:acacia_sapling",
+          "minecraft:dark_oak_sapling",
+          "minecraft:mangrove_propagule",
+          "minecraft:azalea",
+          "minecraft:flowering_azalea",
+          "minecraft:moss_block",
+          "minecraft:moss_carpet",
+          "minecraft:spore_blossom",
+          "minecraft:big_dripleaf",
+          "minecraft:small_dripleaf",
+          "minecraft:vine",
+          "minecraft:glow_berries",
+          "minecraft:cactus",
+          "minecraft:flower_pot",
+          "minecraft:bone_meal",
+          "minecraft:shears"
+        ],
+
     "_needLevels_help": "Demand level per item. Options: DESPERATE (2x), HIGH_NEED (1.5x), MODERATE_NEED (1.25x), BALANCED (1x, default), SURPLUS (0.75x), OVERSATURATED (0.5x). Items not listed default to BALANCED.",
     "needLevels": {
-      "minecraft:iron_ingot": "DESPERATE",
-      "minecraft:bread": "HIGH_NEED",
-      "minecraft:wheat": "OVERSATURATED"
+          "minecraft:wither_rose": "DESPERATE",
+          "minecraft:spore_blossom": "HIGH_NEED",
+          "minecraft:bone_meal": "HIGH_NEED",
+          "minecraft:flower_pot": "MODERATE_NEED",
+          "minecraft:dandelion": "SURPLUS",
+          "minecraft:wheat_seeds": "OVERSATURATED"
+        },
+
+    "_letters_help": "Letters Beau may send to the player on specific events.",
+    "letters": {
+        "shipment_received": [
+            {
+                "sender": "Beau",
+                "subject": "Your plants arrived in one piece!",
+                "body": "Ah, {player}!\n\nThe delivery just came in and everything is looking wonderfully alive. The wither roses especially — exceptional specimens. You clearly know how to handle delicate flora.\n\nDo keep them coming,\nBeau",
+                "chanceWeight": 3
+            },
+            {
+                "sender": "Beau",
+                "subject": "Shipment received - mostly intact",
+                "body": "Hello {player},\n\nGot your shipment. The bone meal was a touch clumpy but perfectly usable. All accounted for.\n\nCheers,\nBeau",
+                "chanceWeight": 2
+            },
+            {
+                "sender": "Beau",
+                "subject": "Oh, a surprise delivery!",
+                "body": "Dear {player},\n\nI was just repotting my azaleas when your goods arrived. Wonderful timing — I was nearly out of stock!\n\nGratefully,\nBeau",
+                "chanceWeight": 1,
+                "minReputation": 50
+            }
+        ],
+        "first_trade": [
+            {
+                "sender": "Beau",
+                "subject": "A new trader at my door!",
+                "body": "{player}!\n\nWord reaches me of a new trader in the region — and they've come to me first! Smart.\n\nI am Beau, proprietor of the finest botanical emporium this side of the forest. I deal in all manner of growing things: flowers, mosses, saplings, and the occasional dangerous specimen.\n\nBring me what grows and I shall make it worth your while.\n\nYours in horticulture,\nBeau",
+                "chanceWeight": 1
+            }
+        ],
+        "quest_complete": [
+            {
+                "sender": "Beau",
+                "subject": "Well done on the delivery!",
+                "body": "Dear {player},\n\nThe {item} arrived in excellent condition — exactly what I needed. A pleasure doing business with someone who respects the cargo.\n\nI'll have more work for you soon, no doubt.\n\nUntil then,\nBeau",
+                "chanceWeight": 2
+            },
+            {
+                "sender": "Beau",
+                "subject": "Quest complete!",
+                "body": "{player},\n\nQuest fulfilled. The plants are safe, the shop is happy, and I can return to my experiments.\n\nMy gratitude,\nBeau",
+                "chanceWeight": 1
+            }
+        ],
+        "quest_expired": [
+            {
+                "sender": "Beau",
+                "subject": "That window has closed...",
+                "body": "Hello {player},\n\nI'm afraid the season for that particular request has passed. The spore blossom won't keep forever, you know.\n\nPerhaps next time? I still value our arrangement.\n\n- Beau",
+                "chanceWeight": 1
+            }
+        ],
+        "reputation_increase": [
+            {
+                "sender": "Beau",
+                "subject": "You're becoming a favourite around here",
+                "body": "Hello {player},\n\nI don't know what you've been up to, but the garden folk are impressed. Even old Maren the moss farmer mentioned you by name.\n\nKeep it up,\nBeau",
+                "chanceWeight": 1,
+                "minReputation": 100
+            }
+        ],
+        "reputation_decrease": [
+            {
+                "sender": "Beau",
+                "subject": "A concern has been raised...",
+                "body": "{player},\n\nI'll be frank — some of my regulars have raised an eyebrow at your recent dealings. I'm sure it's nothing serious, but perhaps take a moment to smooth things over?\n\nI do hope we can continue our arrangement.\n\n- Beau",
+                "chanceWeight": 1
+            }
+        ],
+        "diplomat_proposed": [
+            {
+                "sender": "Beau",
+                "subject": "A proposition from the garden",
+                "body": "Dear {player},\n\nI've sent my most trusted envoy your way with a proposal. Take your time — but not too much time. Good deals, like blossoms, don't last forever.\n\nEagerly,\nBeau",
+                "chanceWeight": 1
+            }
+        ]
     }
-  }
-  
+}

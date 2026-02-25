@@ -46,11 +46,21 @@ public class TownData {
      */
     private final Map<String, Integer> previousSupplyLevels;
 
+    /**
+     * Letters this town may send on specific events, keyed by event type.
+     * Loaded from the town's JSON file at startup; not persisted in NBT
+     * (letters are static flavour data, not runtime state).
+     *
+     * See TownLetter for supported event keys.
+     */
+    private final Map<String, List<TownLetter>> letters;
+
     public TownData(String id, String displayName, String description, int distance,
                     TownType type, Set<ResourceLocation> needs, Set<ResourceLocation> surplus,
                     Set<ResourceLocation> specialtyItems, int minTraderLevel) {
         this(id, displayName, description, distance, type, needs, surplus,
-                specialtyItems, minTraderLevel, new HashMap<>(), new HashMap<>(), new HashMap<>());
+                specialtyItems, minTraderLevel, new HashMap<>(), new HashMap<>(), new HashMap<>(),
+                new HashMap<>());
     }
 
     public TownData(String id, String displayName, String description, int distance,
@@ -58,7 +68,8 @@ public class TownData {
                     Set<ResourceLocation> specialtyItems, int minTraderLevel,
                     Map<String, NeedLevel> needLevels, Map<String, Integer> supplyLevels) {
         this(id, displayName, description, distance, type, needs, surplus,
-                specialtyItems, minTraderLevel, needLevels, supplyLevels, new HashMap<>());
+                specialtyItems, minTraderLevel, needLevels, supplyLevels, new HashMap<>(),
+                new HashMap<>());
     }
 
     public TownData(String id, String displayName, String description, int distance,
@@ -66,6 +77,17 @@ public class TownData {
                     Set<ResourceLocation> specialtyItems, int minTraderLevel,
                     Map<String, NeedLevel> needLevels, Map<String, Integer> supplyLevels,
                     Map<String, Integer> previousSupplyLevels) {
+        this(id, displayName, description, distance, type, needs, surplus,
+                specialtyItems, minTraderLevel, needLevels, supplyLevels, previousSupplyLevels,
+                new HashMap<>());
+    }
+
+    public TownData(String id, String displayName, String description, int distance,
+                    TownType type, Set<ResourceLocation> needs, Set<ResourceLocation> surplus,
+                    Set<ResourceLocation> specialtyItems, int minTraderLevel,
+                    Map<String, NeedLevel> needLevels, Map<String, Integer> supplyLevels,
+                    Map<String, Integer> previousSupplyLevels,
+                    Map<String, List<TownLetter>> letters) {
         this.id = id;
         this.displayName = displayName;
         this.description = description;
@@ -78,6 +100,7 @@ public class TownData {
         this.needLevels = needLevels;
         this.supplyLevels = supplyLevels;
         this.previousSupplyLevels = previousSupplyLevels;
+        this.letters = letters;
     }
 
     public String getId() { return id; }
@@ -183,6 +206,28 @@ public class TownData {
      * Get the previous supply levels snapshot.
      */
     public Map<String, Integer> getPreviousSupplyLevels() { return previousSupplyLevels; }
+
+    /**
+     * Get all letters for this town, keyed by event type.
+     * Returns an empty map if the town JSON defined no letters.
+     *
+     * To get letters for a specific event:
+     *   town.getLetters().getOrDefault("shipment_received", Collections.emptyList())
+     */
+    public Map<String, List<TownLetter>> getLetters() { return letters; }
+
+    /**
+     * Get the list of letters eligible for a specific event and the player's
+     * current reputation with this town.  Returns an empty list if none match.
+     */
+    public List<TownLetter> getEligibleLetters(String eventType, int playerReputation) {
+        List<TownLetter> all = letters.getOrDefault(eventType, Collections.emptyList());
+        List<TownLetter> eligible = new ArrayList<>();
+        for (TownLetter letter : all) {
+            if (letter.isEligible(playerReputation)) eligible.add(letter);
+        }
+        return eligible;
+    }
 
     // ── Supply trend tracking ────────────────────────────────────────────
 
