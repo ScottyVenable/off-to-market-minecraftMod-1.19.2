@@ -70,12 +70,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private int hoveredTownRow = -1; // hover index for town list on left page
 
-    private enum ActivitySort { NEWEST, OLDEST, TYPE }
-    private enum QuestSort { STATUS, REWARD, TIME_LEFT }
-    private enum RequestSort { STATUS, PRICE, TIME_LEFT }
-    private ActivitySort activitySort = ActivitySort.NEWEST;
+    private enum ActivitySort { TYPE, DETAILS, STATUS }
+    private enum QuestSort { TYPE, ITEM, QTY, REWARD, STATUS }
+    private enum RequestSort { ITEM, TOWN, STATUS }
+    private ActivitySort activitySort = ActivitySort.STATUS;
     private QuestSort questSort = QuestSort.STATUS;
     private RequestSort requestSort = RequestSort.STATUS;
+    private boolean activitySortAscending = true;
+    private boolean questSortAscending = true;
+    private boolean requestSortAscending = true;
 
     // Request creation mode (Requests tab)
     private boolean creatingRequest = false;
@@ -200,19 +203,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 Component.literal("\u25BC"), btn -> activityScrollOffset++));
 
         activitySortBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
-                Component.literal("Sort: New"), btn -> {
-            activitySort = switch (activitySort) {
-                case NEWEST -> ActivitySort.OLDEST;
-                case OLDEST -> ActivitySort.TYPE;
-                case TYPE -> ActivitySort.NEWEST;
-            };
-            btn.setMessage(Component.literal("Sort: " + switch (activitySort) {
-                case NEWEST -> "New";
-                case OLDEST -> "Old";
-                case TYPE -> "Type";
-            }));
-            activityScrollOffset = 0;
-        }));
+                Component.empty(), btn -> {}));
+        activitySortBtn.visible = false;
+        activitySortBtn.active = false;
 
         // Towns tab: diplomat selection buttons removed — request creation moved to Requests tab
 
@@ -227,19 +220,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 Component.literal("\u25BC"), btn -> questScrollOffset++));
 
         questSortBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
-                Component.literal("Sort: Sts"), btn -> {
-            questSort = switch (questSort) {
-                case STATUS -> QuestSort.REWARD;
-                case REWARD -> QuestSort.TIME_LEFT;
-                case TIME_LEFT -> QuestSort.STATUS;
-            };
-            btn.setMessage(Component.literal("Sort: " + switch (questSort) {
-                case STATUS -> "Sts";
-                case REWARD -> "Rew";
-                case TIME_LEFT -> "Time";
-            }));
-            questScrollOffset = 0;
-        }));
+                Component.empty(), btn -> {}));
+        questSortBtn.visible = false;
+        questSortBtn.active = false;
 
         // ==== Workers tab buttons ====
 
@@ -296,19 +279,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 Component.literal("\u25BC"), btn -> diplomatScrollOffset++));
 
         requestSortBtn = addRenderableWidget(new Button(x + 236, y + 33, 60, 12,
-                Component.literal("Sort: Sts"), btn -> {
-            requestSort = switch (requestSort) {
-                case STATUS -> RequestSort.PRICE;
-                case PRICE -> RequestSort.TIME_LEFT;
-                case TIME_LEFT -> RequestSort.STATUS;
-            };
-            btn.setMessage(Component.literal("Sort: " + switch (requestSort) {
-                case STATUS -> "Sts";
-                case PRICE -> "Cost";
-                case TIME_LEFT -> "Time";
-            }));
-            diplomatScrollOffset = 0;
-        }));
+                Component.empty(), btn -> {}));
+        requestSortBtn.visible = false;
+        requestSortBtn.active = false;
 
         // "New Request" button — opens request creation mode on Requests tab
         newRequestBtn = addRenderableWidget(new Button(x + 298, y + 33, 65, 12,
@@ -414,7 +387,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         activityScrollUpBtn.visible = activity;
         activityScrollDownBtn.visible = activity;
-        activitySortBtn.visible = activity;
+        activitySortBtn.visible = false;
 
         // Hide coin exchange slots (no longer have a coins tab)
         updateCoinSlotPositions(false);
@@ -424,7 +397,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         questScrollUpBtn.visible = quests;
         questScrollDownBtn.visible = quests;
-        questSortBtn.visible = quests;
+        questSortBtn.visible = false;
 
         TradingPostBlockEntity be = menu.getBlockEntity();
         // Workers tab: show hire button for selected unhired worker, fire button for selected hired worker
@@ -444,7 +417,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         diplomatScrollUpBtn.visible = diplomat && !creatingRequest;
         diplomatScrollDownBtn.visible = diplomat && !creatingRequest;
-        requestSortBtn.visible = diplomat && !creatingRequest;
+        requestSortBtn.visible = false;
         newRequestBtn.visible = diplomat && !creatingRequest;
         sendRequestBtn.visible = diplomat && creatingRequest && requestSelectedItem != null;
         cancelRequestBtn.visible = diplomat && creatingRequest;
@@ -518,6 +491,44 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void drawSlot(PoseStack ps, int x, int y) {
         fill(ps, x - 1, y - 1, x + 17, y + 17, 0xFF373737);
         fill(ps, x, y, x + 16, y + 16, 0xFF8B8B8B);
+    }
+
+    private String sortLabel(String label, boolean selected, boolean ascending) {
+        if (!selected) return label;
+        return label + (ascending ? " \u25B2" : " \u25BC");
+    }
+
+    private void toggleActivitySort(ActivitySort clicked) {
+        if (activitySort == clicked) {
+            activitySortAscending = !activitySortAscending;
+        } else {
+            activitySort = clicked;
+            activitySortAscending = true;
+        }
+        activityScrollOffset = 0;
+        SoundHelper.playUIClick();
+    }
+
+    private void toggleQuestSort(QuestSort clicked) {
+        if (questSort == clicked) {
+            questSortAscending = !questSortAscending;
+        } else {
+            questSort = clicked;
+            questSortAscending = true;
+        }
+        questScrollOffset = 0;
+        SoundHelper.playUIClick();
+    }
+
+    private void toggleRequestSort(RequestSort clicked) {
+        if (requestSort == clicked) {
+            requestSortAscending = !requestSortAscending;
+        } else {
+            requestSort = clicked;
+            requestSortAscending = true;
+        }
+        diplomatScrollOffset = 0;
+        SoundHelper.playUIClick();
     }
 
     // ==================== Render Background ====================
@@ -646,14 +657,43 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             entries.add(new ActivityEntry(false, i, orders.get(i).getOrderTime()));
         }
 
-        switch (activitySort) {
-            case NEWEST -> entries.sort(Comparator.comparingLong((ActivityEntry e) -> e.sortTime).reversed());
-            case OLDEST -> entries.sort(Comparator.comparingLong(e -> e.sortTime));
-            case TYPE -> entries.sort(Comparator
-                    .comparing((ActivityEntry e) -> e.isShipment ? 0 : 1)
-                    .thenComparing((ActivityEntry e) -> e.sortTime, Comparator.reverseOrder()));
-        }
+        Comparator<ActivityEntry> comparator = switch (activitySort) {
+            case TYPE -> Comparator
+                    .comparingInt((ActivityEntry e) -> e.isShipment ? 0 : 1)
+                    .thenComparingLong(e -> e.sortTime);
+            case DETAILS -> Comparator
+                    .comparing((ActivityEntry e) -> getActivityDetailKey(e, shipments, orders), String.CASE_INSENSITIVE_ORDER)
+                    .thenComparingLong(e -> e.sortTime);
+            case STATUS -> Comparator
+                    .comparing((ActivityEntry e) -> getActivityStatusKey(e, shipments, orders), String.CASE_INSENSITIVE_ORDER)
+                    .thenComparingLong(e -> e.sortTime);
+        };
+
+        entries.sort(activitySortAscending ? comparator : comparator.reversed());
         return entries;
+    }
+
+    private String getActivityDetailKey(ActivityEntry entry, List<Shipment> shipments, List<BuyOrder> orders) {
+        if (entry.isShipment && entry.dataIndex < shipments.size()) {
+            Shipment shipment = shipments.get(entry.dataIndex);
+            TownData town = TownRegistry.getTown(shipment.getTownId());
+            return town != null ? town.getDisplayName() : shipment.getTownId();
+        }
+        if (!entry.isShipment && entry.dataIndex < orders.size()) {
+            BuyOrder order = orders.get(entry.dataIndex);
+            return order.getItemDisplayName();
+        }
+        return "";
+    }
+
+    private String getActivityStatusKey(ActivityEntry entry, List<Shipment> shipments, List<BuyOrder> orders) {
+        if (entry.isShipment && entry.dataIndex < shipments.size()) {
+            return "S-" + shipments.get(entry.dataIndex).getStatus().name();
+        }
+        if (!entry.isShipment && entry.dataIndex < orders.size()) {
+            return "O-" + orders.get(entry.dataIndex).getStatus().name();
+        }
+        return "";
     }
 
     private void renderIncomeBg(PoseStack ps, int x, int y) {
@@ -1089,10 +1129,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             this.font.draw(poseStack, scrollInfo, 358 - scrollW, 36, 0x666666);
         }
 
-        // Column headers
-        this.font.draw(poseStack, "Type", 8, 48, 0xFFD700);
-        this.font.draw(poseStack, "Details", 40, 48, 0xFFD700);
-        this.font.draw(poseStack, "Status", 260, 48, 0xFFD700);
+        // Column headers (clickable for sorting)
+        this.font.draw(poseStack, sortLabel("Type", activitySort == ActivitySort.TYPE, activitySortAscending), 8, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Details", activitySort == ActivitySort.DETAILS, activitySortAscending), 40, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Status", activitySort == ActivitySort.STATUS, activitySortAscending), 260, 48, 0xFFD700);
 
         int yOff = 58;
         int displayed = 0;
@@ -1705,17 +1745,25 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         long now = be.getLevel() != null ? be.getLevel().getGameTime() : 0;
-        switch (questSort) {
-            case STATUS -> indices.sort(Comparator
-                    .comparingInt((Integer i) -> quests.get(i).getStatus().ordinal())
-                    .thenComparingLong(i -> quests.get(i).getCreatedTime()).reversed());
-            case REWARD -> indices.sort(Comparator
-                    .comparingInt((Integer i) -> quests.get(i).getRewardCoins()).reversed()
-                    .thenComparingLong(i -> quests.get(i).getCreatedTime()).reversed());
-            case TIME_LEFT -> indices.sort(Comparator
-                    .comparingLong((Integer i) -> quests.get(i).getTicksRemaining(now))
-                    .thenComparingLong(i -> quests.get(i).getCreatedTime()).reversed());
-        }
+        Comparator<Integer> comparator = switch (questSort) {
+            case TYPE -> Comparator
+                .comparingInt((Integer i) -> quests.get(i).getQuestType().ordinal())
+                .thenComparing(i -> quests.get(i).getItemDisplayName(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingLong(i -> quests.get(i).getCreatedTime());
+            case ITEM -> Comparator
+                .comparing((Integer i) -> quests.get(i).getItemDisplayName(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingLong(i -> quests.get(i).getCreatedTime());
+            case QTY -> Comparator
+                .comparingInt((Integer i) -> quests.get(i).getRequiredCount())
+                .thenComparingLong(i -> quests.get(i).getCreatedTime());
+            case REWARD -> Comparator
+                .comparingInt((Integer i) -> quests.get(i).getRewardCoins())
+                .thenComparingLong(i -> quests.get(i).getCreatedTime());
+            case STATUS -> Comparator
+                .comparingInt((Integer i) -> quests.get(i).getStatus().ordinal())
+                .thenComparingLong(i -> quests.get(i).getTicksRemaining(now));
+        };
+        indices.sort(questSortAscending ? comparator : comparator.reversed());
         return indices;
     }
 
@@ -1745,12 +1793,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             this.font.draw(poseStack, scrollInfo, 358 - scrollW, 36, 0x666666);
         }
 
-        // Column headers
-        this.font.draw(poseStack, "Type", 8, 48, 0xFFD700);
-        this.font.draw(poseStack, "Item", 60, 48, 0xFFD700);
-        this.font.draw(poseStack, "Qty", 170, 48, 0xFFD700);
-        this.font.draw(poseStack, "Reward", 210, 48, 0xFFD700);
-        this.font.draw(poseStack, "Status", 290, 48, 0xFFD700);
+        // Column headers (clickable for sorting)
+        this.font.draw(poseStack, sortLabel("Type", questSort == QuestSort.TYPE, questSortAscending), 8, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Item", questSort == QuestSort.ITEM, questSortAscending), 60, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Qty", questSort == QuestSort.QTY, questSortAscending), 170, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Reward", questSort == QuestSort.REWARD, questSortAscending), 210, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Status", questSort == QuestSort.STATUS, questSortAscending), 290, 48, 0xFFD700);
 
         int yOff = 59;
         int displayed = 0;
@@ -1992,22 +2040,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             indices.add(i);
         }
 
-        long now = be.getLevel() != null ? be.getLevel().getGameTime() : 0;
-        switch (requestSort) {
-            case STATUS -> indices.sort(Comparator
-                    .comparingInt((Integer i) -> requests.get(i).getStatus().ordinal())
-                    .thenComparingLong(i -> requests.get(i).getRequestTime()).reversed());
-            case PRICE -> indices.sort(Comparator
-                    .comparingInt((Integer i) -> {
-                        DiplomatRequest r = requests.get(i);
-                        return r.getStatus() == DiplomatRequest.Status.DISCUSSING
-                                ? r.getProposedPrice() : r.getFinalCost();
-                    }).reversed()
-                    .thenComparingLong(i -> requests.get(i).getRequestTime()).reversed());
-            case TIME_LEFT -> indices.sort(Comparator
-                    .comparingLong((Integer i) -> requests.get(i).getTicksRemaining(now))
-                    .thenComparingLong(i -> requests.get(i).getRequestTime()).reversed());
-        }
+        Comparator<Integer> comparator = switch (requestSort) {
+            case ITEM -> Comparator
+                .comparing((Integer i) -> requests.get(i).getItemDisplayName(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingLong(i -> requests.get(i).getRequestTime());
+            case TOWN -> Comparator
+                .comparing((Integer i) -> {
+                TownData town = TownRegistry.getTown(requests.get(i).getTownId());
+                return town != null ? town.getDisplayName() : requests.get(i).getTownId();
+                }, String.CASE_INSENSITIVE_ORDER)
+                .thenComparingLong(i -> requests.get(i).getRequestTime());
+            case STATUS -> Comparator
+                .comparingInt((Integer i) -> requests.get(i).getStatus().ordinal())
+                .thenComparingLong(i -> requests.get(i).getRequestTime());
+        };
+        indices.sort(requestSortAscending ? comparator : comparator.reversed());
         return indices;
     }
 
@@ -2043,10 +2090,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             this.font.draw(poseStack, scrollInfo, 358 - scrollW, 36, 0x666666);
         }
 
-        // Column headers
-        this.font.draw(poseStack, "Item", 8, 48, 0xFFD700);
-        this.font.draw(poseStack, "Town", 120, 48, 0xFFD700);
-        this.font.draw(poseStack, "Status", 210, 48, 0xFFD700);
+        // Column headers (clickable for sorting)
+        this.font.draw(poseStack, sortLabel("Item", requestSort == RequestSort.ITEM, requestSortAscending), 8, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Town", requestSort == RequestSort.TOWN, requestSortAscending), 120, 48, 0xFFD700);
+        this.font.draw(poseStack, sortLabel("Status", requestSort == RequestSort.STATUS, requestSortAscending), 210, 48, 0xFFD700);
 
         int yOff = 59;
         int displayed = 0;
@@ -2691,6 +2738,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Activity tab: click to collect arrived orders or completed shipments
         // Right-click on IN_TRANSIT/AT_MARKET to show cancel confirmation
+        if (currentTab == Tab.ACTIVITY && button == 0) {
+            double relX = mouseX - x;
+            double relY = mouseY - y;
+            if (relY >= 46 && relY <= 56 && relX >= 5 && relX <= 361) {
+                if (relX < 40) {
+                    toggleActivitySort(ActivitySort.TYPE);
+                } else if (relX < 260) {
+                    toggleActivitySort(ActivitySort.DETAILS);
+                } else {
+                    toggleActivitySort(ActivitySort.STATUS);
+                }
+                return true;
+            }
+        }
+
         if (currentTab == Tab.ACTIVITY && hoveredActivityRow >= 0) {
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null && hoveredActivityRow < VISIBLE_ACTIVITY) {
@@ -2769,6 +2831,25 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Quests tab: click to accept or deliver quests
+        if (currentTab == Tab.QUESTS && button == 0) {
+            double relX = mouseX - x;
+            double relY = mouseY - y;
+            if (relY >= 46 && relY <= 56 && relX >= 5 && relX <= 361) {
+                if (relX < 60) {
+                    toggleQuestSort(QuestSort.TYPE);
+                } else if (relX < 170) {
+                    toggleQuestSort(QuestSort.ITEM);
+                } else if (relX < 210) {
+                    toggleQuestSort(QuestSort.QTY);
+                } else if (relX < 290) {
+                    toggleQuestSort(QuestSort.REWARD);
+                } else {
+                    toggleQuestSort(QuestSort.STATUS);
+                }
+                return true;
+            }
+        }
+
         if (currentTab == Tab.QUESTS && hoveredQuestRow >= 0) {
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null) {
@@ -2792,6 +2873,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Diplomat tab: click to collect arrived requests OR accept/decline proposals
+        if (currentTab == Tab.DIPLOMAT && !creatingRequest && button == 0) {
+            double relX = mouseX - x;
+            double relY = mouseY - y;
+            if (relY >= 46 && relY <= 56 && relX >= 5 && relX <= 361) {
+                if (relX < 120) {
+                    toggleRequestSort(RequestSort.ITEM);
+                } else if (relX < 210) {
+                    toggleRequestSort(RequestSort.TOWN);
+                } else {
+                    toggleRequestSort(RequestSort.STATUS);
+                }
+                return true;
+            }
+        }
+
         if (currentTab == Tab.DIPLOMAT && hoveredDiplomatRow >= 0) {
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null) {
