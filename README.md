@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.1.4-blue" alt="Version 0.1.4">
+  <img src="https://img.shields.io/badge/Version-0.2.6-blue" alt="Version 0.2.6">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -41,20 +41,19 @@ Wall-mounted board to view:
 
 ### Town System
 
-Trade with 10+ unique towns, each with their own personality:
+Trade with 9 unique towns, each with their own personality:
 
-| Town | Type | Specialty |
-|------|------|-----------|
-| **Greenhollow Village** | Farming Village | Agricultural products, livestock |
-| **Irondeep Settlement** | Mining Village | Ores, metals, mining supplies |
-| **Mistwood Village** | Forest Village | Lumber, forestry products |
-| **Stonehaven** | Mountain Town | Stone, building materials |
-| **Silverbrook** | River Town | Fish, aquatic goods |
-| **Goldcrest City** | Capital City | Luxury goods, rare items |
-| **Redforge** | Industrial Town | Smithed goods, tools |
-| **Moonvale** | Mystical Town | Enchanting supplies, magic items |
-| **Sandport** | Coastal Town | Trade goods, exotic items |
-| **Frostholm** | Northern Outpost | Cold weather supplies |
+| Town | Type | Specialty | Min. Level |
+|------|------|-----------|------------|
+| **Greenhollow Village** | Village | Farming, crops, produce | 1 |
+| **Irondeep Settlement** | Village | Ores, metals, mining supplies | 1 |
+| **Peenam Animal Market** | Village | Livestock, animal trade slips | 1 |
+| **Saltmere Harbor** | Town | Fish, coastal goods | 1 |
+| **Timberwatch** | Town | Lumber, wood products | 2 |
+| **Crossroads Market** | Market | General trade, diverse goods | 2 |
+| **Basaltkeep Fortress** | City | Weapons, armor, construction | 3 |
+| **Arcaneveil Spire** | City | Enchanting supplies, magic items | 4 |
+| **Goldspire Capital** | City | Luxury goods, rare items, endgame trade | 5 |
 
 ### Dynamic Mod Compatibility
 
@@ -229,13 +228,13 @@ Works alongside other economy mods and integrates automatically with item-adding
 ## Installation
 
 1. Install Minecraft Forge 1.19.2 (version 43.x or higher)
-2. Download `offtomarket-0.1.4.jar`
+2. Download `offtomarket-0.2.6.jar`
 3. Place in your `mods` folder
 4. Launch the game!
 
 ## Roadmap
 
-- [ ] Custom town creation via datapacks
+- [x] Custom town creation — data-driven JSON town system (v0.2)
 - [ ] Multiplayer trading between players
 - [ ] Trading caravans as entities
 - [ ] More mod integrations
