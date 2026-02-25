@@ -3,10 +3,12 @@ package com.offtomarket.mod.block;
 import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -58,15 +60,47 @@ public class TradingBinBlock extends BaseEntityBlock {
                 // Deposit held item into the bin before opening the GUI
                 ItemStack held = player.getItemInHand(hand);
                 if (!held.isEmpty()) {
-                    ItemStack toDeposit = held.copy();
-                    if (tbbe.addItem(toDeposit)) {
-                        player.setItemInHand(hand, ItemStack.EMPTY);
+                    int inserted = tbbe.addItemAmount(held.copy());
+                    if (inserted > 0) {
+                        held.shrink(inserted);
+                        if (held.isEmpty()) {
+                            player.setItemInHand(hand, ItemStack.EMPTY);
+                        }
                     }
                 }
+
+                // Pull from touching containers into bin inventory.
+                pullFromAdjacentContainers(level, pos, tbbe);
+
                 NetworkHooks.openScreen((ServerPlayer) player, tbbe, pos);
             }
         }
         return InteractionResult.sidedSuccess(level.isClientSide());
+    }
+
+    private static void pullFromAdjacentContainers(Level level, BlockPos pos, TradingBinBlockEntity bin) {
+        for (Direction dir : Direction.values()) {
+            BlockPos adjPos = pos.relative(dir);
+            BlockEntity adjBe = level.getBlockEntity(adjPos);
+            if (!(adjBe instanceof Container container)) continue;
+            if (adjBe instanceof TradingBinBlockEntity) continue;
+
+            for (int i = 0; i < container.getContainerSize(); i++) {
+                ItemStack stack = container.getItem(i);
+                if (stack.isEmpty()) continue;
+
+                int inserted = bin.addItemAmount(stack.copy());
+                if (inserted <= 0) continue;
+
+                stack.shrink(inserted);
+                if (stack.isEmpty()) {
+                    container.setItem(i, ItemStack.EMPTY);
+                } else {
+                    container.setItem(i, stack);
+                }
+            }
+            container.setChanged();
+        }
     }
 
     @Override

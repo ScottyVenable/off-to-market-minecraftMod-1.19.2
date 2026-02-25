@@ -1,5 +1,39 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.4.0 — Trading Bin Capacity, Fees, and Caravan Weight
+
+### Universal Fees & Pricing
+- **Unified Fees Application** — Trading tax, markup, and item modifiers now run through one universal effective-price pipeline for bin list display, price preview, and shipment dispatch.
+- **Fees Tab Price Updating Fixed** — Changing values in Fees now immediately affects displayed final pricing behavior and total payout calculations.
+
+### Bin Storage & Scrolling
+- **Expanded Bin Capacity** — Trading Bin storage increased from 9 slots to **200 slots**.
+- **Larger Slot Stack Cap** — Bin slots now support up to **200 items per slot**.
+- **Scrollable Item List** — Bin item area now supports mouse-wheel scrolling with up/down indicators for large inventories.
+
+### Payout Visibility
+- **Live Total Proposed Payout** — Added a running payout total for the entire bin that updates as prices, fees, and modifiers change.
+
+### Deposit & Adjacent Container Support
+- **Tool Deposit Support** — Right-click deposit now uses partial insertion logic and no longer fails hard on non-full insertion cases.
+- **Touching Container Aggregation** — Any container touching the Trading Bin is scanned and its contents are pulled into bin inventory when the bin is used.
+
+### Caravan Weight System
+- **Weight Capacity Cap** — Added a caravan weight limit for the bin based on item weight.
+- **Upgradeable Capacity** — Added caravan weight upgrades (purchased with coins) from the Fees tab.
+- **Weight HUD** — Added current/maximum caravan weight display in the bin UI.
+
+### Network & Backend
+- **New Packet** — Added `UpgradeCaravanWeightPacket` and registered it in `ModNetwork`.
+- **Shipment Pricing Sync** — Trading Post shipment creation now uses the Trading Bin effective price calculation.
+
+## Version 0.3.1 — Trading Post UX Checkpoint
+
+- Added Activity/Quests/Requests sorting controls.
+- Added Activity row details-on-click behavior.
+- Added dedicated Income tab with economy and worker wage visibility.
+- Added request flow/status polish, quantity entry, and UI debug bounds toggle.
+
 ## Version 0.2.5 — Trading Bin Overhaul & Market Improvements
 
 ### Trading Bin Complete Redesign

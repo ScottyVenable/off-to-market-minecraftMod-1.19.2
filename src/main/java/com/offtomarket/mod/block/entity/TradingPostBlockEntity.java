@@ -466,9 +466,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
             ItemStack stack = bin.getItem(i);
             if (!stack.isEmpty() && stack.getItem() != net.minecraft.world.item.Items.AIR) {
-                int basePrice = PriceCalculator.getBaseValue(stack);
-                int price = bin.getSetPrice(i);
-                if (price <= 0) price = basePrice; // default to base price
+                int price = bin.getEffectivePriceForSlot(i);
+                if (price <= 0) price = PriceCalculator.getBaseValue(stack);
 
                 shipmentItems.add(new Shipment.ShipmentItem(
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem()),

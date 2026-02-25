@@ -7,6 +7,7 @@ import com.offtomarket.mod.data.PriceCalculator;
 import com.offtomarket.mod.menu.TradingBinMenu;
 import com.offtomarket.mod.network.ModNetwork;
 import com.offtomarket.mod.network.SetPricePacket;
+import com.offtomarket.mod.network.UpgradeCaravanWeightPacket;
 import com.offtomarket.mod.network.UpdateBinSettingsPacket;
 import com.offtomarket.mod.network.WithdrawBinItemPacket;
 import net.minecraft.client.gui.components.Button;
@@ -45,6 +46,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     private int selectedSlot = -1;
     private ItemStack lastSelectedItem = ItemStack.EMPTY;
     private final List<Integer> filteredSlots = new ArrayList<>();
+    private int listScrollOffset = 0;
 
     // ---- List layout ----
     private static final int LIST_LEFT = 6;
@@ -58,6 +60,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
     private EditBox markupInput;
     private Button autoPriceModeButton;
     private Button applySettingsBtn;
+    private Button upgradeCaravanBtn;
     /** Checkbox pixel size for modifier toggles. */
     private static final int CB_SIZE = 8;
 
@@ -160,6 +163,15 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         applySettingsBtn = addRenderableWidget(new Button(x + 294, y + 64, 80, 14,
                 Component.literal("Apply"), btn -> sendSettingsToServer()));
 
+        upgradeCaravanBtn = addRenderableWidget(new Button(x + 184, y + 147, 190, 14,
+            Component.literal("Upgrade Caravan"), btn -> {
+            TradingBinBlockEntity blockEntity = menu.getBlockEntity();
+            if (blockEntity != null) {
+            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                new UpgradeCaravanWeightPacket(blockEntity.getBlockPos()));
+            }
+        }));
+
         updateFilteredSlots();
         updateTabVisibility();
     }
@@ -181,6 +193,8 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                 }
             }
         }
+        int maxScroll = Math.max(0, filteredSlots.size() - MAX_VISIBLE);
+        listScrollOffset = Math.max(0, Math.min(listScrollOffset, maxScroll));
     }
 
     /** Get the currently selected item for pricing. */
@@ -213,6 +227,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         markupInput.visible = configActive;
         autoPriceModeButton.visible = configActive;
         applySettingsBtn.visible = configActive;
+        upgradeCaravanBtn.visible = configActive;
     }
 
     /** Send current fee/modifier settings to the server. */
@@ -308,8 +323,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             int listX = x + LIST_LEFT;
             int listY = y + LIST_TOP;
 
-            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
-                int slot = filteredSlots.get(i);
+            int visibleCount = Math.min(MAX_VISIBLE, Math.max(0, filteredSlots.size() - listScrollOffset));
+            for (int i = 0; i < visibleCount; i++) {
+                int slot = filteredSlots.get(listScrollOffset + i);
                 ItemStack stack = be.getItem(slot);
                 if (stack.isEmpty()) continue;
 
@@ -342,11 +358,23 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
                         isSelected ? 0xFFD700 : 0xCCCCCC);
 
                 // Price (right-aligned, using CoinRenderer)
-                int price = be.getSetPrice(slot);
+                int price = be.getEffectivePriceForSlot(slot);
                 if (price <= 0) price = PriceCalculator.getBaseValue(stack);
                 int priceW = CoinRenderer.getCompactCoinValueWidth(this.font, price);
                 CoinRenderer.renderCompactCoinValue(poseStack, this.font,
                         listX + LIST_WIDTH - priceW - 2, rowY + 3, price);
+            }
+
+            // Scroll indicators
+            int maxScroll = Math.max(0, filteredSlots.size() - MAX_VISIBLE);
+            if (maxScroll > 0) {
+                if (listScrollOffset > 0) {
+                    this.font.draw(poseStack, "\u25B2", listX + LIST_WIDTH - 8, listY - 10, 0x999999);
+                }
+                if (listScrollOffset < maxScroll) {
+                    this.font.draw(poseStack, "\u25BC", listX + LIST_WIDTH - 8,
+                            listY + MAX_VISIBLE * ROW_HEIGHT + 1, 0x999999);
+                }
             }
 
             // Empty state message
@@ -391,6 +419,17 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         this.font.draw(poseStack, "\u00A77" + filteredSlots.size() + "/" +
                 TradingBinBlockEntity.BIN_SIZE, 130, 6, 0x888888);
 
+        TradingBinBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            String payout = "Payout: " + formatCoinText(be.getTotalProposedPayout());
+            this.font.draw(poseStack, payout, 8, 154, 0xCCAA66);
+
+            int currentWeight = be.getCurrentCaravanWeight();
+            int capacity = be.getCaravanWeightCapacity();
+            int weightColor = currentWeight >= capacity ? 0xFF5555 : 0x88CC88;
+            this.font.draw(poseStack, "Wt " + currentWeight + "/" + capacity, 112, 154, weightColor);
+        }
+
         if (activeTab == 1) {
             renderConfigLabels(poseStack);
         } else {
@@ -411,6 +450,11 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
 
         TradingBinBlockEntity cbe = menu.getBlockEntity();
         if (cbe == null) return;
+
+        if (upgradeCaravanBtn != null) {
+            upgradeCaravanBtn.setMessage(Component.literal(
+                "Upgrade Caravan (" + formatCoinText(cbe.getNextCaravanUpgradeCost()) + ")"));
+        }
 
         // Modifier section header with item context
         ItemStack inspectStack = getSelectedItem();
@@ -461,7 +505,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         // Summary: price breakdown for selected item
         if (hasItem) {
             int baseValue = PriceCalculator.getBaseValue(inspectStack);
-            int modifiedPrice = cbe.applyPriceModifiers(inspectStack, baseValue);
+            int modifiedPrice = cbe.getEffectivePrice(inspectStack, baseValue);
             int maxPrice = PriceCalculator.getMaxPrice(inspectStack);
             String est = TradingBinBlockEntity.getEstimatedMarketTime(
                     modifiedPrice, baseValue, maxPrice);
@@ -473,6 +517,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             this.font.draw(poseStack, "Select an item to", 184, 142, 0x666666);
             this.font.draw(poseStack, "preview modifiers.", 184, 153, 0x666666);
         }
+
+        this.font.draw(poseStack, "Caravan Weight: " + cbe.getCurrentCaravanWeight() +
+                " / " + cbe.getCaravanWeightCapacity(), 184, 136, 0x88CC88);
     }
 
     private void renderPriceBookLabels(PoseStack poseStack) {
@@ -538,9 +585,11 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }
         if (price <= 0) return;
 
+        int effectivePrice = be.getEffectivePrice(stack, price);
+
         // ---- Results: price bar (y=120+) ----
         PriceCalculator.PriceRating rating = PriceCalculator.getPriceRating(
-                price, bd.materialCost(), bd.maxPrice());
+            effectivePrice, bd.materialCost(), bd.maxPrice());
 
         int barX = 184;
         int barY = 120;
@@ -549,7 +598,7 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         fill(poseStack, barX, barY, barX + barW, barY + barH, 0xFF1A1209);
         fill(poseStack, barX + 1, barY + 1, barX + barW - 1, barY + barH - 1, 0xFF2A2A2A);
         if (bd.maxPrice() > 0) {
-            float ratio = Math.min(1.0f, (float) price / bd.maxPrice());
+            float ratio = Math.min(1.0f, (float) effectivePrice / bd.maxPrice());
             int fillW = Math.max(1, (int) ((barW - 2) * ratio));
             fill(poseStack, barX + 1, barY + 1, barX + 1 + fillW, barY + barH - 1,
                     rating.getColor() | 0xFF000000);
@@ -562,9 +611,10 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }
 
         this.font.draw(poseStack, rating.getLabel(), 184, 128, rating.getColor());
+        this.font.draw(poseStack, "Final: " + formatCoinText(effectivePrice), 266, 128, 0xBEA876);
 
         String est = TradingBinBlockEntity.getEstimatedMarketTime(
-                price, bd.materialCost(), bd.maxPrice());
+            effectivePrice, bd.materialCost(), bd.maxPrice());
         this.font.draw(poseStack, "Sells: " + est, 184, 140, 0x888888);
     }
 
@@ -611,8 +661,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             int listX = x + LIST_LEFT;
             int listY = y + LIST_TOP;
 
-            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
-                int slot = filteredSlots.get(i);
+            int visibleCount = Math.min(MAX_VISIBLE, Math.max(0, filteredSlots.size() - listScrollOffset));
+            for (int i = 0; i < visibleCount; i++) {
+                int slot = filteredSlots.get(listScrollOffset + i);
                 int rowY = listY + i * ROW_HEIGHT;
 
                 if (mouseX >= listX && mouseX < listX + LIST_WIDTH
@@ -635,6 +686,29 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        int x = this.leftPos;
+        int y = this.topPos;
+        int listX = x + LIST_LEFT;
+        int listY = y + LIST_TOP;
+        int listBottom = listY + MAX_VISIBLE * ROW_HEIGHT;
+
+        if (mouseX >= listX && mouseX < listX + LIST_WIDTH && mouseY >= listY && mouseY < listBottom) {
+            int maxScroll = Math.max(0, filteredSlots.size() - MAX_VISIBLE);
+            if (delta > 0 && listScrollOffset > 0) {
+                listScrollOffset--;
+                return true;
+            }
+            if (delta < 0 && listScrollOffset < maxScroll) {
+                listScrollOffset++;
+                return true;
+            }
+        }
+
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     // ==================== Keyboard Handling ====================
@@ -691,8 +765,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
             int x = this.leftPos;
             int y = this.topPos;
 
-            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
-                int slot = filteredSlots.get(i);
+            int visibleCount = Math.min(MAX_VISIBLE, Math.max(0, filteredSlots.size() - listScrollOffset));
+            for (int i = 0; i < visibleCount; i++) {
+                int slot = filteredSlots.get(listScrollOffset + i);
                 ItemStack stack = be.getItem(slot);
                 if (stack.isEmpty()) continue;
 
@@ -722,8 +797,9 @@ public class TradingBinScreen extends AbstractContainerScreen<TradingBinMenu> {
         // Tooltip handling: list item hover takes priority
         boolean showedListTooltip = false;
         if (be != null) {
-            for (int i = 0; i < filteredSlots.size() && i < MAX_VISIBLE; i++) {
-                int slot = filteredSlots.get(i);
+            int visibleCount = Math.min(MAX_VISIBLE, Math.max(0, filteredSlots.size() - listScrollOffset));
+            for (int i = 0; i < visibleCount; i++) {
+                int slot = filteredSlots.get(listScrollOffset + i);
                 int rowY = this.topPos + LIST_TOP + i * ROW_HEIGHT;
 
                 if (mouseX >= this.leftPos + LIST_LEFT

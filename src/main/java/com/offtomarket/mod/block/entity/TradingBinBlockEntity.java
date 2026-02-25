@@ -34,7 +34,10 @@ import java.util.Map;
  * 9 slots for items, plus the note appears in slot 0 after pickup.
  */
 public class TradingBinBlockEntity extends BlockEntity implements Container, MenuProvider {
-    public static final int BIN_SIZE = 9;
+    public static final int BIN_SIZE = 200;
+    public static final int MAX_STACK_PER_SLOT = 200;
+    public static final int BASE_CARAVAN_WEIGHT_CAPACITY = 800;
+    public static final int CARAVAN_WEIGHT_PER_UPGRADE = 200;
     /** @deprecated Inspection slot removed — pricing now done via list selection. */
     @Deprecated public static final int INSPECT_SLOT = -1;
     public static final int TOTAL_SIZE = BIN_SIZE;
@@ -88,6 +91,8 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     private boolean rareMarkupEnabled = true;
     /** Percent markup for rare+ rarity items (default 30%). */
     private int rareMarkupPercent = 30;
+    /** Caravan weight upgrade level purchased from Fees tab. */
+    private int caravanWeightUpgradeLevel = 0;
 
     public TradingBinBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.TRADING_BIN.get(), pos, state);
@@ -176,6 +181,47 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     public void setRareMarkupEnabled(boolean enabled) { this.rareMarkupEnabled = enabled; syncToClient(); }
     public int getRareMarkupPercent() { return rareMarkupPercent; }
     public void setRareMarkupPercent(int percent) { this.rareMarkupPercent = Math.max(0, Math.min(200, percent)); syncToClient(); }
+    public int getCaravanWeightUpgradeLevel() { return caravanWeightUpgradeLevel; }
+
+    public int getCaravanWeightCapacity() {
+        return BASE_CARAVAN_WEIGHT_CAPACITY + caravanWeightUpgradeLevel * CARAVAN_WEIGHT_PER_UPGRADE;
+    }
+
+    public int getNextCaravanUpgradeCost() {
+        return 250 + (caravanWeightUpgradeLevel * 175);
+    }
+
+    public int getCurrentCaravanWeight() {
+        int weight = 0;
+        for (int i = 0; i < BIN_SIZE; i++) {
+            ItemStack stack = items.get(i);
+            if (!stack.isEmpty()) {
+                weight += stack.getCount() * getItemWeightPerUnit(stack);
+            }
+        }
+        return weight;
+    }
+
+    public int getRemainingCaravanWeight() {
+        return Math.max(0, getCaravanWeightCapacity() - getCurrentCaravanWeight());
+    }
+
+    public static int getItemWeightPerUnit(ItemStack stack) {
+        if (stack.isEmpty()) return 1;
+        int base = PriceCalculator.getBaseValue(stack);
+        return Math.max(1, base / 50);
+    }
+
+    public boolean upgradeCaravanWeight(Player player) {
+        int cost = getNextCaravanUpgradeCost();
+        if (!TradingPostBlockEntity.hasEnoughCoins(player, cost)) {
+            return false;
+        }
+        TradingPostBlockEntity.deductCoins(player, cost);
+        caravanWeightUpgradeLevel++;
+        syncToClient();
+        return true;
+    }
 
     // ==================== Modifier Validation ====================
 
@@ -250,6 +296,44 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     }
 
     /**
+     * Price currently configured in the slot (0 means default/fair value).
+     */
+    public int getRawPriceForSlot(int slot) {
+        return slotPrices.getOrDefault(slot, 0);
+    }
+
+    /**
+     * Universal final pricing pipeline used by list display and shipment dispatch.
+     */
+    public int getEffectivePrice(ItemStack stack, int rawPrice) {
+        if (stack.isEmpty()) return 0;
+        int base = rawPrice > 0 ? rawPrice : PriceCalculator.getBaseValue(stack);
+        if (base <= 0) base = 1;
+
+        int modifiedValue = applyPriceModifiers(stack, base);
+        int tax = (int) (modifiedValue * (craftingTaxPercent / 100.0));
+        int subtotal = modifiedValue + tax;
+        int markup = (int) (subtotal * (minMarkupPercent / 100.0));
+        return Math.max(1, subtotal + markup);
+    }
+
+    public int getEffectivePriceForSlot(int slot) {
+        ItemStack stack = getItem(slot);
+        if (stack.isEmpty()) return 0;
+        return getEffectivePrice(stack, getRawPriceForSlot(slot));
+    }
+
+    public int getTotalProposedPayout() {
+        long total = 0;
+        for (int i = 0; i < BIN_SIZE; i++) {
+            ItemStack stack = getItem(i);
+            if (stack.isEmpty()) continue;
+            total += (long) getEffectivePriceForSlot(i) * stack.getCount();
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
+    }
+
+    /**
      * Get the estimated market time label for a given price.
      * Based on how the price compares to fair value.
      */
@@ -306,18 +390,70 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
     }
 
     /**
-     * Add an item to the first available slot (used for returned items).
+     * Add as many items as possible into the bin, respecting stack and caravan weight caps.
+     * @return amount inserted
+     */
+    public int addItemAmount(ItemStack stack) {
+        if (stack.isEmpty() || stack.getItem() == net.minecraft.world.item.Items.AIR) return 0;
+
+        int weightPerUnit = getItemWeightPerUnit(stack);
+        int maxByWeight = getRemainingCaravanWeight() / weightPerUnit;
+        if (maxByWeight <= 0) return 0;
+
+        int toInsert = Math.min(stack.getCount(), maxByWeight);
+        int inserted = 0;
+
+        // 1) Merge into existing compatible stacks
+        for (int i = 0; i < BIN_SIZE && inserted < toInsert; i++) {
+            ItemStack existing = items.get(i);
+            if (existing.isEmpty()) continue;
+            if (!ItemStack.isSameItemSameTags(existing, stack)) continue;
+
+            int room = Math.max(0, MAX_STACK_PER_SLOT - existing.getCount());
+            if (room <= 0) continue;
+
+            int add = Math.min(room, toInsert - inserted);
+            existing.grow(add);
+            inserted += add;
+        }
+
+        // 2) Fill empty slots
+        for (int i = 0; i < BIN_SIZE && inserted < toInsert; i++) {
+            ItemStack existing = items.get(i);
+            if (!existing.isEmpty()) continue;
+
+            int add = Math.min(MAX_STACK_PER_SLOT, toInsert - inserted);
+            ItemStack placed = stack.copy();
+            placed.setCount(add);
+            items.set(i, placed);
+
+            // Auto-apply / remember default pricing on newly created slot
+            if (getSetPrice(i) <= 0) {
+                int autoPrice = computeAutoPrice(placed);
+                if (autoPrice > 0) {
+                    slotPrices.put(i, autoPrice);
+                } else {
+                    int remembered = getRememberedPrice(placed);
+                    if (remembered > 0) {
+                        slotPrices.put(i, remembered);
+                    }
+                }
+            }
+            inserted += add;
+        }
+
+        if (inserted > 0) {
+            setChanged();
+            syncToClient();
+        }
+        return inserted;
+    }
+
+    /**
+     * Add an item stack and return true only if the entire stack was inserted.
      */
     public boolean addItem(ItemStack stack) {
-        if (stack.isEmpty() || stack.getItem() == net.minecraft.world.item.Items.AIR) return false;
-        for (int i = 0; i < BIN_SIZE; i++) {
-            if (items.get(i).isEmpty()) {
-                items.set(i, stack);
-                setChanged();
-                return true;
-            }
-        }
-        return false;
+        return addItemAmount(stack) >= stack.getCount();
     }
 
     public NonNullList<ItemStack> getItems() {
@@ -392,6 +528,11 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
             }
         }
         setChanged();
+    }
+
+    @Override
+    public int getMaxStackSize() {
+        return MAX_STACK_PER_SLOT;
     }
 
     /**
@@ -505,6 +646,7 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         tag.putInt("DamagedDiscountPercent", damagedDiscountPercent);
         tag.putBoolean("RareMarkupEnabled", rareMarkupEnabled);
         tag.putInt("RareMarkupPercent", rareMarkupPercent);
+        tag.putInt("CaravanWeightUpgradeLevel", caravanWeightUpgradeLevel);
 
     }
 
@@ -544,6 +686,7 @@ public class TradingBinBlockEntity extends BlockEntity implements Container, Men
         damagedDiscountPercent = tag.contains("DamagedDiscountPercent") ? tag.getInt("DamagedDiscountPercent") : 40;
         rareMarkupEnabled = !tag.contains("RareMarkupEnabled") || tag.getBoolean("RareMarkupEnabled");
         rareMarkupPercent = tag.contains("RareMarkupPercent") ? tag.getInt("RareMarkupPercent") : 30;
+        caravanWeightUpgradeLevel = Math.max(0, tag.getInt("CaravanWeightUpgradeLevel"));
 
         priceMemory.clear();
         if (tag.contains("PriceMemory")) {

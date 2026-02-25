@@ -174,5 +174,10 @@ public class ModNetwork {
                 WithdrawBinItemPacket::encode, WithdrawBinItemPacket::decode,
                 WithdrawBinItemPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, UpgradeCaravanWeightPacket.class,
+                UpgradeCaravanWeightPacket::encode, UpgradeCaravanWeightPacket::decode,
+                UpgradeCaravanWeightPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }
