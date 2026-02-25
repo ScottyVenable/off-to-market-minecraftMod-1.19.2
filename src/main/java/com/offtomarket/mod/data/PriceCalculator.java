@@ -1,5 +1,7 @@
 package com.offtomarket.mod.data;
 
+import com.offtomarket.mod.item.AnimalTradeSlipItem;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -908,6 +910,15 @@ public class PriceCalculator {
      * Get the base value of an item in copper pieces.
      */
     public static int getBaseValue(ItemStack stack) {
+        // Animal trade slips: use per-animal value stored in NBT (filled) or raw slot value (empty)
+        if (stack.getItem() instanceof AnimalTradeSlipItem) {
+            CompoundTag tag = stack.getTag();
+            if (tag != null && tag.contains(AnimalTradeSlipItem.TAG_ANIMAL_TYPE)) {
+                return AnimalTradeSlipItem.getBaseValue(tag.getString(AnimalTradeSlipItem.TAG_ANIMAL_TYPE));
+            }
+            // Unfilled slip - modest base value
+            return 40;
+        }
         return getValueTier(stack).basePrice();
     }
 

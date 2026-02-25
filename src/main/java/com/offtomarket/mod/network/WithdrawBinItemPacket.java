@@ -49,41 +49,75 @@ public class WithdrawBinItemPacket {
                         ItemStack stack = tbbe.getItem(msg.slot);
                         if (!stack.isEmpty()) {
                             ItemStack toGive = stack.copy();
-                            tbbe.setItem(msg.slot, ItemStack.EMPTY);
-                            tbbe.setChanged();
-                            boolean placed = false;
-                            if (msg.toContainer) {
-                                // Try to place into an adjacent container block entity
-                                for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
-                                    net.minecraft.world.level.block.entity.BlockEntity adj =
-                                            player.level.getBlockEntity(be.getBlockPos().relative(dir));
-                                    if (adj instanceof net.minecraft.world.Container adjCont
-                                            && !(adj instanceof TradingLedgerBlockEntity)) {
-                                        for (int i = 0; i < adjCont.getContainerSize(); i++) {
-                                            ItemStack slot2 = adjCont.getItem(i);
-                                            if (slot2.isEmpty()) {
-                                                adjCont.setItem(i, toGive);
-                                                adjCont.setChanged();
-                                                placed = true;
-                                                break;
-                                            } else if (net.minecraft.world.item.ItemStack.isSameItemSameTags(slot2, toGive)
-                                                    && slot2.getCount() < slot2.getMaxStackSize()) {
-                                                int room = slot2.getMaxStackSize() - slot2.getCount();
-                                                int take = Math.min(room, toGive.getCount());
-                                                slot2.grow(take);
-                                                toGive.shrink(take);
-                                                adjCont.setChanged();
-                                                if (toGive.isEmpty()) { placed = true; break; }
-                                            }
+                            boolean isVirtual = tbbe.isVirtualSlot(msg.slot);
+                            TradingLedgerBlockEntity.VirtualSource vs = tbbe.getVirtualSource(msg.slot);
+
+                            if (isVirtual && vs != null) {
+                                if (msg.toContainer) {
+                                    // Item already lives in an adjacent container — just stop tracking it
+                                    tbbe.removeVirtualTracking(msg.slot);
+                                } else {
+                                    // "To Inventory": remove from source container, give to player
+                                    BlockEntity srcBe = player.level.getBlockEntity(vs.sourcePos);
+                                    if (srcBe instanceof net.minecraft.world.Container srcCont) {
+                                        ItemStack srcStack = srcCont.getItem(vs.sourceSlot);
+                                        if (!srcStack.isEmpty()) {
+                                            int take = Math.min(toGive.getCount(), srcStack.getCount());
+                                            toGive = srcStack.copy();
+                                            toGive.setCount(take);
+                                            srcStack.shrink(take);
+                                            srcCont.setItem(vs.sourceSlot, srcStack.isEmpty() ? ItemStack.EMPTY : srcStack);
+                                            srcCont.setChanged();
                                         }
-                                        if (placed) break;
+                                    }
+                                    // Clear virtual ledger slot
+                                    tbbe.setItem(msg.slot, ItemStack.EMPTY);
+                                    tbbe.setChanged();
+                                    if (!player.getInventory().add(toGive)) {
+                                        player.drop(toGive, false);
                                     }
                                 }
-                            }
-                            if (!placed) {
-                                // Fall back to player inventory
-                                if (!player.getInventory().add(toGive)) {
-                                    player.drop(toGive, false);
+                            } else {
+                                // Normal (owned) slot — existing behavior
+                                tbbe.setItem(msg.slot, ItemStack.EMPTY);
+                                tbbe.setChanged();
+                                boolean placed = false;
+                                if (msg.toContainer) {
+                                    for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                                        net.minecraft.core.BlockPos adjPos = be.getBlockPos().relative(dir);
+                                        net.minecraft.world.level.block.entity.BlockEntity adj =
+                                                player.level.getBlockEntity(adjPos);
+                                        if (adj instanceof net.minecraft.world.Container adjCont
+                                                && !(adj instanceof TradingLedgerBlockEntity)) {
+                                            for (int i = 0; i < adjCont.getContainerSize(); i++) {
+                                                ItemStack slot2 = adjCont.getItem(i);
+                                                if (slot2.isEmpty()) {
+                                                    adjCont.setItem(i, toGive);
+                                                    adjCont.setChanged();
+                                                    tbbe.suppressContainerSync(adjPos,
+                                                            5 * TradingLedgerBlockEntity.SYNC_INTERVAL_TICKS);
+                                                    placed = true;
+                                                    break;
+                                                } else if (net.minecraft.world.item.ItemStack.isSameItemSameTags(slot2, toGive)
+                                                        && slot2.getCount() < slot2.getMaxStackSize()) {
+                                                    int room = slot2.getMaxStackSize() - slot2.getCount();
+                                                    int take = Math.min(room, toGive.getCount());
+                                                    slot2.grow(take);
+                                                    toGive.shrink(take);
+                                                    adjCont.setChanged();
+                                                    tbbe.suppressContainerSync(adjPos,
+                                                            5 * TradingLedgerBlockEntity.SYNC_INTERVAL_TICKS);
+                                                    if (toGive.isEmpty()) { placed = true; break; }
+                                                }
+                                            }
+                                            if (placed) break;
+                                        }
+                                    }
+                                }
+                                if (!placed) {
+                                    if (!player.getInventory().add(toGive)) {
+                                        player.drop(toGive, false);
+                                    }
                                 }
                             }
                         }

@@ -511,6 +511,30 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             demandTracker.recordSupply(town.getId(), si.getItemId().toString(), si.getCount());
         }
 
+        // For virtual (read-only) slots: remove the actual items from their source containers now
+        for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
+            if (!bin.isVirtualSlot(i)) continue;
+            TradingLedgerBlockEntity.VirtualSource vs = bin.getVirtualSource(i);
+            if (vs == null) continue;
+            ItemStack snapshot = bin.getItem(i);
+            if (snapshot.isEmpty()) continue;
+
+            BlockEntity srcBe = level.getBlockEntity(vs.sourcePos);
+            if (srcBe instanceof net.minecraft.world.Container srcCont) {
+                ItemStack srcStack = srcCont.getItem(vs.sourceSlot);
+                int takeCount = Math.min(snapshot.getCount(), srcStack.getCount());
+                srcStack.shrink(takeCount);
+                srcCont.setItem(vs.sourceSlot, srcStack.isEmpty() ? ItemStack.EMPTY : srcStack);
+                srcCont.setChanged();
+            }
+        }
+
+        // Record this shipment in the ledger history (Past Orders tab)
+        int totalShipCount = itemsToShip.stream().mapToInt(ItemStack::getCount).sum();
+        int totalShipValue = shipmentItems.stream()
+                .mapToInt(si -> si.getPricePerItem() * si.getCount()).sum();
+        bin.recordShipment(gameTime, town.getDisplayName(), totalShipCount, totalShipValue);
+
         // Clear bin after dispatch (shipment notices are now handled by mailbox notes)
         bin.clearAndLeaveNote(ItemStack.EMPTY);
 
@@ -1360,6 +1384,16 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             }
         }
         return null;
+    }
+
+    /**
+     * Returns true when there is no nearby Trading Ledger, or the ledger is empty.
+     * Used by the ContainerData to gray-out the "Send to Market" button client-side.
+     */
+    public boolean isBinEmpty() {
+        if (level == null || level.isClientSide()) return true;
+        TradingLedgerBlockEntity bin = findNearbyBin(level, worldPosition);
+        return bin == null || bin.isEmpty();
     }
 
     public void dropContents(Level level, BlockPos pos) {

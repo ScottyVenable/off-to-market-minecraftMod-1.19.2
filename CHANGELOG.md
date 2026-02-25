@@ -1,5 +1,104 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.4.6 — UI Polish, Finance Table & Economy Fixes
+
+### Bug Fix — "Send to Market" Button
+- Fixed a bug where the **"Send to Market" button remained grayed out** even when items were present in the Trading Ledger bin.
+- Root cause: `sendBtn.active` was only updated on user actions, not every tick. Added a `containerTick()` override that reads `menu.hasBinItems()` on each tick.
+
+### Blocks — Axe Tool Preference
+- All mod blocks (`trading_post`, `trading_ledger`, `market_board`, `mailbox`, `finance_table`) now correctly require and prefer an **axe** to break.
+- Added `data/minecraft/tags/blocks/mineable/axe.json` with all 5 blocks.
+- Added `.requiresCorrectToolForDrops()` to all block registrations.
+
+### Animal Trade Slip Pricing
+- **Animal Trade Slip base values now reflect the animal type** instead of defaulting to 8c (TIER_COMMON).
+- `PriceCalculator.getBaseValue()` checks for `TAG_ANIMAL_TYPE` NBT and delegates to `AnimalTradeSlipItem.getBaseValue()`.
+- Unfilled slips return 40c. Filled slips return 50c (Chicken) to 2000c (Allay) based on animal.
+
+### Trading Ledger — Income Tab & Taller Window
+- Window height increased from **166px to 230px** (matches Mailbox), giving more room for bin lists and content.
+- **MAX_VISIBLE bin rows increased from 8 to 12.**
+- Added a **4th "Income" tab** that aggregates all past shipments: total revenue, total items shipped, and per-town revenue breakdown (scrollable, sorted by revenue).
+- Tabs resized to 4 × 49px to accommodate the new tab.
+- Bottom widgets (Withdraw button, Upgrade Caravan) repositioned to match new height.
+
+### Market Board — Cart Persistence
+- **Shopping cart is no longer lost when closing the Market Board.** Cart is saved to a static per-`BlockPos` map on `onClose()` and restored in `init()`, persisting across GUI close/reopen within the same session.
+- Cart is cleared after a successful Checkout, as expected.
+
+### Market Board — UI Overhaul
+- **Player inventory view removed** from the Market Board screen.
+- Freed space used for more listings: **VISIBLE_LISTINGS increased from 8 to 14**, cart rows from 7 to 13.
+- **Coin Balance strip** added at the bottom of the screen (shows inventory coins + coin bags + nearby Finance Tables).
+- Checkout and scroll buttons repositioned to match the extended listing area.
+
+### New Block — Finance Table
+- Added the **Finance Table** block: a 27-slot coin storage vault (3 rows × 9 columns).
+- Coins dropped on block break; shift-click transfers between table and inventory.
+- `FinanceTableBlockEntity.getTotalCoinValue()` sums all stored CoinItem stacks.
+- The Market Board **coin balance strip** scans nearby Finance Tables (within 16 blocks) and includes their stored value.
+- Mineable with an axe; drops stored contents when broken.
+
+### Trading Post — List Expansion & UI Cleanup
+- All scrollable lists in the Trading Post now use the full **230px window height**.
+- **Activity tab**: visible rows increased from 7 to **13** (12px rows); detail bar repositioned to bottom of list area.
+- **Quests tab**: visible rows increased from 6 to **11** (14px rows).
+- **Requests tab**: visible rows increased from 6 to **11** (14px rows).
+- **Towns tab**: visible town list rows increased from 8 to **15**; left/right panels and center spine extended to fill height.
+- **Workers tab**: left list panel and right detail panel extended to 186px; Hire/Dismiss buttons repositioned to bottom of panel.
+
+---
+
+## Version 0.4.5 — Virtual Container Sync & Past Orders History
+
+### Trading Ledger — Virtual Container Reading
+- **Adjacent containers are now read virtually** — items in chests/barrels next to the Trading Ledger appear in the ledger bin as snapshots; they are not physically moved until shipped.
+- `slotToVirtualSource` tracks each virtual slot back to its source container and slot index.
+- NBT syncs a `VirtualSlots` int array to the client for correct display.
+- Context menu shows **"Remove from Ledger"** instead of "To Container" for virtual items (the item stays in its source container).
+- "To Inventory" on a virtual item withdraws it from the source container directly.
+- Re-pull suppression (`suppressContainerSync`) prevents an item just moved to a container from immediately re-appearing as a virtual snapshot.
+
+### Trading Ledger — Past Orders Tab
+- **New "History" tab** (third tab, 68px wide) on the Trading Ledger screen.
+- Each completed shipment records: destination town, total items shipped, total coin value, and game timestamp.
+- Up to **20 past orders** are retained and persisted in NBT.
+- History list is scrollable (mouse-wheel + scroll arrows) with time-ago display (< 1 min / N min / N hr / N days).
+- Column headers: Town | Items | Value | When.
+
+### Trading Post — Send to Market
+- `sendItemsToMarket()` now drains source containers for all virtual slots before clearing the ledger.
+- Calls `recordShipment()` on the ledger block entity to log each completed shipment.
+
+---
+
+## Version 0.4.4 — UI Overhaul & Economy Polish
+
+### Trading Post — Inventory Removed
+- **Player inventory no longer shown** in the Trading Post screen; the GUI uses the full 193px content height for trade content.
+- Overview panel expanded to show more at-a-glance info.
+
+### Trading Post — Economy Tab
+- **Vertical income tables** — Best Towns and Top Items each use the full panel width in a stacked layout.
+- **g/s/c text labels** instead of coin icons for all coin values (e.g. `1g 2s 3c`).
+
+### Trading Post — Towns Tab
+- **Right panel is now fully scrollable** — Description text word-wraps and scrolls; specialty items, needs, and surplus entries are all accessible via mouse-wheel.
+- **Expanded panels** — Both left and right panels extended to 158px height with improved separator spacing.
+- Scroll arrows appear when content overflows the visible area.
+
+### Trading Ledger — Fees Tab
+- **Modifier text no longer clips** into the Upgrade Caravan button; layout tightened with better separator and text positions.
+
+### Trading Ledger — Context Menu
+- **Hover highlight** on "To Inventory" / "To Container" rows: background tint + gold text on hover.
+
+### Send to Market
+- **Send to Market button grays out** when the connected Trading Ledger is empty or no Ledger is nearby.
+
+---
+
 ## Version 0.4.3 — Trading Bin Renamed to Trading Ledger
 
 ### Block Rename

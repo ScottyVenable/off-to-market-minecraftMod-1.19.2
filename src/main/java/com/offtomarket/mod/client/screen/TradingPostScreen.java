@@ -48,7 +48,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private static final int[] TAB_X = {8, 61, 114, 167, 220, 273, 326};
 
     private static final int CONTENT_TOP = 32;
-    private static final int CONTENT_H = 112;
 
     // ==================== State ====================
 
@@ -59,9 +58,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private int townListScroll = 0;    // scroll offset for town list (left page)
     private int questScrollOffset = 0;
     private int diplomatScrollOffset = 0;
-    private static final int VISIBLE_ACTIVITY = 7;
-    private static final int VISIBLE_QUESTS = 6;
-    private static final int VISIBLE_DIPLOMAT = 6;
+    private static final int VISIBLE_ACTIVITY = 13;
+    private static final int VISIBLE_QUESTS = 11;
+    private static final int VISIBLE_DIPLOMAT = 11;
     private static final int VISIBLE_INCOME_ROWS = 6; // rows in each income column
 
     // Income tab scroll
@@ -220,7 +219,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (activityScrollOffset > 0) activityScrollOffset--;
         }));
 
-        activityScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
+        activityScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 213, 14, 14,
                 Component.literal("\u25BC"), btn -> activityScrollOffset++));
 
         activitySortBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
@@ -237,7 +236,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (questScrollOffset > 0) questScrollOffset--;
         }));
 
-        questScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
+        questScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 209, 14, 14,
                 Component.literal("\u25BC"), btn -> questScrollOffset++));
 
         questSortBtn = addRenderableWidget(new Button(x + 303, y + 33, 60, 12,
@@ -247,7 +246,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // ==== Workers tab buttons ====
 
-        hireNegotiatorBtn = addRenderableWidget(new Button(x + 156, y + 128, 110, 14,
+        hireNegotiatorBtn = addRenderableWidget(new Button(x + 156, y + 208, 110, 14,
                 Component.literal("Hire Negotiator"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -257,7 +256,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        hireCartBtn = addRenderableWidget(new Button(x + 156, y + 128, 110, 14,
+        hireCartBtn = addRenderableWidget(new Button(x + 156, y + 208, 110, 14,
                 Component.literal("Hire Trading Cart"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -267,7 +266,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        hireBookkeeperBtn = addRenderableWidget(new Button(x + 156, y + 128, 110, 14,
+        hireBookkeeperBtn = addRenderableWidget(new Button(x + 156, y + 208, 110, 14,
                 Component.literal("Hire Bookkeeper"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -277,7 +276,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }));
 
-        fireWorkerBtn = addRenderableWidget(new Button(x + 272, y + 128, 100, 14,
+        fireWorkerBtn = addRenderableWidget(new Button(x + 272, y + 208, 100, 14,
                 Component.literal("\u2716 Dismiss"), btn -> {
             TradingPostBlockEntity tbe = menu.getBlockEntity();
             if (tbe != null) {
@@ -296,7 +295,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (diplomatScrollOffset > 0) diplomatScrollOffset--;
         }));
 
-        diplomatScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 127, 14, 14,
+        diplomatScrollDownBtn = addRenderableWidget(new Button(x + 364, y + 209, 14, 14,
                 Component.literal("\u25BC"), btn -> diplomatScrollOffset++));
 
         requestSortBtn = addRenderableWidget(new Button(x + 236, y + 33, 60, 12,
@@ -383,6 +382,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         updateButtonVisibility();
     }
 
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        if (sendBtn != null) {
+            sendBtn.active = menu.hasBinItems();
+        }
+    }
+
     private void switchTab(Tab tab) {
         if (currentTab != tab) {
             SoundHelper.playTabSwitch();
@@ -404,6 +411,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         prevTownBtn.visible = trade;
         nextTownBtn.visible = trade;
         sendBtn.visible = trade;
+        sendBtn.active = menu.hasBinItems(); // grayed out when no items in the nearby ledger
         collectBtn.visible = trade;
 
         activityScrollUpBtn.visible = activity;
@@ -503,10 +511,6 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         OtmGuiTheme.drawInsetPanel(ps, x, y, w, h);
     }
 
-    private void drawSlot(PoseStack ps, int x, int y) {
-        OtmGuiTheme.drawSlot(ps, x, y);
-    }
-
     private String sortLabel(String label, boolean selected, boolean ascending) {
         return OtmGuiTheme.sortLabel(label, selected, ascending);
     }
@@ -561,8 +565,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Title bar
         drawInsetPanel(poseStack, x + 4, y + 3, 376, 14);
 
-        // Content area — taller on non-Trade tabs since inventory is hidden
-        int contentH = (currentTab == Tab.TRADE) ? CONTENT_H : 193;
+        // Content area — full height on all tabs (inventory removed)
+        int contentH = 193;
         drawInsetPanel(poseStack, x + 4, y + CONTENT_TOP, 376, contentH);
 
         // Tab bar
@@ -594,26 +598,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             case DIPLOMAT -> renderDiplomatBg(poseStack, x, y, mouseX, mouseY);
         }
 
-        // Divider above inventory and player inventory slots — only on Trade tab
-        if (currentTab == Tab.TRADE) {
-            fill(poseStack, x + 4, y + 145, x + 380, y + 146, 0xFF3B2E1E);
-
-            // Player inventory slot backgrounds
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 9; col++) {
-                    drawSlot(poseStack, x + 111 + col * 18, y + 148 + row * 18);
-                }
-            }
-            for (int col = 0; col < 9; col++) {
-                drawSlot(poseStack, x + 111 + col * 18, y + 206);
-            }
-        }
-
         if (DebugConfig.SHOW_UI_BOUNDS) {
             hLine(poseStack, x + 4, x + 380, y + CONTENT_TOP, 0x66FF0000);
-            hLine(poseStack, x + 4, x + 380, y + CONTENT_TOP + CONTENT_H, 0x66FF0000);
-            vLine(poseStack, x + 4, y + CONTENT_TOP, y + CONTENT_TOP + CONTENT_H, 0x6600FFFF);
-            vLine(poseStack, x + 380, y + CONTENT_TOP, y + CONTENT_TOP + CONTENT_H, 0x6600FFFF);
+            hLine(poseStack, x + 4, x + 380, y + CONTENT_TOP + 193, 0x66FF0000);
+            vLine(poseStack, x + 4, y + CONTENT_TOP, y + CONTENT_TOP + 193, 0x6600FFFF);
+            vLine(poseStack, x + 380, y + CONTENT_TOP, y + CONTENT_TOP + 193, 0x6600FFFF);
         }
     }
 
@@ -640,12 +629,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             fill(ps, barX, barY, barX + fillW, barY + 1, 0xFF77EE77);
         }
 
-        // Overview panel below buttons
-        drawInsetPanel(ps, x + 6, y + 98, 372, 44);
+        // Overview panel below buttons — expanded to fill space freed by removed inventory
+        drawInsetPanel(ps, x + 6, y + 98, 372, 124);
         // Header separator
         fill(ps, x + 12, y + 109, x + 372, y + 110, 0xFF4A3D2B);
         // Column divider
-        fill(ps, x + 194, y + 111, x + 195, y + 140, 0xFF4A3D2B);
+        fill(ps, x + 194, y + 111, x + 195, y + 218, 0xFF4A3D2B);
     }
 
     // ==================== Activity Tab (Unified Shipments + Orders) ====================
@@ -722,20 +711,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void renderIncomeBg(PoseStack ps, int x, int y) {
         // Stats strip at top
         drawInsetPanel(ps, x + 6, y + 35, 372, 20);
-        // Single unified scrollable panel covering the rest of the content area
+        // Full-height content panel
         drawInsetPanel(ps, x + 6, y + 57, 372, 165);
-        // Best Towns header separator
-        fill(ps, x + 8,   y + 68, x + 376, y + 69, OtmGuiTheme.SEPARATOR);
-        // Mid-section divider between Best Towns and Top Items
-        fill(ps, x + 8,   y + 134, x + 376, y + 135, OtmGuiTheme.SEPARATOR);
-        // Top Items header separator
-        fill(ps, x + 8,   y + 148, x + 376, y + 149, OtmGuiTheme.SEPARATOR);
+        // Best Towns section: header separator + column-header separator
+        fill(ps, x + 8, y + 68, x + 376, y + 69, OtmGuiTheme.SEPARATOR);
+        fill(ps, x + 8, y + 78, x + 376, y + 79, OtmGuiTheme.SEPARATOR);
+        // Divider between Best Towns rows and Top Items section
+        fill(ps, x + 8, y + 137, x + 376, y + 138, OtmGuiTheme.SEPARATOR);
+        // Top Items section: header separator + column-header separator
+        fill(ps, x + 8, y + 147, x + 376, y + 148, OtmGuiTheme.SEPARATOR);
+        fill(ps, x + 8, y + 157, x + 376, y + 158, OtmGuiTheme.SEPARATOR);
     }
 
     private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         // Header row background
         fill(ps, x + 5, y + 46, x + 361, y + 56, 0xFF2C2318);
-        fill(ps, x + 5, y + 129, x + 361, y + 141, 0xFF2C2318);
 
         // Activity rows with hover
         hoveredActivityRow = -1;
@@ -762,18 +752,21 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 fill(ps, x + 5, rowY, x + 361, rowY + 12, rowColor);
             }
         }
+
+        // Detail footer bar below list
+        fill(ps, x + 5, y + 213, x + 361, y + 225, 0xFF2C2318);
     }
 
     private void renderTownsBg(PoseStack ps, int x, int y) {
-        // Left page panel (dark themed)
-        drawInsetPanel(ps, x + 6, y + 35, 180, 105);
+        // Left page panel — full content height
+        drawInsetPanel(ps, x + 6,   y + 35, 180, 185);
 
         // Header underline
         fill(ps, x + 10, y + 48, x + 182, y + 49, 0xFF2A1F14);
 
         // Town list row backgrounds (selection/hover highlights)
         List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
-        int visibleTowns = 8;
+        int visibleTowns = 15;
         int rowH = 11;
         int listStartY = y + 50;
         for (int i = 0; i < visibleTowns; i++) {
@@ -791,13 +784,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Center spine
-        fill(ps, x + 186, y + 35, x + 190, y + 140, 0xFF6B5A3E);
-        // Right page detail panel (dark themed)
-        drawInsetPanel(ps, x + 190, y + 35, 188, 105);
+        fill(ps, x + 186, y + 35, x + 190, y + 220, 0xFF6B5A3E);
+        // Right page detail panel — full content height
+        drawInsetPanel(ps, x + 190, y + 35, 188, 185);
 
-        // Right page section dividers
+        // Right page section dividers (with 2px breathing room after each)
         fill(ps, x + 196, y + 57, x + 372, y + 58, 0xFFBBA878); // below name/meta
-        fill(ps, x + 196, y + 77, x + 372, y + 78, 0xFFBBA878); // below req/rep
+        fill(ps, x + 196, y + 79, x + 372, y + 80, 0xFFBBA878); // below req/rep
 
         // Reputation mini-bar background (rendered in Bg so labels draw over it)
         TradingPostBlockEntity be = menu.getBlockEntity();
@@ -808,7 +801,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (unlocked) {
                 int rep = be.getReputation(town.getId());
                 int repBarX = x + 260;
-                int repBarY = y + 70;
+                int repBarY = y + 72;
                 int repBarW = 60;
                 int repBarH = 5;
                 int maxRep = 1000;
@@ -843,7 +836,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int leftPageRight = x + 184;
             int listStartY = y + 50;
             int rowH = 11;
-            int visibleTowns = 8;
+            int visibleTowns = 15;
             List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
             int itemCount = Math.min(visibleTowns, allTowns.size() - townListScroll);
             if (mouseX >= leftPageLeft && mouseX <= leftPageRight
@@ -893,7 +886,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     private void renderWorkersBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
         // Left panel: worker list (140px wide)
-        drawInsetPanel(ps, x + 6, y + 35, 140, 106);
+        drawInsetPanel(ps, x + 6, y + 35, 140, 186);
 
         // Worker list rows (3 workers, 30px each)
         hoveredWorkerRow = -1;
@@ -928,7 +921,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Right panel: worker detail (224px wide)
-        drawInsetPanel(ps, x + 152, y + 35, 226, 106);
+        drawInsetPanel(ps, x + 152, y + 35, 226, 186);
 
         // Divider below detail header
         fill(ps, x + 156, y + 55, x + 374, y + 56, 0xFF2A1F14);
@@ -1028,10 +1021,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             case DIPLOMAT -> renderDiplomatLabels(poseStack);
         }
 
-        // Inventory label — only on Trade tab
-        if (currentTab == Tab.TRADE) {
-            this.font.draw(poseStack, this.playerInventoryTitle, 111, 138, 0x404040);
-        }
+        // No inventory label — player inventory is not displayed
     }
 
     // ==================== Trade Tab ====================
@@ -1172,7 +1162,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (selectedActivityDataIndex >= 0) {
             String detail = getSelectedActivityDetail(be);
             if (!detail.isEmpty()) {
-                this.font.draw(poseStack, "Details:", 8, 131, 0xBEA876);
+                this.font.draw(poseStack, "Details:", 8, 215, 0xBEA876);
                 String detailText = detail;
                 if (this.font.width(detailText) > 300) {
                     while (this.font.width(detailText + "..") > 300 && detailText.length() > 3) {
@@ -1180,7 +1170,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     }
                     detailText += "..";
                 }
-                this.font.draw(poseStack, detailText, 50, 131, 0xAAAAAA);
+                this.font.draw(poseStack, detailText, 50, 215, 0xAAAAAA);
             }
         }
     }
@@ -1359,7 +1349,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void renderEconomyDashboard(PoseStack ps) {
         TradingPostBlockEntity be = menu.getBlockEntity();
 
-        // ── Stats strip (y=35–55, text centered at y=39) ──────────────
+        // ── Stats strip (y=35–55) ────────────────────────────────────
         if (be == null) {
             this.font.draw(ps, "No data available.", 10, 39, OtmGuiTheme.TEXT_MUTED);
             return;
@@ -1371,31 +1361,23 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         int statsY = 39;
         this.font.draw(ps, "Earnings:", 8, statsY, OtmGuiTheme.TEXT_LABEL);
-        if (lifetime > 0) {
-            CoinRenderer.renderCoinValue(ps, this.font, 60, statsY, (int) Math.min(lifetime, Integer.MAX_VALUE));
-        } else {
-            this.font.draw(ps, "—", 60, statsY, OtmGuiTheme.TEXT_MUTED);
-        }
+        this.font.draw(ps, lifetime > 0 ? formatCoinText((int) Math.min(lifetime, Integer.MAX_VALUE)) : "\u00A78\u2014", 60, statsY, 0xFFFFFF);
         this.font.draw(ps, "Ships:", 185, statsY, OtmGuiTheme.TEXT_LABEL);
         this.font.draw(ps, String.valueOf(totalShips), 216, statsY, OtmGuiTheme.TEXT_VALUE);
         this.font.draw(ps, "Avg/Ship:", 250, statsY, OtmGuiTheme.TEXT_LABEL);
-        if (avgEarnings > 0) {
-            CoinRenderer.renderCoinValue(ps, this.font, 305, statsY, (int) Math.min(avgEarnings, Integer.MAX_VALUE));
-        } else {
-            this.font.draw(ps, "—", 305, statsY, OtmGuiTheme.TEXT_MUTED);
-        }
+        this.font.draw(ps, avgEarnings > 0 ? formatCoinText((int) Math.min(avgEarnings, Integer.MAX_VALUE)) : "\u00A78\u2014", 305, statsY, 0xFFFFFF);
 
         if (lifetime == 0) {
             this.font.draw(ps, "Send shipments to see stats here!", 10, 90, OtmGuiTheme.TEXT_MUTED);
             return;
         }
 
-        // ── Left panel: Best Towns (panels start y=57) ─────────────
-        // Section header at y=60, divider at y=68, col-headers at y=70, rows from y=81
-        this.font.draw(ps, "Best Towns", 8, 60, OtmGuiTheme.TEXT_TITLE);
-        this.font.draw(ps, "Town",  8,   70, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Total", 110, 70, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Avg",   158, 70, OtmGuiTheme.TEXT_COL_HEADER);
+        // ── Best Towns (stacked, full width, y=57–137) ───────────────
+        // Section header at y=60, separator at y=68 (bg), col headers at y=70, rows from y=81
+        this.font.draw(ps, "\u00A7lBest Towns", 8, 60, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Town",     8,   70, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Total",   220,  70, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Avg/Ship", 314, 70, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> townEarnings = be.getEarningsByTown();
         List<Map.Entry<String, Long>> sortedTowns = townEarnings.entrySet().stream()
@@ -1411,24 +1393,25 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             Map.Entry<String, Long> entry = sortedTowns.get(i);
             TownData town = TownRegistry.getTown(entry.getKey());
             String townName = OtmGuiTheme.truncate(this.font,
-                    town != null ? town.getDisplayName() : entry.getKey(), 95);
+                    town != null ? town.getDisplayName() : entry.getKey(), 200);
             this.font.draw(ps, townName, 8, rowY, OtmGuiTheme.TEXT_NAME);
-            CoinRenderer.renderCoinValue(ps, this.font, 110, rowY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
+            this.font.draw(ps, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 220, rowY, 0xFFFFFF);
             long avg = entry.getValue() / Math.max(1, countShipmentsForTown(be, entry.getKey()));
-            CoinRenderer.renderCoinValue(ps, this.font, 158, rowY, (int) Math.min(avg, Integer.MAX_VALUE));
+            this.font.draw(ps, formatCoinText((int) Math.min(avg, Integer.MAX_VALUE)), 314, rowY, 0xFFFFFF);
             rowY += 9;
         }
         if (sortedTowns.size() > VISIBLE_INCOME_ROWS) {
             String scrollInfo = (incomeTownScroll + 1) + "-"
                     + Math.min(incomeTownScroll + VISIBLE_INCOME_ROWS, sortedTowns.size())
                     + " / " + sortedTowns.size();
-            this.font.draw(ps, scrollInfo, 8, 133, OtmGuiTheme.TEXT_SCROLL);
+            this.font.draw(ps, scrollInfo, 8, 129, OtmGuiTheme.TEXT_SCROLL);
         }
 
-        // ── Right panel: Top Items ────────────────────────────────
-        this.font.draw(ps, "Top Items", 195, 60, OtmGuiTheme.TEXT_TITLE);
-        this.font.draw(ps, "Item",  195, 70, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Total", 314, 70, OtmGuiTheme.TEXT_COL_HEADER);
+        // ── Top Items (stacked, full width, y=138–222) ───────────────
+        // Section header at y=140, separator at y=147 (bg), col headers at y=150, rows from y=160
+        this.font.draw(ps, "\u00A7lTop Items", 8, 140, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Item",  8,   150, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Total", 314, 150, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> itemEarnings = be.getEarningsByItem();
         List<Map.Entry<String, Long>> sortedItems = itemEarnings.entrySet().stream()
@@ -1438,20 +1421,20 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int maxItemScroll = Math.max(0, sortedItems.size() - VISIBLE_INCOME_ROWS);
         incomeItemScroll = Math.min(incomeItemScroll, maxItemScroll);
 
-        rowY = 81;
+        rowY = 160;
         displayed = 0;
         for (int i = incomeItemScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedItems.size(); i++, displayed++) {
             Map.Entry<String, Long> entry = sortedItems.get(i);
-            String name = OtmGuiTheme.truncate(this.font, entry.getKey(), 110);
-            this.font.draw(ps, name, 195, rowY, OtmGuiTheme.TEXT_NAME);
-            CoinRenderer.renderCoinValue(ps, this.font, 314, rowY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
+            String name = OtmGuiTheme.truncate(this.font, entry.getKey(), 290);
+            this.font.draw(ps, name, 8, rowY, OtmGuiTheme.TEXT_NAME);
+            this.font.draw(ps, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 314, rowY, 0xFFFFFF);
             rowY += 9;
         }
         if (sortedItems.size() > VISIBLE_INCOME_ROWS) {
             String scrollInfo = (incomeItemScroll + 1) + "-"
                     + Math.min(incomeItemScroll + VISIBLE_INCOME_ROWS, sortedItems.size())
                     + " / " + sortedItems.size();
-            this.font.draw(ps, scrollInfo, 195, 133, OtmGuiTheme.TEXT_SCROLL);
+            this.font.draw(ps, scrollInfo, 8, 212, OtmGuiTheme.TEXT_SCROLL);
         }
     }
 
@@ -1478,7 +1461,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Clamp selections
         townViewPage = Math.min(townViewPage, allTowns.size() - 1);
-        int maxListScroll = Math.max(0, allTowns.size() - 8);
+        int maxListScroll = Math.max(0, allTowns.size() - 15);
         townListScroll = Math.min(townListScroll, maxListScroll);
 
         // ========== LEFT PAGE: Scrollable town list ==========
@@ -1495,8 +1478,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int countW = this.font.width(countStr);
         this.font.draw(poseStack, countStr, 180 - countW, 38, 0x8B7355);
 
-        // Town list entries (8 visible rows, 11px each, starting at y=50)
-        int visibleTowns = 8;
+        // Town list entries (15 visible rows, 11px each, starting at y=50)
+        int visibleTowns = 15;
         int rowH = 11;
         for (int i = 0; i < visibleTowns; i++) {
             int townIdx = townListScroll + i;
@@ -1579,60 +1562,70 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         String meta = town.getType().getDisplayName() + " \u00B7 Dist " + town.getDistance();
         this.font.draw(poseStack, meta, rightX, 48, 0x6B5A3E);
 
-        // --- Section below first divider (y=59-76): Level + Reputation ---
+        // --- Section below first divider (y=59–78): Level + Reputation ---
         // Level requirement
         String lvlReq = "Req Lvl " + town.getMinTraderLevel();
         int lvlColor = unlocked ? 0x3B7A3B : 0x8B2222;
-        this.font.draw(poseStack, lvlReq, rightX, 60, lvlColor);
+        this.font.draw(poseStack, lvlReq, rightX, 62, lvlColor);
 
         // Reputation (text + mini-bar drawn in Bg)
         if (be != null && unlocked) {
             int rep = be.getReputation(town.getId());
             String repLevel = TradingPostBlockEntity.getReputationLevel(rep);
             int repColor = TradingPostBlockEntity.getReputationColor(rep);
-            this.font.draw(poseStack, "\u2605 " + repLevel, rightX, 70, repColor);
+            this.font.draw(poseStack, "\u2605 " + repLevel, rightX, 72, repColor);
             // Rep number next to the bar
-            this.font.draw(poseStack, String.valueOf(rep), 324, 70, 0x8B7355);
+            this.font.draw(poseStack, String.valueOf(rep), 324, 72, 0x8B7355);
         }
 
-        // --- Section below second divider (y=79+): Description + Specialty + Needs ---
-        int sectionY = 80;
+        // --- Scrollable section below second divider (y=83+) ---
+        // Collect all content into lines list for unified scrolling
+        List<String> lines = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
 
-        // Description (2 lines max, tight 9px spacing)
-        List<FormattedCharSequence> descLines = this.font.split(
-                Component.literal(town.getDescription()), 175);
-        int descLinesShown = Math.min(descLines.size(), 2);
-        for (int i = 0; i < descLinesShown; i++) {
-            this.font.draw(poseStack, descLines.get(i), rightX, sectionY + i * 9, 0x5C4A32);
+        // Description — word-wrap to fit available width
+        String desc = town.getDescription();
+        String[] words = desc.split(" ");
+        StringBuilder currentLine = new StringBuilder();
+        for (String word : words) {
+            String test = currentLine.length() == 0 ? word : currentLine + " " + word;
+            if (this.font.width(test) > 170) {
+                if (currentLine.length() > 0) {
+                    lines.add(currentLine.toString());
+                    colors.add(0x5C4A32);
+                }
+                currentLine = new StringBuilder(word);
+            } else {
+                currentLine = new StringBuilder(test);
+            }
         }
-        sectionY += descLinesShown * 9 + 1;
+        if (currentLine.length() > 0) {
+            lines.add(currentLine.toString());
+            colors.add(0x5C4A32);
+        }
 
         // Specialty items (gold-highlighted)
         if (!town.getSpecialtyItems().isEmpty()) {
+            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
             StringBuilder specStr = new StringBuilder("\u2726 ");
             boolean first = true;
-            for (ResourceLocation rl : town.getSpecialtyItems()) {
-                Item item = ForgeRegistries.ITEMS.getValue(rl);
-                if (item == null) continue;
-                String iname = new ItemStack(item).getHoverName().getString();
+            for (ResourceLocation specRl : town.getSpecialtyItems()) {
+                Item specItem = ForgeRegistries.ITEMS.getValue(specRl);
+                if (specItem == null) continue;
+                String iname = new ItemStack(specItem).getHoverName().getString();
                 if (!first) specStr.append(", ");
                 specStr.append(iname);
                 first = false;
             }
             String specText = specStr.toString();
-            // Truncate if too wide
             if (this.font.width(specText) > 170) {
                 while (this.font.width(specText + "..") > 170 && specText.length() > 5)
                     specText = specText.substring(0, specText.length() - 1);
                 specText += "..";
             }
-            this.font.draw(poseStack, specText, rightX, sectionY, 0xCCAA44);
-            sectionY += 9;
+            lines.add(specText);
+            colors.add(0xCCAA44);
         }
-
-        // ---- Needs & Surplus below description ----
-        List<String> lines = new ArrayList<>();
-        List<Integer> colors = new ArrayList<>();
 
         List<String[]> desperateItems = new ArrayList<>();
         List<String[]> highNeedItems = new ArrayList<>();
@@ -1640,85 +1633,89 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         List<String[]> surplusItems = new ArrayList<>();
         List<String[]> oversatItems = new ArrayList<>();
 
-        for (ResourceLocation rl : town.getNeeds()) {
-            Item item = ForgeRegistries.ITEMS.getValue(rl);
-            if (item == null) continue;
-            NeedLevel level = town.getNeedLevel(item);
-            String iname = new ItemStack(item).getHoverName().getString();
+        for (ResourceLocation needRl : town.getNeeds()) {
+            Item needItem = ForgeRegistries.ITEMS.getValue(needRl);
+            if (needItem == null) continue;
+            NeedLevel level = town.getNeedLevel(needItem);
+            String iname = new ItemStack(needItem).getHoverName().getString();
             if (this.font.width(iname) > 145) {
                 while (this.font.width(iname + "..") > 145 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
             switch (level) {
-                case DESPERATE -> desperateItems.add(new String[]{iname});
-                case HIGH_NEED -> highNeedItems.add(new String[]{iname});
-                case MODERATE_NEED -> moderateItems.add(new String[]{iname});
-                default -> highNeedItems.add(new String[]{iname});
+                case DESPERATE      -> desperateItems.add(new String[]{iname});
+                case HIGH_NEED      -> highNeedItems.add(new String[]{iname});
+                case MODERATE_NEED  -> moderateItems.add(new String[]{iname});
+                default             -> highNeedItems.add(new String[]{iname});
             }
         }
 
-        for (ResourceLocation rl : town.getSurplus()) {
-            Item item = ForgeRegistries.ITEMS.getValue(rl);
-            if (item == null) continue;
-            NeedLevel level = town.getNeedLevel(item);
-            String iname = new ItemStack(item).getHoverName().getString();
+        for (ResourceLocation surpRl : town.getSurplus()) {
+            Item surpItem = ForgeRegistries.ITEMS.getValue(surpRl);
+            if (surpItem == null) continue;
+            NeedLevel level = town.getNeedLevel(surpItem);
+            String iname = new ItemStack(surpItem).getHoverName().getString();
             if (this.font.width(iname) > 145) {
                 while (this.font.width(iname + "..") > 145 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
             switch (level) {
-                case OVERSATURATED -> oversatItems.add(new String[]{iname});
-                case SURPLUS -> surplusItems.add(new String[]{iname});
-                default -> surplusItems.add(new String[]{iname});
+                case OVERSATURATED  -> oversatItems.add(new String[]{iname});
+                case SURPLUS        -> surplusItems.add(new String[]{iname});
+                default             -> surplusItems.add(new String[]{iname});
             }
         }
 
+        // Build needs/surplus section lines
         if (!desperateItems.isEmpty()) {
-            lines.add("\u2757 Desperate:");
-            colors.add(NeedLevel.DESPERATE.getColor());
-            for (String[] e : desperateItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.DESPERATE.getColor()); }
+            lines.add(""); colors.add(0);
+            lines.add("\u2757 Desperate:"); colors.add(0xFF4444);
+            for (String[] e : desperateItems) { lines.add("  " + e[0]); colors.add(0xFF8888); }
         }
         if (!highNeedItems.isEmpty()) {
-            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
-            lines.add("\u26A0 High Need:");
-            colors.add(NeedLevel.HIGH_NEED.getColor());
-            for (String[] e : highNeedItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.HIGH_NEED.getColor()); }
+            lines.add(""); colors.add(0);
+            lines.add("\u26A0 High Need:"); colors.add(0xFFAA00);
+            for (String[] e : highNeedItems) { lines.add("  " + e[0]); colors.add(0xFFCC77); }
         }
         if (!moderateItems.isEmpty()) {
-            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
-            lines.add("Moderate:");
-            colors.add(NeedLevel.MODERATE_NEED.getColor());
-            for (String[] e : moderateItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.MODERATE_NEED.getColor()); }
+            lines.add(""); colors.add(0);
+            lines.add("Moderate:"); colors.add(0xCCAA44);
+            for (String[] e : moderateItems) { lines.add("  " + e[0]); colors.add(0xBB9944); }
         }
-        if (!surplusItems.isEmpty() || !oversatItems.isEmpty()) {
-            if (!lines.isEmpty()) { lines.add(""); colors.add(0); }
-            lines.add("\u25BC Surplus:");
-            colors.add(NeedLevel.SURPLUS.getColor());
-            for (String[] e : surplusItems) { lines.add("  \u2022 " + e[0]); colors.add(NeedLevel.SURPLUS.getColor()); }
-            for (String[] e : oversatItems) { lines.add("  \u2022 " + e[0] + " \u2716"); colors.add(NeedLevel.OVERSATURATED.getColor()); }
+        if (!surplusItems.isEmpty()) {
+            lines.add(""); colors.add(0);
+            lines.add("\u25BC Surplus:"); colors.add(0x4488FF);
+            for (String[] e : surplusItems) { lines.add("  " + e[0]); colors.add(0x88AAFF); }
         }
-
-        // Scrollable needs/surplus area — dynamic start Y, fit remaining space
-        int needsStartY = sectionY;
-        int availableH = 138 - needsStartY; // bottom of right page at y~138
-        int visibleLines = Math.max(2, availableH / 9);
-        int maxScrollR = Math.max(0, lines.size() - visibleLines);
-        townContentScroll = Math.min(townContentScroll, maxScrollR);
-
-        int drawY = needsStartY;
-        for (int li = townContentScroll; li < lines.size() && (li - townContentScroll) < visibleLines; li++) {
-            this.font.draw(poseStack, lines.get(li), rightX, drawY, colors.get(li));
-            drawY += 9;
+        if (!oversatItems.isEmpty()) {
+            lines.add(""); colors.add(0);
+            lines.add("Oversaturated:"); colors.add(0x6699CC);
+            for (String[] e : oversatItems) { lines.add("  " + e[0]); colors.add(0x99BBDD); }
         }
 
-        // Scroll indicators for needs/surplus
+        // Draw scrollable content (y=84 to y=190)
+        int contentStartY = 84;
+        int contentBottomY = 190;
+        int lineH = 9;
+        int visibleLn = (contentBottomY - contentStartY) / lineH;
+        int maxContentScroll = Math.max(0, lines.size() - visibleLn);
+        townContentScroll = Math.min(townContentScroll, maxContentScroll);
+
+        for (int i = 0; i < visibleLn && (townContentScroll + i) < lines.size(); i++) {
+            String ln = lines.get(townContentScroll + i);
+            int lc = colors.get(townContentScroll + i);
+            if (ln.isEmpty() || lc == 0) continue; // blank spacer line
+            this.font.draw(poseStack, ln, rightX, contentStartY + i * lineH, lc);
+        }
+
+        // Scroll arrows for right panel content
         if (townContentScroll > 0) {
-            this.font.draw(poseStack, "\u25B2", rightX + 170, needsStartY, 0x6B5A3E);
+            this.font.draw(poseStack, "\u25B2", rightX + 165, contentStartY, 0x6B5A3E);
         }
-        if (townContentScroll < maxScrollR) {
-            this.font.draw(poseStack, "\u25BC", rightX + 170, needsStartY + (visibleLines - 1) * 9, 0x6B5A3E);
+        if (townContentScroll < maxContentScroll) {
+            this.font.draw(poseStack, "\u25BC", rightX + 165, contentBottomY - lineH + 2, 0x6B5A3E);
         }
     }
 
@@ -2987,7 +2984,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             } else {
                 // Left page area: scroll town list
                 List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
-                int maxScroll = Math.max(0, allTowns.size() - 8);
+                int maxScroll = Math.max(0, allTowns.size() - 15);
                 if (delta > 0 && townListScroll > 0) {
                     townListScroll--;
                     return true;

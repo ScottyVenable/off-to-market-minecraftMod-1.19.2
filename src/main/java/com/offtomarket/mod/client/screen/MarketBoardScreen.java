@@ -3,6 +3,8 @@ package com.offtomarket.mod.client.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.offtomarket.mod.OffToMarket;
+import com.offtomarket.mod.block.FinanceTableBlock;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.data.MarketListing;
 import com.offtomarket.mod.data.NeedLevel;
@@ -27,14 +29,20 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
 
 public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> {
     private static final ResourceLocation TEXTURE =
             new ResourceLocation(OffToMarket.MODID, "textures/gui/market_board.png");
 
     private int scrollOffset = 0;
-    private static final int VISIBLE_LISTINGS = 8;
+    private static final int VISIBLE_LISTINGS = 14;
+
+    /** Persists cart entries across screen close/reopen (client-side, keyed by block position). */
+    private static final Map<BlockPos, List<int[]>> SAVED_CARTS = new HashMap<>();
 
     /** Row index (0-based within visible rows) the mouse is currently hovering, or -1. */
     private int hoveredRow = -1;
@@ -73,7 +81,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private final List<CartEntry> cart = new ArrayList<>();
     private boolean showingCart = false;
     private int cartScrollOffset = 0;
-    private static final int VISIBLE_CART_ROWS = 7;
+    private static final int VISIBLE_CART_ROWS = 13;
     private int hoveredCartRow = -1;
 
     // Quantity selection overlay
@@ -120,7 +128,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             if (scrollOffset > 0) scrollOffset--;
         }));
 
-        scrollDownBtn = addRenderableWidget(new Button(x + 366, y + 110, 14, 14,
+        scrollDownBtn = addRenderableWidget(new Button(x + 366, y + 183, 14, 14,
                 Component.literal("v"), btn -> scrollOffset++));
 
         refreshBtn = addRenderableWidget(new Button(x + 194, y + 3, 48, 14,
@@ -142,10 +150,10 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // ==== Cart view buttons ====
 
-        checkoutBtn = addRenderableWidget(new Button(x + 8, y + 115, 170, 14,
+        checkoutBtn = addRenderableWidget(new Button(x + 8, y + 188, 170, 14,
                 Component.literal("Checkout"), btn -> doCheckout()));
 
-        clearCartBtn = addRenderableWidget(new Button(x + 192, y + 115, 170, 14,
+        clearCartBtn = addRenderableWidget(new Button(x + 192, y + 188, 170, 14,
                 Component.literal("Clear Cart"), btn -> {
             cart.clear();
             showingCart = false;
@@ -157,7 +165,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             if (cartScrollOffset > 0) cartScrollOffset--;
         }));
 
-        cartScrollDownBtn = addRenderableWidget(new Button(x + 366, y + 110, 14, 14,
+        cartScrollDownBtn = addRenderableWidget(new Button(x + 366, y + 183, 14, 14,
                 Component.literal("v"), btn -> cartScrollOffset++));
 
         // ==== Quantity overlay buttons ====
@@ -200,7 +208,40 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             updateButtonVisibility();
         }));
 
+        // Restore previously saved cart for this market board
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            List<int[]> saved = SAVED_CARTS.get(be.getBlockPos());
+            if (saved != null && !saved.isEmpty()) {
+                List<MarketListing> listings = be.getListings();
+                for (int[] entry : saved) {
+                    int li = entry[0], qty = entry[1];
+                    if (li >= 0 && li < listings.size()) {
+                        MarketListing ml = listings.get(li);
+                        cart.add(new CartEntry(li, qty, ml.getItemDisplayName(),
+                                ml.getTownId(), ml.getPricePerItem(), ml.getCount()));
+                    }
+                }
+            }
+        }
+
         updateButtonVisibility();
+    }
+
+    @Override
+    public void onClose() {
+        // Persist the current cart so it survives screen close/reopen
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            if (cart.isEmpty()) {
+                SAVED_CARTS.remove(be.getBlockPos());
+            } else {
+                List<int[]> toSave = new ArrayList<>();
+                for (CartEntry e : cart) toSave.add(new int[]{e.listingIndex, e.quantity});
+                SAVED_CARTS.put(be.getBlockPos(), toSave);
+            }
+        }
+        super.onClose();
     }
 
     private void updateButtonVisibility() {
@@ -294,6 +335,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 new CartCheckoutPacket(be.getBlockPos(), entries));
 
         cart.clear();
+        SAVED_CARTS.remove(be.getBlockPos()); // cart fulfilled, remove persistence
         showingCart = false;
         updateButtonVisibility();
     }
@@ -318,6 +360,25 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                     total += bagTag.getInt("Gold") * 100
                            + bagTag.getInt("Silver") * 10
                            + bagTag.getInt("Copper");
+                }
+            }
+        }
+        // Include coins stored in nearby Finance Tables (within 16 blocks)
+        if (minecraft != null && minecraft.level != null && minecraft.player != null) {
+            BlockPos playerPos = minecraft.player.blockPosition();
+            int r = 16;
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dy = -3; dy <= 3; dy++) {
+                    for (int dz = -r; dz <= r; dz++) {
+                        BlockPos p = playerPos.offset(dx, dy, dz);
+                        if (minecraft.level.getBlockState(p).getBlock() instanceof FinanceTableBlock) {
+                            net.minecraft.world.level.block.entity.BlockEntity fbe =
+                                    minecraft.level.getBlockEntity(p);
+                            if (fbe instanceof FinanceTableBlockEntity ftbe) {
+                                total += ftbe.getTotalCoinValue();
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -381,10 +442,6 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         OtmGuiTheme.drawInsetPanel(ps, x, y, w, h);
     }
 
-    private void drawSlot(PoseStack ps, int x, int y) {
-        OtmGuiTheme.drawSlot(ps, x, y);
-    }
-
     // ==================== Render Background ====================
 
     @Override
@@ -402,26 +459,16 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         // Title bar
         drawInsetPanel(poseStack, x + 4, y + 3, 376, 14);
 
-        // Content area
-        drawInsetPanel(poseStack, x + 4, y + 19, 360, 108);
+        // Extended content area (listings / cart) — no inventory below
+        drawInsetPanel(poseStack, x + 4, y + 19, 360, 169);
+
+        // Coin balance strip at the bottom
+        drawInsetPanel(poseStack, x + 4, y + 200, 376, 14);
 
         if (showingCart) {
             renderCartBg(poseStack, x, y, mouseX, mouseY);
         } else {
             renderListingBg(poseStack, x, y, mouseX, mouseY);
-        }
-
-        // Divider above inventory
-        fill(poseStack, x + 4, y + 130, x + 380, y + 131, 0xFF3B2E1E);
-
-        // Player inventory slots
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                drawSlot(poseStack, x + 111 + col * 18, y + 140 + row * 18);
-            }
-        }
-        for (int col = 0; col < 9; col++) {
-            drawSlot(poseStack, x + 111 + col * 18, y + 198);
         }
     }
 
@@ -521,8 +568,8 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     }
 
     private void renderQtyOverlayBg(PoseStack poseStack, int x, int y) {
-        // Fully opaque dimming layer over the entire content area
-        fill(poseStack, x + 4, y + 19, x + 380, y + 128, 0xFF000000);
+        // Qty overlay dims the content area only
+        fill(poseStack, x + 4, y + 19, x + 380, y + 192, 0xFF000000);
 
         // Overlay panel — centered in the content area
         int ox = x + OVL_X;
@@ -561,8 +608,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             renderListingLabels(poseStack);
         }
 
-        // Inventory label
-        this.font.draw(poseStack, this.playerInventoryTitle, 111, 130, 0x404040);
+        // Coin balance strip label
+        int balance = getPlayerCoinBalance();
+        this.font.draw(poseStack, "\u00A77Coin Balance: " + formatCoinText(balance), 7, 203, 0xFFDD88);
     }
 
     private void renderListingLabels(PoseStack poseStack) {

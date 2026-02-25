@@ -1,11 +1,13 @@
 package com.offtomarket.mod.registry;
 
 import com.offtomarket.mod.OffToMarket;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
 import com.offtomarket.mod.block.entity.MailboxBlockEntity;
 import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.menu.CoinBagMenu;
+import com.offtomarket.mod.menu.FinanceTableMenu;
 import com.offtomarket.mod.menu.MailboxMenu;
 import com.offtomarket.mod.menu.MarketBoardMenu;
 import com.offtomarket.mod.menu.TradingLedgerMenu;
@@ -66,5 +68,15 @@ public class ModMenuTypes {
                     return new MailboxMenu(windowId, inv, mbe);
                 }
                 return new MailboxMenu(windowId, inv);
+            }));
+
+    public static final RegistryObject<MenuType<FinanceTableMenu>> FINANCE_TABLE =
+            MENUS.register("finance_table", () -> IForgeMenuType.create((windowId, inv, data) -> {
+                BlockPos pos = data.readBlockPos();
+                BlockEntity be = inv.player.level.getBlockEntity(pos);
+                if (be instanceof FinanceTableBlockEntity ftbe) {
+                    return new FinanceTableMenu(windowId, inv, ftbe);
+                }
+                return new FinanceTableMenu(windowId, inv);
             }));
 }

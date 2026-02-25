@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "offtomarket:trading_post",
+    "offtomarket:trading_ledger",
+    "offtomarket:market_board",
+    "offtomarket:mailbox",
+    "offtomarket:finance_table"
+  ]
+}

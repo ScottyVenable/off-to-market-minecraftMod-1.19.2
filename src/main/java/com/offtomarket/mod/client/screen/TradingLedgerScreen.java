@@ -31,10 +31,14 @@ import java.util.Locale;
  */
 public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMenu> {
 
-    /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings). */
+    /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings), 2 = History (past orders), 3 = Income. */
     private int activeTab = 0;
     private Button binTabButton;
     private Button configTabButton;
+    private Button historyTabButton;
+    private Button incomeTabButton;
+    private int historyScrollOffset = 0;
+    private int incomeScrollOffset = 0;
 
     // ---- Bin tab widgets ----
     private EditBox priceInput;
@@ -53,7 +57,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     private static final int LIST_TOP = 36;
     private static final int LIST_WIDTH = 166;
     private static final int ROW_HEIGHT = 14;
-    private static final int MAX_VISIBLE = 8;
+    private static final int MAX_VISIBLE = 12;
 
     // ---- Config tab widgets ----
     private EditBox taxInput;
@@ -70,7 +74,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     public TradingLedgerScreen(TradingLedgerMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
         this.imageWidth = 384;
-        this.imageHeight = 166;
+        this.imageHeight = 230;
     }
 
     // ==================== Initialization ====================
@@ -81,14 +85,22 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         int x = this.leftPos;
         int y = this.topPos;
 
-        // ---- Tab buttons (right panel tab bar) ----
-        binTabButton = addRenderableWidget(new Button(x + 183, y + 4, 96, 12,
+        // ---- Tab buttons (right panel tab bar — 4 equal tabs at 49px each) ----
+        binTabButton = addRenderableWidget(new Button(x + 182, y + 4, 49, 12,
                 Component.literal("\u00A7e\u00A7lBin"), btn -> {
-            activeTab = 0; updateTabVisibility(); updateTabLabels();
+            activeTab = 0; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
         }));
-        configTabButton = addRenderableWidget(new Button(x + 283, y + 4, 96, 12,
+        configTabButton = addRenderableWidget(new Button(x + 232, y + 4, 49, 12,
                 Component.literal("\u00A77Fees"), btn -> {
-            activeTab = 1; updateTabVisibility(); updateTabLabels();
+            activeTab = 1; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
+        }));
+        historyTabButton = addRenderableWidget(new Button(x + 282, y + 4, 49, 12,
+                Component.literal("\u00A77History"), btn -> {
+            activeTab = 2; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
+        }));
+        incomeTabButton = addRenderableWidget(new Button(x + 332, y + 4, 49, 12,
+                Component.literal("\u00A77Income"), btn -> {
+            activeTab = 3; historyScrollOffset = 0; incomeScrollOffset = 0; updateTabVisibility(); updateTabLabels();
         }));
 
         // ---- Search input (left panel, below title) ----
@@ -124,7 +136,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }));
 
-        withdrawButton = addRenderableWidget(new Button(x + 184, y + 148, 80, 14,
+        withdrawButton = addRenderableWidget(new Button(x + 184, y + 210, 80, 14,
                 Component.literal("Withdraw"), btn -> {
             TradingLedgerBlockEntity be = menu.getBlockEntity();
             if (be != null && selectedSlot >= 0 && selectedSlot < TradingLedgerBlockEntity.BIN_SIZE) {
@@ -166,7 +178,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         applySettingsBtn = addRenderableWidget(new Button(x + 294, y + 64, 80, 14,
                 Component.literal("Apply"), btn -> sendSettingsToServer()));
 
-        upgradeCaravanBtn = addRenderableWidget(new Button(x + 184, y + 147, 190, 14,
+        upgradeCaravanBtn = addRenderableWidget(new Button(x + 184, y + 213, 190, 14,
             Component.literal("Upgrade Caravan"), btn -> {
             TradingLedgerBlockEntity blockEntity = menu.getBlockEntity();
             if (blockEntity != null) {
@@ -213,6 +225,9 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     private void updateTabLabels() {
         binTabButton.setMessage(Component.literal(activeTab == 0 ? "\u00A7e\u00A7lBin" : "\u00A77Bin"));
         configTabButton.setMessage(Component.literal(activeTab == 1 ? "\u00A7e\u00A7lFees" : "\u00A77Fees"));
+        historyTabButton.setMessage(Component.literal(activeTab == 2 ? "\u00A7e\u00A7lHistory" : "\u00A77History"));
+        if (incomeTabButton != null)
+            incomeTabButton.setMessage(Component.literal(activeTab == 3 ? "\u00A7e\u00A7lIncome" : "\u00A77Income"));
     }
 
     /** Toggle widget visibility based on active tab and selection state. */
@@ -231,6 +246,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         autoPriceModeButton.visible = configActive;
         applySettingsBtn.visible = configActive;
         upgradeCaravanBtn.visible = configActive;
+        // History tab (activeTab == 2) and Income tab (activeTab == 3) have no widgets — labels only
     }
 
     /** Send current fee/modifier settings to the server. */
@@ -301,14 +317,14 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         int y = this.topPos;
 
         // ---- Left panel: dark wood (replaces vanilla dispenser texture) ----
-        drawPanel(poseStack, x, y, 178, 166);
+        drawPanel(poseStack, x, y, 178, 230);
         drawInsetPanel(poseStack, x + 3, y + 18, 172, 14);     // search bar area
-        drawInsetPanel(poseStack, x + 3, y + 34, 172, 116);    // list area (8 rows)
+        drawInsetPanel(poseStack, x + 3, y + 34, 172, 172);    // list area (12 rows)
 
         // ---- Right panel: dark wood ----
-        drawPanel(poseStack, x + 178, y, 206, 166);
+        drawPanel(poseStack, x + 178, y, 206, 230);
         drawInsetPanel(poseStack, x + 181, y + 3, 200, 14);    // tab bar
-        drawInsetPanel(poseStack, x + 181, y + 19, 200, 145);  // content area
+        drawInsetPanel(poseStack, x + 181, y + 19, 200, 207);  // content area
 
         updateTabVisibility();
 
@@ -378,12 +394,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             // Empty state message
             if (filteredSlots.isEmpty()) {
                 if (searchInput != null && !searchInput.getValue().isEmpty()) {
-                    drawCenteredString(poseStack, this.font, "No matches", x + 89, y + 80, 0x666666);
+                    drawCenteredString(poseStack, this.font, "No matches", x + 89, y + 110, 0x666666);
                 } else {
-                    drawCenteredString(poseStack, this.font, "Bin is empty", x + 89, y + 74, 0x666666);
-                    drawCenteredString(poseStack, this.font, "Place a chest or barrel", x + 89, y + 90, 0x555555);
-                    drawCenteredString(poseStack, this.font, "next to the bin to", x + 89, y + 102, 0x555555);
-                    drawCenteredString(poseStack, this.font, "auto-fill it.", x + 89, y + 114, 0x555555);
+                    drawCenteredString(poseStack, this.font, "Bin is empty", x + 89, y + 104, 0x666666);
+                    drawCenteredString(poseStack, this.font, "Place a chest or barrel", x + 89, y + 120, 0x555555);
+                    drawCenteredString(poseStack, this.font, "next to the bin to", x + 89, y + 132, 0x555555);
+                    drawCenteredString(poseStack, this.font, "auto-fill it.", x + 89, y + 144, 0x555555);
                 }
             }
         }
@@ -393,9 +409,15 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             // Fees tab
             drawDivider(poseStack, x, y + 62);
             drawDivider(poseStack, x, y + 80);
-            drawDivider(poseStack, x, y + 139);
+            drawDivider(poseStack, x, y + 130);
             taxInput.render(poseStack, mouseX, mouseY, partialTick);
             markupInput.render(poseStack, mouseX, mouseY, partialTick);
+        } else if (activeTab == 2) {
+            // History tab — header divider only; content drawn in renderHistoryLabels
+            drawDivider(poseStack, x, y + 30);
+        } else if (activeTab == 3) {
+            // Income tab — header divider only; content drawn in renderIncomeLabels
+            drawDivider(poseStack, x, y + 30);
         } else {
             // Bin tab
             drawDivider(poseStack, x, y + 54);
@@ -420,16 +442,20 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         TradingLedgerBlockEntity be = menu.getBlockEntity();
         if (be != null) {
             String payout = "Payout: " + formatCoinText(be.getTotalProposedPayout());
-            this.font.draw(poseStack, payout, 8, 154, 0xCCAA66);
+            this.font.draw(poseStack, payout, 8, 220, 0xCCAA66);
 
             int currentWeight = be.getCurrentCaravanWeight();
             int capacity = be.getCaravanWeightCapacity();
             int weightColor = currentWeight >= capacity ? 0xFF5555 : 0x88CC88;
-            this.font.draw(poseStack, "Wt " + currentWeight + "/" + capacity, 112, 154, weightColor);
+            this.font.draw(poseStack, "Wt " + currentWeight + "/" + capacity, 112, 220, weightColor);
         }
 
         if (activeTab == 1) {
             renderConfigLabels(poseStack);
+        } else if (activeTab == 2) {
+            renderHistoryLabels(poseStack);
+        } else if (activeTab == 3) {
+            renderIncomeLabels(poseStack);
         } else {
             renderPriceBookLabels(poseStack);
         }
@@ -510,15 +536,136 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             String est = TradingLedgerBlockEntity.getEstimatedMarketTime(
                     modifiedPrice, baseValue, maxPrice);
 
-            this.font.draw(poseStack, "Base: " + formatCoinText(baseValue), 184, 142, 0xAAAAAA);
-            this.font.draw(poseStack, "\u00A76\u2192 " + formatCoinText(modifiedPrice), 264, 142, 0xFFAA00);
-            this.font.draw(poseStack, "Sells: " + est, 184, 153, 0x888888);
+            this.font.draw(poseStack, "Base: " + formatCoinText(baseValue), 184, 134, 0xAAAAAA);
+            this.font.draw(poseStack, "\u00A76\u2192 " + formatCoinText(modifiedPrice), 264, 134, 0xFFAA00);
+            this.font.draw(poseStack, "Sells: " + est, 184, 143, 0x888888);
         } else {
-            this.font.draw(poseStack, "Select an item to", 184, 142, 0x666666);
-            this.font.draw(poseStack, "preview modifiers.", 184, 153, 0x666666);
+            this.font.draw(poseStack, "Select an item to preview modifiers.", 184, 134, 0x666666);
         }
 
         // Caravan Weight display removed — not shown in Fees panel
+    }
+
+    private void renderHistoryLabels(PoseStack poseStack) {
+        drawCenteredString(poseStack, this.font, "\u00A7lPast Orders", 280, 21, 0xFFD700);
+
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        if (be == null) return;
+
+        java.util.List<TradingLedgerBlockEntity.LedgerShipmentRecord> history = be.getShipmentHistory();
+
+        if (history.isEmpty()) {
+            this.font.draw(poseStack, "No shipments yet.", 184, 42, 0x666666);
+            this.font.draw(poseStack, "Ship items from the Trading Post", 184, 54, 0x555555);
+            this.font.draw(poseStack, "to record orders here.", 184, 66, 0x555555);
+            return;
+        }
+
+        this.font.draw(poseStack, "Town", 184, 34, 0xBBAAAA);
+        this.font.draw(poseStack, "Items", 256, 34, 0xBBAAAA);
+        this.font.draw(poseStack, "Value", 296, 34, 0xBBAAAA);
+        this.font.draw(poseStack, "When", 348, 34, 0xBBAAAA);
+
+        int rowH = 12;
+        int startY = 40;
+        int bottomY = 220;
+        int visibleRows = (bottomY - startY) / rowH;  // ~15
+        int maxScroll = Math.max(0, history.size() - visibleRows);
+        historyScrollOffset = Math.min(historyScrollOffset, maxScroll);
+
+        long nowTicks = this.minecraft != null && this.minecraft.level != null
+                ? this.minecraft.level.getGameTime() : 0;
+
+        for (int i = 0; i < visibleRows && (historyScrollOffset + i) < history.size(); i++) {
+            TradingLedgerBlockEntity.LedgerShipmentRecord rec = history.get(historyScrollOffset + i);
+            int ry = startY + i * rowH;
+
+            String tName = rec.townDisplayName;
+            while (this.font.width(tName) > 65 && tName.length() > 3)
+                tName = tName.substring(0, tName.length() - 1);
+            if (!tName.equals(rec.townDisplayName)) tName += "..";
+            this.font.draw(poseStack, tName, 184, ry, 0xCCAA66);
+
+            this.font.draw(poseStack, rec.totalItems + "x", 256, ry, 0xAAAAAA);
+            this.font.draw(poseStack, formatCoinText(rec.totalValue), 296, ry, 0x88CC88);
+
+            long deltaTicks = nowTicks - rec.gameTime;
+            String when;
+            if (deltaTicks < 20 * 60) when = "< 1 min";
+            else if (deltaTicks < 20 * 3600) when = (deltaTicks / (20 * 60)) + " min";
+            else if (deltaTicks < 20 * 86400L) when = (deltaTicks / (20 * 3600)) + " hr";
+            else when = (deltaTicks / (20 * 86400L)) + " day" + (deltaTicks >= 20 * 86400L * 2 ? "s" : "");
+            this.font.draw(poseStack, when, 378 - this.font.width(when), ry, 0x666666);
+        }
+
+        if (historyScrollOffset > 0) this.font.draw(poseStack, "\u25B2", 370, startY, 0x6B5A3E);
+        if (historyScrollOffset < maxScroll) this.font.draw(poseStack, "\u25BC", 370, bottomY - rowH + 2, 0x6B5A3E);
+    }
+
+    private void renderIncomeLabels(PoseStack poseStack) {
+        drawCenteredString(poseStack, this.font, "\u00A7lIncome Summary", 280, 21, 0xFFD700);
+
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        if (be == null) return;
+
+        java.util.List<TradingLedgerBlockEntity.LedgerShipmentRecord> history = be.getShipmentHistory();
+
+        if (history.isEmpty()) {
+            this.font.draw(poseStack, "No income data yet.", 184, 42, 0x666666);
+            this.font.draw(poseStack, "Complete shipments to see", 184, 54, 0x555555);
+            this.font.draw(poseStack, "income totals here.", 184, 66, 0x555555);
+            return;
+        }
+
+        // Aggregate totals
+        long totalRevenue = 0;
+        int totalItems = 0;
+        java.util.Map<String, Long> revenueByTown = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Integer> itemsByTown = new java.util.LinkedHashMap<>();
+        for (TradingLedgerBlockEntity.LedgerShipmentRecord rec : history) {
+            totalRevenue += rec.totalValue;
+            totalItems += rec.totalItems;
+            revenueByTown.merge(rec.townDisplayName, (long) rec.totalValue, Long::sum);
+            itemsByTown.merge(rec.townDisplayName, rec.totalItems, Integer::sum);
+        }
+
+        // Summary row
+        int sy = 34;
+        this.font.draw(poseStack, "Total Revenue:", 184, sy, 0xBBAAAA);
+        this.font.draw(poseStack, formatCoinText((int) Math.min(totalRevenue, Integer.MAX_VALUE)), 276, sy, 0x88FF88);
+        this.font.draw(poseStack, "Items: " + totalItems, 184, sy + 11, 0x888888);
+        this.font.draw(poseStack, "Shipments: " + history.size(), 184, sy + 22, 0x888888);
+
+        // Column headers for by-town breakdown
+        int rowH = 11;
+        int startY = sy + 36;
+        int bottomY = 220;
+        int visibleRows = (bottomY - startY) / rowH;
+        java.util.List<java.util.Map.Entry<String, Long>> townEntries =
+                new java.util.ArrayList<>(revenueByTown.entrySet());
+        townEntries.sort((a, b) -> Long.compare(b.getValue(), a.getValue())); // sort by revenue desc
+        int maxScroll = Math.max(0, townEntries.size() - visibleRows);
+        incomeScrollOffset = Math.min(incomeScrollOffset, maxScroll);
+
+        this.font.draw(poseStack, "Town", 184, startY - 9, 0xBBAAAA);
+        this.font.draw(poseStack, "Revenue", 284, startY - 9, 0xBBAAAA);
+        this.font.draw(poseStack, "Items", 350, startY - 9, 0xBBAAAA);
+
+        for (int i = 0; i < visibleRows && (incomeScrollOffset + i) < townEntries.size(); i++) {
+            java.util.Map.Entry<String, Long> entry = townEntries.get(incomeScrollOffset + i);
+            int ry = startY + i * rowH;
+            String tName = entry.getKey();
+            while (this.font.width(tName) > 88 && tName.length() > 3)
+                tName = tName.substring(0, tName.length() - 1);
+            if (!tName.equals(entry.getKey())) tName += "..";
+            this.font.draw(poseStack, tName, 184, ry, 0xCCAA66);
+            this.font.draw(poseStack, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 284, ry, 0xAACCAA);
+            Integer items = itemsByTown.get(entry.getKey());
+            this.font.draw(poseStack, items != null ? String.valueOf(items) : "-", 350, ry, 0x888888);
+        }
+
+        if (incomeScrollOffset > 0) this.font.draw(poseStack, "\u25B2", 370, startY, 0x6B5A3E);
+        if (incomeScrollOffset < maxScroll) this.font.draw(poseStack, "\u25BC", 370, bottomY - rowH, 0x6B5A3E);
     }
 
     private void renderPriceBookLabels(PoseStack poseStack) {
@@ -735,6 +882,30 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }
 
+        // History tab right-panel scroll
+        if (activeTab == 2 && mouseX >= x + 183 && mouseX < x + 383) {
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
+            if (be != null) {
+                int histVisible = (220 - 40) / 12;
+                int maxHistScroll = Math.max(0, be.getShipmentHistory().size() - histVisible);
+                if (delta > 0 && historyScrollOffset > 0) { historyScrollOffset--; return true; }
+                if (delta < 0 && historyScrollOffset < maxHistScroll) { historyScrollOffset++; return true; }
+            }
+        }
+
+        // Income tab right-panel scroll
+        if (activeTab == 3 && mouseX >= x + 183 && mouseX < x + 383) {
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
+            if (be != null) {
+                int incomeSY = 34 + 36;
+                int incomeVisible = (220 - incomeSY) / 11;
+                int maxIncomeScroll = Math.max(0, (int) be.getShipmentHistory().stream()
+                        .map(r -> r.townDisplayName).distinct().count() - incomeVisible);
+                if (delta > 0 && incomeScrollOffset > 0) { incomeScrollOffset--; return true; }
+                if (delta < 0 && incomeScrollOffset < maxIncomeScroll) { incomeScrollOffset++; return true; }
+            }
+        }
+
         return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
@@ -852,14 +1023,21 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         if (contextMenuSlot >= 0 && be != null) {
             int cmX = contextMenuX;
             int cmY = contextMenuY;
+            boolean isVirtual = be.isVirtualSlot(contextMenuSlot);
+            String opt1Label = isVirtual ? "Remove from Ledger" : "To Container";
             // Panel background
             fill(poseStack, cmX - 1, cmY - 1, cmX + 82, cmY + 24, 0xFF000000);
             fill(poseStack, cmX, cmY, cmX + 81, cmY + 23, 0xFF2A1E0E);
+            // Hover row highlights
+            boolean hoverInv  = mouseX >= cmX && mouseX < cmX + 81 && mouseY >= cmY       && mouseY < cmY + 11;
+            boolean hoverCont = mouseX >= cmX && mouseX < cmX + 81 && mouseY >= cmY + 12  && mouseY < cmY + 23;
+            if (hoverInv)  fill(poseStack, cmX, cmY,      cmX + 81, cmY + 11, 0xFF3D2E18);
+            if (hoverCont) fill(poseStack, cmX, cmY + 12, cmX + 81, cmY + 23, 0xFF3D2E18);
             // Divider
             fill(poseStack, cmX + 1, cmY + 11, cmX + 80, cmY + 12, 0xFF4A3820);
-            // Option labels
-            this.font.draw(poseStack, "\u00A7fTo Inventory", cmX + 3, cmY + 2, 0xFFFFFF);
-            this.font.draw(poseStack, "\u00A77To Container", cmX + 3, cmY + 14, 0xAAAAAA);
+            // Option labels (gold on hover)
+            this.font.draw(poseStack, "To Inventory", cmX + 3, cmY + 2,  hoverInv  ? 0xFFD700 : 0xFFFFFF);
+            this.font.draw(poseStack, opt1Label,       cmX + 3, cmY + 14, hoverCont ? 0xFFD700 : 0xAAAAAA);
         }
     }
 

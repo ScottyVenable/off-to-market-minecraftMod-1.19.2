@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -24,8 +25,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The Trading Bin holds items the player wants to sell/ship.
@@ -57,9 +62,15 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
 
     // Adjacent-container auto-sync
     /** How often (in ticks) the bin pulls items from neighbouring containers (~3 s). */
-    private static final int SYNC_INTERVAL_TICKS = 60;
+    public static final int SYNC_INTERVAL_TICKS = 60;
     /** Counts down to the next auto-sync; starts at 0 so the first sync happens quickly. */
     private int syncCooldown = 0;
+    /**
+     * Containers suppressed from auto-sync after a "To Container" withdrawal.
+     * Key = container BlockPos, Value = game tick when suppression expires.
+     * Not persisted — intentional; re-sync on reload is fine.
+     */
+    private final Map<BlockPos, Long> withdrawSuppressedPos = new HashMap<>();
 
     // ==================== Settings ====================
 
@@ -72,6 +83,98 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         private final String displayName;
         AutoPriceMode(String displayName) { this.displayName = displayName; }
         public String getDisplayName() { return displayName; }
+    }
+
+    /**
+     * Records the origin of a "virtual" ledger slot — an item that lives in
+     * an adjacent container and is shown read-only in the ledger until shipped.
+     */
+    public static final class VirtualSource {
+        public final BlockPos sourcePos;
+        public final int sourceSlot;
+
+        public VirtualSource(BlockPos sourcePos, int sourceSlot) {
+            this.sourcePos = sourcePos;
+            this.sourceSlot = sourceSlot;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof VirtualSource vs)) return false;
+            return sourceSlot == vs.sourceSlot && sourcePos.equals(vs.sourcePos);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * sourcePos.hashCode() + sourceSlot;
+        }
+    }
+
+    /**
+     * Maps ledger slot index to its source container location for virtual (read-only) slots.
+     * Not persisted — rebuilt on next auto-sync tick after world load.
+     */
+    private final Map<Integer, VirtualSource> slotToVirtualSource = new HashMap<>();
+
+    /**
+     * Client-side mirror of virtual slot indices, populated via NBT sync.
+     * On the server, query slotToVirtualSource directly.
+     */
+    private final Set<Integer> clientVirtualSlots = new HashSet<>();
+
+    // ==================== Shipment History ====================
+
+    /** Records a single shipping event for the Past Orders tab. */
+    public static final class LedgerShipmentRecord {
+        public final long gameTime;
+        public final String townDisplayName;
+        public final int totalItems;
+        public final int totalValue; // copper pieces
+
+        public LedgerShipmentRecord(long gameTime, String townDisplayName, int totalItems, int totalValue) {
+            this.gameTime = gameTime;
+            this.townDisplayName = townDisplayName;
+            this.totalItems = totalItems;
+            this.totalValue = totalValue;
+        }
+
+        public CompoundTag save() {
+            CompoundTag tag = new CompoundTag();
+            tag.putLong("GameTime", gameTime);
+            tag.putString("Town", townDisplayName);
+            tag.putInt("Items", totalItems);
+            tag.putInt("Value", totalValue);
+            return tag;
+        }
+
+        public static LedgerShipmentRecord load(CompoundTag tag) {
+            return new LedgerShipmentRecord(
+                    tag.getLong("GameTime"),
+                    tag.getString("Town"),
+                    tag.getInt("Items"),
+                    tag.getInt("Value"));
+        }
+    }
+
+    /** Max entries kept in the history list. */
+    private static final int MAX_HISTORY_ENTRIES = 20;
+    private final List<LedgerShipmentRecord> shipmentHistory = new ArrayList<>();
+
+    /**
+     * Record a shipment event. Call from TradingPostBlockEntity before clearing the bin.
+     */
+    public void recordShipment(long gameTime, String townDisplayName, int totalItems, int totalValue) {
+        shipmentHistory.add(0, new LedgerShipmentRecord(gameTime, townDisplayName, totalItems, totalValue));
+        if (shipmentHistory.size() > MAX_HISTORY_ENTRIES) {
+            shipmentHistory.subList(MAX_HISTORY_ENTRIES, shipmentHistory.size()).clear();
+        }
+        setChanged();
+        syncToClient();
+    }
+
+    public List<LedgerShipmentRecord> getShipmentHistory() {
+        return java.util.Collections.unmodifiableList(shipmentHistory);
     }
 
     private int craftingTaxPercent = 15;   // extra % for crafted items
@@ -413,6 +516,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             items.set(0, note);
         }
         slotPrices.clear();
+        slotToVirtualSource.clear();
         awaitingPickup = false;
         pickupTimer = -1;
         syncToClient();
@@ -509,14 +613,24 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     }
 
     /**
-     * Scan all six neighbouring positions and pull every item from any found
-     * {@link Container} block entity (excluding other Trading Bins) into this bin.
-     * Items are physically removed from the source container as they are inserted.
+     * Scan all six neighbouring positions and snapshot every item from any found
+     * Container block entity (excluding other Trading Ledgers) as virtual slots.
+     * Items are NOT physically moved — they stay in the source container and are
+     * only removed when the shipment is sent or the player withdraws them.
+     * Skips containers that were recently used as "To Container" withdrawal targets.
      */
     private void syncFromAdjacentContainers() {
         Level level = this.getLevel();
         if (level == null || level.isClientSide()) return;
         BlockPos pos = this.getBlockPos();
+        long now = level.getGameTime();
+
+        // Clean up expired suppression entries
+        withdrawSuppressedPos.entrySet().removeIf(e -> e.getValue() <= now);
+
+        // Track which ledger slots were refreshed this cycle
+        List<Integer> updatedLedgerSlots = new ArrayList<>();
+        boolean changed = false;
 
         for (Direction dir : Direction.values()) {
             BlockPos adjPos = pos.relative(dir);
@@ -524,23 +638,133 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             if (!(adjBe instanceof Container container)) continue;
             if (adjBe instanceof TradingLedgerBlockEntity) continue;
 
-            boolean changed = false;
-            for (int i = 0; i < container.getContainerSize(); i++) {
-                ItemStack stack = container.getItem(i);
+            // Skip containers suppressed by recent "To Container" withdrawal
+            if (withdrawSuppressedPos.getOrDefault(adjPos, 0L) > now) continue;
+
+            for (int cSlot = 0; cSlot < container.getContainerSize(); cSlot++) {
+                ItemStack stack = container.getItem(cSlot);
                 if (stack.isEmpty()) continue;
 
-                int inserted = addItemAmount(stack.copy());
-                if (inserted <= 0) continue;
+                // Find existing virtual ledger slot for this (sourcePos, sourceSlot) pair
+                Integer existingLedgerSlot = findVirtualLedgerSlot(adjPos, cSlot);
 
-                stack.shrink(inserted);
-                container.setItem(i, stack.isEmpty() ? ItemStack.EMPTY : stack);
-                changed = true;
-            }
-            if (changed) {
-                container.setChanged();
-                setChanged();
+                if (existingLedgerSlot != null) {
+                    // Refresh snapshot — count or NBT may have changed in source container
+                    items.set(existingLedgerSlot, stack.copy());
+                    updatedLedgerSlots.add(existingLedgerSlot);
+                    changed = true; // always sync to keep client display current
+                } else {
+                    // Allocate a free ledger slot for this new virtual item
+                    int freeSlot = findFreeLedgerSlot();
+                    if (freeSlot < 0) continue; // ledger display full
+
+                    ItemStack snapshot = stack.copy();
+                    items.set(freeSlot, snapshot);
+                    slotToVirtualSource.put(freeSlot, new VirtualSource(adjPos, cSlot));
+
+                    // Auto-price the new virtual slot
+                    if (getSetPrice(freeSlot) <= 0) {
+                        int autoPrice = computeAutoPrice(snapshot);
+                        if (autoPrice > 0) {
+                            slotPrices.put(freeSlot, autoPrice);
+                        } else {
+                            int remembered = getRememberedPrice(snapshot);
+                            if (remembered > 0) slotPrices.put(freeSlot, remembered);
+                        }
+                    }
+                    updatedLedgerSlots.add(freeSlot);
+                    changed = true;
+                }
             }
         }
+
+        // Remove stale virtual slots whose source container slot is now empty/moved
+        List<Integer> staleSlots = new ArrayList<>();
+        for (Map.Entry<Integer, VirtualSource> entry : slotToVirtualSource.entrySet()) {
+            if (!updatedLedgerSlots.contains(entry.getKey())) {
+                staleSlots.add(entry.getKey());
+            }
+        }
+        for (int staleSlot : staleSlots) {
+            items.set(staleSlot, ItemStack.EMPTY);
+            slotPrices.remove(staleSlot);
+            slotToVirtualSource.remove(staleSlot);
+            changed = true;
+        }
+
+        if (changed) {
+            setChanged();
+            syncToClient();
+        }
+    }
+
+    /** Returns the VirtualSource for this ledger slot, or null if it is a real (owned) slot. */
+    @Nullable
+    public VirtualSource getVirtualSource(int slot) {
+        return slotToVirtualSource.get(slot);
+    }
+
+    /** Returns true if this slot contains a snapshot of an item owned by an adjacent container. */
+    public boolean isVirtualSlot(int slot) {
+        Level lvl = getLevel();
+        if (lvl != null && lvl.isClientSide()) {
+            // Client side: use the set synced from server via NBT
+            return clientVirtualSlots.contains(slot);
+        }
+        return slotToVirtualSource.containsKey(slot);
+    }
+
+    /**
+     * Find the ledger slot index already assigned to the given (sourcePos, sourceContainerSlot),
+     * or null if no assignment exists yet.
+     */
+    @Nullable
+    private Integer findVirtualLedgerSlot(BlockPos sourcePos, int sourceContainerSlot) {
+        for (Map.Entry<Integer, VirtualSource> e : slotToVirtualSource.entrySet()) {
+            VirtualSource vs = e.getValue();
+            if (vs.sourceSlot == sourceContainerSlot && vs.sourcePos.equals(sourcePos)) {
+                return e.getKey();
+            }
+        }
+        return null;
+    }
+
+    /** Find the first items[] slot that is completely empty (not occupied by real or virtual item). */
+    private int findFreeLedgerSlot() {
+        for (int i = 0; i < BIN_SIZE; i++) {
+            if (items.get(i).isEmpty()) return i;
+        }
+        return -1;
+    }
+
+    /**
+     * Suppresses auto-syncing from the given adjacent container for the specified
+     * number of ticks. Call this after a "To Container" action so the item
+     * isn't immediately re-imported as a virtual slot.
+     */
+    public void suppressContainerSync(BlockPos containerPos, int ticks) {
+        Level level = getLevel();
+        if (level == null) return;
+        withdrawSuppressedPos.put(containerPos, level.getGameTime() + ticks);
+    }
+
+    /**
+     * Remove the virtual tracking for a slot without touching the source container.
+     * Used when the item is left in the source container intentionally (e.g. "Stop Tracking").
+     */
+    public void removeVirtualTracking(int slot) {
+        if (!isVirtualSlot(slot)) return;
+        // Get source pos for suppression before clearing
+        VirtualSource vs = slotToVirtualSource.get(slot);
+        items.set(slot, ItemStack.EMPTY);
+        slotPrices.remove(slot);
+        slotToVirtualSource.remove(slot);
+        if (vs != null) {
+            // Suppress re-syncing this source container for several cycles
+            suppressContainerSync(vs.sourcePos, 5 * SYNC_INTERVAL_TICKS);
+        }
+        setChanged();
+        syncToClient();
     }
 
     // ==================== Container ====================
@@ -584,6 +808,10 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         items.set(slot, stack);
         if (stack.getCount() > getMaxStackSize()) {
             stack.setCount(getMaxStackSize());
+        }
+        // Remove virtual tracking when a slot is cleared
+        if (stack.isEmpty()) {
+            slotToVirtualSource.remove(slot);
         }
         // Auto-apply price based on AutoPriceMode
         if (!stack.isEmpty() && getSetPrice(slot) <= 0) {
@@ -719,6 +947,17 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         tag.putInt("RareMarkupPercent", rareMarkupPercent);
         tag.putInt("CaravanWeightUpgradeLevel", caravanWeightUpgradeLevel);
 
+        // Virtual slot indices for client-side display
+        int[] virtualIndices = new int[slotToVirtualSource.size()];
+        int vi = 0;
+        for (int idx : slotToVirtualSource.keySet()) virtualIndices[vi++] = idx;
+        tag.putIntArray("VirtualSlots", virtualIndices);
+
+        // Shipment history (most recent first)
+        ListTag historyTag = new ListTag();
+        for (LedgerShipmentRecord rec : shipmentHistory) historyTag.add(rec.save());
+        tag.put("ShipmentHistory", historyTag);
+
     }
 
     @Override
@@ -764,6 +1003,21 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             CompoundTag memoryTag = tag.getCompound("PriceMemory");
             for (String key : memoryTag.getAllKeys()) {
                 priceMemory.put(key, memoryTag.getInt(key));
+            }
+        }
+
+        // Client-side virtual slot index mirror
+        clientVirtualSlots.clear();
+        if (tag.contains("VirtualSlots")) {
+            for (int idx : tag.getIntArray("VirtualSlots")) clientVirtualSlots.add(idx);
+        }
+
+        // Shipment history
+        shipmentHistory.clear();
+        if (tag.contains("ShipmentHistory")) {
+            ListTag histList = tag.getList("ShipmentHistory", 10); // 10 = CompoundTag type
+            for (int i = 0; i < histList.size(); i++) {
+                shipmentHistory.add(LedgerShipmentRecord.load(histList.getCompound(i)));
             }
         }
 

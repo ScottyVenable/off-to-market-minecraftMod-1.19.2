@@ -73,4 +73,9 @@ public class ModItems {
     public static final RegistryObject<Item> MAILBOX_ITEM = ITEMS.register("mailbox",
             () -> new BlockItem(ModBlocks.MAILBOX.get(),
                     new Item.Properties().tab(ModCreativeTab.TAB)));
+
+    // Finance Table
+    public static final RegistryObject<Item> FINANCE_TABLE_ITEM = ITEMS.register("finance_table",
+            () -> new BlockItem(ModBlocks.FINANCE_TABLE.get(),
+                    new Item.Properties().tab(ModCreativeTab.TAB)));
 }
