@@ -184,5 +184,15 @@ public class ModNetwork {
                 OpenCustomMenuPacket::encode, OpenCustomMenuPacket::decode,
                 OpenCustomMenuPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+
+        CHANNEL.registerMessage(id++, DepositCoinsPacket.class,
+                DepositCoinsPacket::encode, DepositCoinsPacket::decode,
+                DepositCoinsPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, WithdrawCoinsPacket.class,
+                WithdrawCoinsPacket::encode, WithdrawCoinsPacket::decode,
+                WithdrawCoinsPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

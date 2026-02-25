@@ -9,7 +9,7 @@
     "type": "MARKET",
 
     "_level_help": "Minimum trader level (1-5) before this town appears in the list.",
-    "minTraderLevel": 2,
+    "minTraderLevel": 1,
 
     "_sells_help": "Items this town lists on the Market Board. Use full registry IDs.",
     "sells": [

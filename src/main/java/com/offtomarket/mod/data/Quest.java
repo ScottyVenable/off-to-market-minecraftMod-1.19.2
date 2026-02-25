@@ -218,7 +218,26 @@ public class Quest {
         List<Quest> quests = new ArrayList<>();
         List<ResourceLocation> needs = new ArrayList<>(town.getNeeds());
         List<ResourceLocation> surplus = new ArrayList<>(town.getSurplus());
-        
+
+        // Fallback: JSON towns use needLevels map rather than the legacy needs/surplus sets.
+        // Build needs/surplus lists from needLevels entries so JSON-only towns get quests.
+        if (needs.isEmpty()) {
+            for (Map.Entry<String, NeedLevel> entry : town.getNeedLevels().entrySet()) {
+                if (entry.getValue().isInDemand()) {
+                    ResourceLocation rl = ResourceLocation.tryParse(entry.getKey());
+                    if (rl != null) needs.add(rl);
+                }
+            }
+        }
+        if (surplus.isEmpty()) {
+            for (Map.Entry<String, NeedLevel> entry : town.getNeedLevels().entrySet()) {
+                if (entry.getValue().isOversupplied()) {
+                    ResourceLocation rl = ResourceLocation.tryParse(entry.getKey());
+                    if (rl != null) surplus.add(rl);
+                }
+            }
+        }
+
         if (needs.isEmpty() && surplus.isEmpty()) return quests;
 
         // Determine quest type distribution

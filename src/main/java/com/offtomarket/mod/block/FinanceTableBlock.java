@@ -1,7 +1,6 @@
 package com.offtomarket.mod.block;
 
 import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
-import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
@@ -97,9 +96,13 @@ public class FinanceTableBlock extends BaseEntityBlock {
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock())) {
             BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof FinanceTableBlockEntity ftbe) {
-                // Drop all stored coins when the block is broken
-                net.minecraft.world.Containers.dropContents(level, pos, ftbe);
+            if (be instanceof FinanceTableBlockEntity ftbe && ftbe.getBalance() > 0) {
+                // Convert the stored balance to coin stacks and drop them into the world
+                for (net.minecraft.world.item.ItemStack stack
+                        : FinanceTableBlockEntity.buildCoinStacks(ftbe.getBalance())) {
+                    net.minecraft.world.Containers.dropItemStack(level,
+                            pos.getX(), pos.getY(), pos.getZ(), stack);
+                }
             }
         }
         super.onRemove(state, level, pos, newState, isMoving);

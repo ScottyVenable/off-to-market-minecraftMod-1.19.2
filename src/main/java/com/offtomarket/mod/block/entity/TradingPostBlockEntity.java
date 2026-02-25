@@ -1679,7 +1679,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             be.lastQuestRefreshDay = dayNumber;
             be.refreshQuests(gameTime);
             changed = true;
-        } else if (dayTime >= 0 && dayTime < 200 && dayNumber > be.lastQuestRefreshDay) {
+        } else if (dayTime >= 0 && dayTime < 500 && dayNumber > be.lastQuestRefreshDay) {
             be.lastQuestRefreshDay = dayNumber;
             be.refreshQuests(gameTime);
             changed = true;

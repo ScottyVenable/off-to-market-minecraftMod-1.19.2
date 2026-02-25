@@ -1,34 +1,63 @@
 package com.offtomarket.mod.client.screen;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
 import com.offtomarket.mod.debug.DebugConfig;
-import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.menu.FinanceTableMenu;
+import com.offtomarket.mod.network.DepositCoinsPacket;
+import com.offtomarket.mod.network.ModNetwork;
+import com.offtomarket.mod.network.WithdrawCoinsPacket;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
 
+/**
+ * Screen for the Finance Table. Shows the deposited coin balance and provides
+ * Deposit All and Withdraw All buttons. No block-entity item slots — all
+ * operations are handled server-side via network packets.
+ */
 public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu> {
 
     public FinanceTableScreen(FinanceTableMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
-        this.imageWidth = 176;
-        this.imageHeight = 168;
-        // Move vanilla label positions to match OtmGuiTheme layout
-        this.inventoryLabelY = this.imageHeight - 94;
+        this.imageWidth  = 176;
+        this.imageHeight = 145;
         this.titleLabelX = 8;
-        this.titleLabelY = 5;
+        this.titleLabelY = 6;
+        // Push inventory label out of the auto-draw path — we draw it manually
+        this.inventoryLabelY = this.imageHeight + 100;
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+
+        // Deposit All button
+        this.addRenderableWidget(new Button(
+                this.leftPos + 8, this.topPos + 44, 78, 20,
+                Component.literal("Deposit All"),
+                btn -> {
+                    FinanceTableBlockEntity be = menu.getBlockEntity();
+                    if (be != null) {
+                        ModNetwork.CHANNEL.sendToServer(new DepositCoinsPacket(be.getBlockPos()));
+                    }
+                }));
+
+        // Withdraw All button
+        this.addRenderableWidget(new Button(
+                this.leftPos + 90, this.topPos + 44, 78, 20,
+                Component.literal("Withdraw All"),
+                btn -> {
+                    FinanceTableBlockEntity be = menu.getBlockEntity();
+                    if (be != null) {
+                        ModNetwork.CHANNEL.sendToServer(new WithdrawCoinsPacket(be.getBlockPos()));
+                    }
+                }));
     }
 
     @Override
     protected void renderBg(PoseStack poseStack, float partialTick, int mouseX, int mouseY) {
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-
         int x = this.leftPos;
         int y = this.topPos;
 
@@ -38,58 +67,55 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
         // Title inset
         OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 3, this.imageWidth - 8, 14);
 
-        // Table slot area inset (3 rows x 9 cols)
-        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 18, this.imageWidth - 8, 56);
+        // Balance display inset
+        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 20, this.imageWidth - 8, 20);
 
-        // Player inventory inset
-        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 78, this.imageWidth - 8, 56);
+        // Player inventory inset (3 rows)
+        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 60, this.imageWidth - 8, 58);
 
         // Hotbar inset
-        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 138, this.imageWidth - 8, 24);
+        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 118, this.imageWidth - 8, 24);
 
-        // Draw individual slot backgrounds
+        // Individual slot backgrounds — player inventory
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                OtmGuiTheme.drawSlot(poseStack, x + 8 + col * 18, y + 18 + row * 18);
+                OtmGuiTheme.drawSlot(poseStack, x + 8 + col * 18, y + FinanceTableMenu.PLAYER_INV_Y + row * 18);
             }
         }
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                OtmGuiTheme.drawSlot(poseStack, x + 8 + col * 18, y + 84 + row * 18);
-            }
-        }
+        // Hotbar slot backgrounds
         for (int col = 0; col < 9; col++) {
-            OtmGuiTheme.drawSlot(poseStack, x + 8 + col * 18, y + 142);
+            OtmGuiTheme.drawSlot(poseStack, x + 8 + col * 18, y + FinanceTableMenu.HOTBAR_Y);
         }
     }
 
     @Override
     protected void renderLabels(PoseStack poseStack, int mouseX, int mouseY) {
         // Title
-        this.font.draw(poseStack, this.title, this.titleLabelX, this.titleLabelY, 0xFFD700);
+        this.font.draw(poseStack, this.title, this.titleLabelX, this.titleLabelY, OtmGuiTheme.TEXT_TITLE);
 
-        // Inventory label
+        // Inventory label above player inventory
         this.font.draw(poseStack, this.playerInventoryTitle,
-                this.titleLabelX, this.inventoryLabelY, 0x888888);
+                this.titleLabelX, FinanceTableMenu.PLAYER_INV_Y - 10, OtmGuiTheme.TEXT_MUTED);
 
-        // Coin value stored
+        // Balance display inside the balance inset panel
         FinanceTableBlockEntity be = menu.getBlockEntity();
-        if (be != null) {
-            int total = be.getTotalCoinValue();
-            if (DebugConfig.isGoldOnlyMode()) {
-                int gp = total / 100;
-                this.font.draw(poseStack, "Stored: \u00A7e" + gp + "g\u00A7r", 8, this.imageHeight - 82, 0xCCAA66);
-            } else {
-                int gp = total / 100;
-                int sp = (total % 100) / 10;
-                int cp = total % 10;
-                StringBuilder sb = new StringBuilder("Stored: ");
-                if (gp > 0) sb.append("\u00A7e").append(gp).append("g\u00A7r ");
-                if (sp > 0) sb.append("\u00A77").append(sp).append("s\u00A7r ");
-                if (cp > 0 || total == 0) sb.append("\u00A76").append(cp).append("c\u00A7r");
-                this.font.draw(poseStack, sb.toString(), 8, this.imageHeight - 82, 0xCCAA66);
-            }
+        int total = (be != null) ? be.getBalance() : 0;
+
+        String balanceText;
+        if (DebugConfig.isGoldOnlyMode()) {
+            int gp = total / 100;
+            balanceText = "Balance: \u00A7e" + gp + "g\u00A7r";
+        } else {
+            int gp = total / 100;
+            int sp = (total % 100) / 10;
+            int cp = total % 10;
+            StringBuilder sb = new StringBuilder("Balance: ");
+            if (gp > 0) sb.append("\u00A7e").append(gp).append("g\u00A7r ");
+            if (sp > 0) sb.append("\u00A77").append(sp).append("s\u00A7r ");
+            if (cp > 0 || total == 0) sb.append("\u00A76").append(cp).append("c\u00A7r");
+            balanceText = sb.toString().trim();
         }
+        this.font.draw(poseStack, balanceText, 8, 26, OtmGuiTheme.TEXT_TITLE);
     }
 
     @Override

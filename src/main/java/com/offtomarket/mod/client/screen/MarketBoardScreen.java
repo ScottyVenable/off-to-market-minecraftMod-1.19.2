@@ -344,7 +344,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                             net.minecraft.world.level.block.entity.BlockEntity fbe =
                                     minecraft.level.getBlockEntity(p);
                             if (fbe instanceof FinanceTableBlockEntity ftbe) {
-                                total += ftbe.getTotalCoinValue();
+                                total += ftbe.getBalance();
                             }
                         }
                     }

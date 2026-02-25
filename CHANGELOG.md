@@ -1,5 +1,31 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.5.0 — Finance Table Bank, Quest Fix & Beau's Market
+
+### Finance Table — Full Redesign
+- Replaced the old 27-slot coin chest with a true bank block.
+- The Finance Table now stores a single integer **balance** (in copper pieces) instead of physical coin item stacks.
+- Added **Deposit All** button: scans the player's entire inventory for coin items, removes them, and adds their total CP value to the balance.
+- Added **Withdraw All** button: converts the full balance to coin item stacks (gold first, then silver, then copper) and delivers them to the player's inventory (overflow dropped at feet).
+- Breaking the Finance Table now drops coin items equivalent to the stored balance rather than the old item inventory.
+- Screen redesigned using OtmGuiTheme: compact layout with a balance display panel, two action buttons, and the player inventory. No item slots on the block entity.
+- Two new network packets: `DepositCoinsPacket` and `WithdrawCoinsPacket`.
+
+### Bug Fix — Quests Not Populating At Dawn
+- Fixed a bug where towns defined entirely via JSON (using only `needLevels` map entries) would never generate quests.
+- Root cause: `Quest.generateQuests()` used the legacy `needs` and `surplus` Sets, which are always empty for JSON-only towns. When both were empty the method returned early with zero quests.
+- Fix: Added fallback logic to build the needs/surplus lists from `town.getNeedLevels()` entries filtered by `NeedLevel.isInDemand()` and `isOversupplied()` when the legacy sets are empty.
+- Also widened the dawn quest-refresh tick window from `dayTime < 200` to `dayTime < 500` to prevent missed refreshes on busy servers.
+
+### Bug Fix — Beau's Market Not Selectable
+- Fixed `beaus_botany_shop.json` having `minTraderLevel: 2`, which prevented players at Trader Level 1 from seeing it in the towns list.
+- Changed to `minTraderLevel: 1`. JSON towns now correctly appear from the first trader level as intended.
+
+### Note — YggdrasilMinecraftSessionService Warning
+- The `Couldn't look up profile properties` log message is a harmless Mojang auth/skin lookup failure that only occurs in offline (dev) mode. It is not mod code and can be safely ignored.
+
+---
+
 ## Version 0.4.9 — Expanded In-Game Commands
 
 ### New Command — /otm help
