@@ -496,27 +496,19 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     // ==================== Drawing Helpers ====================
 
     private void drawPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF1A1209);
-        fill(ps, x + 1, y + 1, x + w - 1, y + 2, 0xFF8B7355);
-        fill(ps, x + 1, y + 1, x + 2, y + h - 1, 0xFF8B7355);
-        fill(ps, x + 1, y + h - 2, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + w - 2, y + 1, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + 2, y + 2, x + w - 2, y + h - 2, 0xFF5C4A32);
+        OtmGuiTheme.drawPanel(ps, x, y, w, h);
     }
 
     private void drawInsetPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF2A1F14);
-        fill(ps, x + 1, y + 1, x + w - 1, y + h - 1, 0xFF3E3226);
+        OtmGuiTheme.drawInsetPanel(ps, x, y, w, h);
     }
 
     private void drawSlot(PoseStack ps, int x, int y) {
-        fill(ps, x - 1, y - 1, x + 17, y + 17, 0xFF373737);
-        fill(ps, x, y, x + 16, y + 16, 0xFF8B8B8B);
+        OtmGuiTheme.drawSlot(ps, x, y);
     }
 
     private String sortLabel(String label, boolean selected, boolean ascending) {
-        if (!selected) return label;
-        return label + (ascending ? " \u25B2" : " \u25BC");
+        return OtmGuiTheme.sortLabel(label, selected, ascending);
     }
 
     private void toggleActivitySort(ActivitySort clicked) {
@@ -1356,9 +1348,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         TradingPostBlockEntity be = menu.getBlockEntity();
 
         // ── Stats strip ──────────────────────────────────────────
-        this.font.draw(ps, "Economy Overview", 8, 36, 0xFFD700);
+        this.font.draw(ps, "Economy Overview", 8, 36, OtmGuiTheme.TEXT_TITLE);
         if (be == null) {
-            this.font.draw(ps, "No data available.", 10, 50, 0x888888);
+            this.font.draw(ps, "No data available.", 10, 50, OtmGuiTheme.TEXT_MUTED);
             return;
         }
 
@@ -1368,33 +1360,33 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Row 1 of stats strip
         int statsY = 40;
-        this.font.draw(ps, "Earnings:", 8, statsY, 0x88BBDD);
+        this.font.draw(ps, "Earnings:", 8, statsY, OtmGuiTheme.TEXT_LABEL);
         if (lifetime > 0) {
             CoinRenderer.renderCoinValue(ps, this.font, 60, statsY, (int) Math.min(lifetime, Integer.MAX_VALUE));
         } else {
-            this.font.draw(ps, "—", 60, statsY, 0x666666);
+            this.font.draw(ps, "—", 60, statsY, OtmGuiTheme.TEXT_MUTED);
         }
-        this.font.draw(ps, "Ships:", 185, statsY, 0x88BBDD);
-        this.font.draw(ps, String.valueOf(totalShips), 216, statsY, 0xFFFFFF);
-        this.font.draw(ps, "Avg/Ship:", 250, statsY, 0x88BBDD);
+        this.font.draw(ps, "Ships:", 185, statsY, OtmGuiTheme.TEXT_LABEL);
+        this.font.draw(ps, String.valueOf(totalShips), 216, statsY, OtmGuiTheme.TEXT_VALUE);
+        this.font.draw(ps, "Avg/Ship:", 250, statsY, OtmGuiTheme.TEXT_LABEL);
         if (avgEarnings > 0) {
             CoinRenderer.renderCoinValue(ps, this.font, 305, statsY, (int) Math.min(avgEarnings, Integer.MAX_VALUE));
         } else {
-            this.font.draw(ps, "—", 305, statsY, 0x666666);
+            this.font.draw(ps, "—", 305, statsY, OtmGuiTheme.TEXT_MUTED);
         }
 
         if (lifetime == 0) {
             // Empty state hint inside the lower panels
-            this.font.draw(ps, "Send shipments to see stats here!", 10, 90, 0x666666);
+            this.font.draw(ps, "Send shipments to see stats here!", 10, 90, OtmGuiTheme.TEXT_MUTED);
             return;
         }
 
         // ── Left panel: Best Towns ────────────────────────────────
-        this.font.draw(ps, "Best Towns", 8, 62, 0xFFD700);
+        this.font.draw(ps, "Best Towns", 8, 62, OtmGuiTheme.TEXT_TITLE);
         // Column sub-headers
-        this.font.draw(ps, "Town",        8,  74, 0xCCAA44);
-        this.font.draw(ps, "Total",      110,  74, 0xCCAA44);
-        this.font.draw(ps, "Avg",        158,  74, 0xCCAA44);
+        this.font.draw(ps, "Town",        8,  74, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Total",      110,  74, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Avg",        158,  74, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> townEarnings = be.getEarningsByTown();
         List<Map.Entry<String, Long>> sortedTowns = townEarnings.entrySet().stream()
@@ -1409,13 +1401,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         for (int i = incomeTownScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedTowns.size(); i++, displayed++) {
             Map.Entry<String, Long> entry = sortedTowns.get(i);
             TownData town = TownRegistry.getTown(entry.getKey());
-            String townName = town != null ? town.getDisplayName() : entry.getKey();
-            if (this.font.width(townName) > 95) {
-                while (this.font.width(townName + "..") > 95 && townName.length() > 2)
-                    townName = townName.substring(0, townName.length() - 1);
-                townName += "..";
-            }
-            this.font.draw(ps, townName, 8, rowY, 0xEEDDCC);
+            String townName = OtmGuiTheme.truncate(this.font,
+                    town != null ? town.getDisplayName() : entry.getKey(), 95);
+            this.font.draw(ps, townName, 8, rowY, OtmGuiTheme.TEXT_NAME);
             CoinRenderer.renderCoinValue(ps, this.font, 110, rowY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
             long avg = entry.getValue() / Math.max(1, countShipmentsForTown(be, entry.getKey()));
             CoinRenderer.renderCoinValue(ps, this.font, 158, rowY, (int) Math.min(avg, Integer.MAX_VALUE));
@@ -1424,13 +1412,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (sortedTowns.size() > VISIBLE_INCOME_ROWS) {
             String scrollInfo = (incomeTownScroll + 1) + "-" + Math.min(incomeTownScroll + VISIBLE_INCOME_ROWS, sortedTowns.size())
                     + " / " + sortedTowns.size();
-            this.font.draw(ps, scrollInfo, 8, 135, 0x557799);
+            this.font.draw(ps, scrollInfo, 8, 135, OtmGuiTheme.TEXT_SCROLL);
         }
 
         // ── Right panel: Top Items ────────────────────────────────
-        this.font.draw(ps, "Top Items", 195, 62, 0xFFD700);
-        this.font.draw(ps, "Item",  195, 74, 0xCCAA44);
-        this.font.draw(ps, "Total", 314, 74, 0xCCAA44);
+        this.font.draw(ps, "Top Items", 195, 62, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Item",  195, 74, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Total", 314, 74, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> itemEarnings = be.getEarningsByItem();
         List<Map.Entry<String, Long>> sortedItems = itemEarnings.entrySet().stream()
@@ -1444,20 +1432,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         displayed = 0;
         for (int i = incomeItemScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedItems.size(); i++, displayed++) {
             Map.Entry<String, Long> entry = sortedItems.get(i);
-            String name = entry.getKey();
-            if (this.font.width(name) > 110) {
-                while (this.font.width(name + "..") > 110 && name.length() > 2)
-                    name = name.substring(0, name.length() - 1);
-                name += "..";
-            }
-            this.font.draw(ps, name, 195, rowY, 0xEEDDCC);
+            String name = OtmGuiTheme.truncate(this.font, entry.getKey(), 110);
+            this.font.draw(ps, name, 195, rowY, OtmGuiTheme.TEXT_NAME);
             CoinRenderer.renderCoinValue(ps, this.font, 314, rowY, (int) Math.min(entry.getValue(), Integer.MAX_VALUE));
             rowY += 9;
         }
         if (sortedItems.size() > VISIBLE_INCOME_ROWS) {
             String scrollInfo = (incomeItemScroll + 1) + "-" + Math.min(incomeItemScroll + VISIBLE_INCOME_ROWS, sortedItems.size())
                     + " / " + sortedItems.size();
-            this.font.draw(ps, scrollInfo, 195, 135, 0x557799);
+            this.font.draw(ps, scrollInfo, 195, 135, OtmGuiTheme.TEXT_SCROLL);
         }
     }
 

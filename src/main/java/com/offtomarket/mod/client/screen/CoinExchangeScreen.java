@@ -56,18 +56,12 @@ public class CoinExchangeScreen extends Screen {
         int y = (this.height - GUI_HEIGHT) / 2;
 
         // Draw outer frame
-        fill(poseStack, x, y, x + GUI_WIDTH, y + GUI_HEIGHT, 0xFF1A1209);
-        fill(poseStack, x + 1, y + 1, x + GUI_WIDTH - 1, y + 2, 0xFF8B7355);
-        fill(poseStack, x + 1, y + 1, x + 2, y + GUI_HEIGHT - 1, 0xFF8B7355);
-        fill(poseStack, x + 1, y + GUI_HEIGHT - 2, x + GUI_WIDTH - 1, y + GUI_HEIGHT - 1, 0xFF2A1F14);
-        fill(poseStack, x + GUI_WIDTH - 2, y + 1, x + GUI_WIDTH - 1, y + GUI_HEIGHT - 1, 0xFF2A1F14);
-        fill(poseStack, x + 2, y + 2, x + GUI_WIDTH - 2, y + GUI_HEIGHT - 2, 0xFF5C4A32);
+        OtmGuiTheme.drawPanel(poseStack, x, y, GUI_WIDTH, GUI_HEIGHT);
 
         // Title bar inset
-        fill(poseStack, x + 4, y + 3, x + GUI_WIDTH - 4, y + 17, 0xFF2A1F14);
-        fill(poseStack, x + 5, y + 4, x + GUI_WIDTH - 5, y + 16, 0xFF3E3226);
+        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 3, GUI_WIDTH - 8, 14);
 
-        drawCenteredString(poseStack, this.font, "Coin Exchange", x + GUI_WIDTH / 2, y + 6, 0xFFD700);
+        drawCenteredString(poseStack, this.font, "Coin Exchange", x + GUI_WIDTH / 2, y + 6, OtmGuiTheme.TEXT_TITLE);
 
         // Coin counts from player inventory
         Minecraft mc = Minecraft.getInstance();
@@ -78,8 +72,7 @@ public class CoinExchangeScreen extends Screen {
             int copper = countItem(inv, ModItems.COPPER_COIN.get());
 
             // Coin count area inset
-            fill(poseStack, x + 4, y + 19, x + GUI_WIDTH - 4, y + 47, 0xFF2A1F14);
-            fill(poseStack, x + 5, y + 20, x + GUI_WIDTH - 5, y + 46, 0xFF3E3226);
+            OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 19, GUI_WIDTH - 8, 28);
 
             int row1Y = y + 23;
             int row2Y = y + 34;

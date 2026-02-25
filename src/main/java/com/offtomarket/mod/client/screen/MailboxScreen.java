@@ -403,16 +403,10 @@ public class MailboxScreen extends AbstractContainerScreen<MailboxMenu> {
     // ==================== Helpers ====================
 
     private void drawPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF1A1209);
-        fill(ps, x + 1, y + 1, x + w - 1, y + 2, 0xFF8B7355);
-        fill(ps, x + 1, y + 1, x + 2, y + h - 1, 0xFF8B7355);
-        fill(ps, x + 1, y + h - 2, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + w - 2, y + 1, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + 2, y + 2, x + w - 2, y + h - 2, 0xFF5C4A32);
+        OtmGuiTheme.drawPanel(ps, x, y, w, h);
     }
 
     private void drawInsetPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF2A1F14);
-        fill(ps, x + 1, y + 1, x + w - 1, y + h - 1, 0xFF3E3226);
+        OtmGuiTheme.drawInsetPanel(ps, x, y, w, h);
     }
 }

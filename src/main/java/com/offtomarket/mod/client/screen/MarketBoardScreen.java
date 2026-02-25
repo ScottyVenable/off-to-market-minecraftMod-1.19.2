@@ -353,9 +353,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
     private void drawSortHeader(PoseStack ps, String label, int x, int y, SortMode mode) {
         boolean active = sortMode == mode;
-        int color = active ? 0xFFFF88 : 0xFFD700;
-        String arrow = active ? (sortAscending ? " \u25B2" : " \u25BC") : "";
-        this.font.draw(ps, label + arrow, x, y, color);
+        this.font.draw(ps, OtmGuiTheme.sortLabel(label, active, sortAscending), x, y, OtmGuiTheme.sortColor(active));
     }
 
     private String formatCoinText(int copperPieces) {
@@ -376,22 +374,15 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     // ==================== Drawing Helpers ====================
 
     private void drawPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF1A1209);
-        fill(ps, x + 1, y + 1, x + w - 1, y + 2, 0xFF8B7355);
-        fill(ps, x + 1, y + 1, x + 2, y + h - 1, 0xFF8B7355);
-        fill(ps, x + 1, y + h - 2, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + w - 2, y + 1, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + 2, y + 2, x + w - 2, y + h - 2, 0xFF5C4A32);
+        OtmGuiTheme.drawPanel(ps, x, y, w, h);
     }
 
     private void drawInsetPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF2A1F14);
-        fill(ps, x + 1, y + 1, x + w - 1, y + h - 1, 0xFF3E3226);
+        OtmGuiTheme.drawInsetPanel(ps, x, y, w, h);
     }
 
     private void drawSlot(PoseStack ps, int x, int y) {
-        fill(ps, x - 1, y - 1, x + 17, y + 17, 0xFF373737);
-        fill(ps, x, y, x + 16, y + 16, 0xFF8B8B8B);
+        OtmGuiTheme.drawSlot(ps, x, y);
     }
 
     // ==================== Render Background ====================
