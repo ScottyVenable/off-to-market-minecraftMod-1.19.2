@@ -1,5 +1,6 @@
 package com.offtomarket.mod.data;
 
+import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.item.AnimalTradeSlipItem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -838,6 +839,16 @@ public class PriceCalculator {
      */
     public static ValueTier getValueTier(ItemStack stack) {
         if (stack.isEmpty()) return TIER_JUNK;
+        // Potions store their effect type, amplifier, and duration in NBT — not in the Item
+        // instance. The per-Item cache would lock in a bare no-NBT water-bottle result for the
+        // shared PotionItem / SplashPotionItem / LingeringPotionItem singletons, making every
+        // potion (including Potion of Regeneration) appear as ~5 CP. Compute fresh every call.
+        if (stack.getItem() instanceof PotionItem
+                || stack.getItem() instanceof SplashPotionItem
+                || stack.getItem() instanceof LingeringPotionItem) {
+            ValueTier ptier = computePotionPrice(stack);
+            return stack.isEnchanted() ? applyEnchantBonus(ptier, stack) : ptier;
+        }
         // Look up (or compute) the base tier for this item type.
         ValueTier base = BASE_TIER_CACHE.computeIfAbsent(stack.getItem(),
                 k -> computeBaseTier(new ItemStack(k)));
@@ -914,12 +925,22 @@ public class PriceCalculator {
         if (stack.getItem() instanceof AnimalTradeSlipItem) {
             CompoundTag tag = stack.getTag();
             if (tag != null && tag.contains(AnimalTradeSlipItem.TAG_ANIMAL_TYPE)) {
-                return AnimalTradeSlipItem.getBaseValue(tag.getString(AnimalTradeSlipItem.TAG_ANIMAL_TYPE));
+                int v = AnimalTradeSlipItem.getBaseValue(tag.getString(AnimalTradeSlipItem.TAG_ANIMAL_TYPE));
+                ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+                DebugConfig.WATCH_LAST_PRICE_ITEM = rl != null ? rl.toString() : "animal_trade_slip";
+                DebugConfig.WATCH_LAST_PRICE_VALUE = v;
+                return v;
             }
             // Unfilled slip - modest base value
+            DebugConfig.WATCH_LAST_PRICE_ITEM = "animal_trade_slip (unfilled)";
+            DebugConfig.WATCH_LAST_PRICE_VALUE = 40;
             return 40;
         }
-        return getValueTier(stack).basePrice();
+        int v = getValueTier(stack).basePrice();
+        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        DebugConfig.WATCH_LAST_PRICE_ITEM = rl != null ? rl.toString() : stack.getItem().getClass().getSimpleName();
+        DebugConfig.WATCH_LAST_PRICE_VALUE = v;
+        return v;
     }
 
     /**

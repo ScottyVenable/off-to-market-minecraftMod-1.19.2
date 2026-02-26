@@ -1,5 +1,64 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.5.6 — Trading Ledger Virtual Slot Isolation
+
+### Bug Fixes
+- **Trading Ledger: real items no longer silently lost via virtual slot conflicts**: Three code paths allowed real (player-owned) items to land in ledger slots that still carried stale virtual-source mappings. Because `saveAdditional()` excludes any slot present in `slotToVirtualSource`, those real items were omitted from saves and permanently lost on the next world load or chunk sync.
+  - `setItem()` now **unconditionally** removes virtual tracking for the touched slot (previously only cleared it when the new stack was empty). This covers all Menu/container-protocol interactions (shift-click, drag, hopper insertion, etc.).
+  - `addItemAmount()` now **skips virtual-mapped slots** in both its merge and empty-fill loops, so programmatic item additions never compete with reserved virtual positions.
+  - `findFreeLedgerSlot()` now **skips slots with pending virtual mappings**, preventing `syncFromAdjacentContainers()` from reusing a slot that another mapping already claims.
+
+---
+
+## Version 0.5.5 — Trading Ledger Item Loss Fix
+
+### Bug Fixes
+- **Trading Ledger no longer loses owned items across sessions**: Stale entries in the internal `clientVirtualSlots` set (only written at world-load, never updated at runtime) were incorrectly flagging real items as virtual during saves, causing them to be excluded from NBT and lost on reload. Save exclusion and `isVirtualSlot()` now rely solely on `slotToVirtualSource`, which is kept live and is fully restored from NBT in `load()`, so it is always the authoritative source of truth.
+
+---
+
+## Version 0.5.4 — Ledger Stability, Live Market Timer & Town Need Display
+
+### Bug Fixes
+- **Trading Ledger: quit/rejoin no longer duplicates items** — Virtual slot source mappings are now persisted in NBT. On world reload the Ledger immediately knows which adjacent container each mirrored slot came from, eliminating the dupe that occurred when the old tick-60 auto-sync ran before chunk neighbours were fully loaded.
+- **Trading Ledger: no longer flashes "empty" on connect** — Stale-slot cleanup is now gated on whether any adjacent container was actually found during the sync tick, preventing a false wipe of freshly-restored virtual slots.
+- **"The Ledger is empty"** — Empty-state text in the Trading Ledger screen updated from "The bin is empty" to "The Ledger is empty".
+- **Market board refresh timer now updates live** — The server syncs the countdown to the client once per second while the cooldown is active, so the displayed timer ticks down in real time instead of jumping at the moment listings refresh.
+- **Town detail panel now shows all needs and surplus** — The needs/surplus display previously iterated only the legacy `needs`/`surplus` sets, which are empty for JSON-defined towns. It now reads from `needLevels` and `supplyLevels` maps (the live system) as well, so every town correctly shows what it wants and what it has too much of.
+
+### Features
+- **Trade button in town detail panel** — A "► Trade" button now appears at the bottom of the town detail view in the Towns tab. Clicking it selects that town and immediately switches to the Trade tab, removing the need to manually navigate over.
+
+---
+
+## Version 0.5.3 — Finance Table Purchase Integration
+
+### Features
+- **Finance Table funds purchases**: When a player does not have enough coins in hand, the mod now automatically draws the remainder from a connected Finance Table (within 8 blocks of the Trading Post). This applies to all purchase paths: direct Market Board buys, cart checkout, worker hiring, and diplomat deal acceptance. The Finance Table balance is checked first in the affordability calculation, and any shortfall is deducted from the bank after the player's own coins are exhausted. No Finance Table is required — the feature is transparent when none is present.
+
+---
+
+## Version 0.5.2 — Bug Fixes
+
+### Bug Fixes
+- **Potion pricing**: Potions of Regeneration (and all other potions) now price correctly based on their actual effect, amplifier, duration, and delivery type. Previously the `Item`-keyed price cache stored a bare water-bottle result for the shared `PotionItem` singleton, making every potion appear as 3–5 CP. Potions now bypass the cache and compute fresh on every lookup.
+- **Trading Ledger item duplication**: Breaking or reloading a Trading Ledger no longer duplicates items from adjacent containers. Virtual (mirrored) slot snapshots are now excluded from NBT saves so they are not mistaken for owned items on the next load.
+- **Beau's Market selection**: Town list rows now play a click sound on selection, giving clear feedback that the click registered. (The town was always selectable; the missing audio confirmation made it feel unresponsive.)
+
+---
+
+## Version 0.5.1 — Global Debug Watch Variables
+
+### Debug Infrastructure
+- Added 9 new `DebugConfig.WATCH_*` static fields: `WATCH_ACTIVE_QUEST_COUNT`, `WATCH_LAST_QUEST_REFRESH_DAY`, `WATCH_SELECTED_TOWN_ID`, `WATCH_FINANCE_TABLE_BALANCE`, `WATCH_LAST_PRICE_ITEM`, `WATCH_LAST_PRICE_VALUE`, `WATCH_QUEST_GEN_TOWN`, `WATCH_QUEST_GEN_NEEDS`, `WATCH_QUEST_GEN_SURPLUS`.
+- `DebugHooks.onServerTick()` now populates the three new Trading Post fields each tick alongside existing watches.
+- `PriceCalculator.getBaseValue()` now writes the item name and CP value to `WATCH_LAST_PRICE_*` on every price lookup.
+- `Quest.generateQuests()` now writes town ID and needs/surplus counts to `WATCH_QUEST_GEN_*` each time quests are generated.
+- Added `TradingPostBlockEntity.getLastQuestRefreshDay()` public getter.
+- Updated `.vscode/DEBUG_WATCHES.md` with a new top section listing all global static watch expressions (work from any breakpoint).
+
+---
+
 ## Version 0.5.0 — Finance Table Bank, Quest Fix & Beau's Market
 
 ### Finance Table — Full Redesign

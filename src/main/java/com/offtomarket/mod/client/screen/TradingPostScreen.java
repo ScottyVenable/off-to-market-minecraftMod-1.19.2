@@ -820,6 +820,19 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                     if (fillW > 0) fill(ps, centerX - fillW, repBarY, centerX, repBarY + repBarH, repColor | 0xFF000000);
                 }
             }
+
+            // Trade shortcut button at the bottom of the right detail panel (y+193 to y+203)
+            int tbX = x + 289;
+            int tbY = y + 193;
+            int tbW = 70;
+            int tbH = 10;
+            int tbBg  = unlocked ? 0xFF3A2E1E : 0xFF2A1F14;
+            int tbAcc = unlocked ? 0xFFBBA878 : 0xFF4A3D2B;
+            fill(ps, tbX,         tbY,         tbX + tbW, tbY + tbH, tbBg);
+            fill(ps, tbX,         tbY,         tbX + 1,   tbY + tbH, tbAcc);
+            fill(ps, tbX,         tbY,         tbX + tbW, tbY + 1,   tbAcc);
+            fill(ps, tbX,         tbY + tbH - 1, tbX + tbW, tbY + tbH, tbAcc);
+            fill(ps, tbX + tbW - 1, tbY,       tbX + tbW, tbY + tbH, tbAcc);
         }
     }
 
@@ -1631,38 +1644,36 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         List<String[]> surplusItems = new ArrayList<>();
         List<String[]> oversatItems = new ArrayList<>();
 
-        for (ResourceLocation needRl : town.getNeeds()) {
-            Item needItem = ForgeRegistries.ITEMS.getValue(needRl);
+        // Collect ALL items with non-BALANCED NeedLevels from every available source:
+        //   - explicit needLevels map (loaded from JSON and updated by SupplyDemandManager)
+        //   - dynamic supplyLevels map
+        //   - legacy needs / surplus sets (backward compatibility)
+        java.util.LinkedHashSet<String> allNeedKeys = new java.util.LinkedHashSet<>();
+        allNeedKeys.addAll(town.getNeedLevels().keySet());
+        allNeedKeys.addAll(town.getSupplyLevels().keySet());
+        for (ResourceLocation rl : town.getNeeds())   allNeedKeys.add(rl.toString());
+        for (ResourceLocation rl : town.getSurplus()) allNeedKeys.add(rl.toString());
+
+        for (String key : allNeedKeys) {
+            ResourceLocation rl = ResourceLocation.tryParse(key);
+            if (rl == null) continue;
+            Item needItem = ForgeRegistries.ITEMS.getValue(rl);
             if (needItem == null) continue;
-            NeedLevel level = town.getNeedLevel(needItem);
+            NeedLevel needLvl = town.getNeedLevel(needItem);
+            if (needLvl == NeedLevel.BALANCED) continue;
             String iname = new ItemStack(needItem).getHoverName().getString();
             if (this.font.width(iname) > 145) {
                 while (this.font.width(iname + "..") > 145 && iname.length() > 3)
                     iname = iname.substring(0, iname.length() - 1);
                 iname += "..";
             }
-            switch (level) {
+            switch (needLvl) {
                 case DESPERATE      -> desperateItems.add(new String[]{iname});
                 case HIGH_NEED      -> highNeedItems.add(new String[]{iname});
                 case MODERATE_NEED  -> moderateItems.add(new String[]{iname});
-                default             -> highNeedItems.add(new String[]{iname});
-            }
-        }
-
-        for (ResourceLocation surpRl : town.getSurplus()) {
-            Item surpItem = ForgeRegistries.ITEMS.getValue(surpRl);
-            if (surpItem == null) continue;
-            NeedLevel level = town.getNeedLevel(surpItem);
-            String iname = new ItemStack(surpItem).getHoverName().getString();
-            if (this.font.width(iname) > 145) {
-                while (this.font.width(iname + "..") > 145 && iname.length() > 3)
-                    iname = iname.substring(0, iname.length() - 1);
-                iname += "..";
-            }
-            switch (level) {
-                case OVERSATURATED  -> oversatItems.add(new String[]{iname});
                 case SURPLUS        -> surplusItems.add(new String[]{iname});
-                default             -> surplusItems.add(new String[]{iname});
+                case OVERSATURATED  -> oversatItems.add(new String[]{iname});
+                default             -> {} // BALANCED already filtered above
             }
         }
 
@@ -1714,6 +1725,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
         if (townContentScroll < maxContentScroll) {
             this.font.draw(poseStack, "\u25BC", rightX + 165, contentBottomY - lineH + 2, 0x6B5A3E);
+        }
+
+        // Trade shortcut button label
+        if (!allTowns.isEmpty()) {
+            TownData viewed = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
+            boolean viewedUnlocked = viewed.getMinTraderLevel() <= traderLevel;
+            String tradeBtnTxt = viewedUnlocked ? "\u25BA Trade" : "Locked";
+            int tradeBtnColor  = viewedUnlocked ? 0xFFD700    : 0x664444;
+            int tradeBtnX = rightX + 93;
+            int tradeTxtW = this.font.width(tradeBtnTxt);
+            this.font.draw(poseStack, tradeBtnTxt, tradeBtnX + (70 - tradeTxtW) / 2.0f, 195, tradeBtnColor);
         }
     }
 
@@ -2919,6 +2941,31 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
+        // Towns tab: Trade button click — navigate to Trade tab with the viewed town selected
+        if (currentTab == Tab.TOWNS && button == 0) {
+            double lx = mouseX - x;
+            double ly = mouseY - y;
+            if (lx >= 289 && lx <= 359 && ly >= 193 && ly <= 203) {
+                List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
+                if (!allTowns.isEmpty()) {
+                    TownData viewed = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
+                    if (viewed.getMinTraderLevel() <= menu.getTraderLevel()) {
+                        List<TownData> available = getAvailableTowns();
+                        for (int i = 0; i < available.size(); i++) {
+                            if (available.get(i).getId().equals(viewed.getId())) {
+                                selectedTownIndex = i;
+                                selectTown(available.get(i));
+                                switchTab(Tab.TRADE);
+                                SoundHelper.playUIClick();
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+        }
+
         // Towns tab: click town in list to select it (left page)
         if (currentTab == Tab.TOWNS && hoveredTownRow >= 0) {
             int townIdx = townListScroll + hoveredTownRow;
@@ -2927,6 +2974,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 townViewPage = townIdx;
                 townContentScroll = 0; // reset right page scroll
                 updateButtonVisibility();
+                SoundHelper.playUIClick();
                 return true;
             }
         }

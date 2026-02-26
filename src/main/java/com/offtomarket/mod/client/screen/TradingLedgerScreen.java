@@ -394,9 +394,9 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
                 if (searchInput != null && !searchInput.getValue().isEmpty()) {
                     drawCenteredString(poseStack, this.font, "No matches", x + 89, y + 110, 0x666666);
                 } else {
-                    drawCenteredString(poseStack, this.font, "Bin is empty", x + 89, y + 104, 0x666666);
+                    drawCenteredString(poseStack, this.font, "The Ledger is empty", x + 89, y + 104, 0x666666);
                     drawCenteredString(poseStack, this.font, "Place a chest or barrel", x + 89, y + 120, 0x555555);
-                    drawCenteredString(poseStack, this.font, "next to the bin to", x + 89, y + 132, 0x555555);
+                    drawCenteredString(poseStack, this.font, "next to the Ledger to", x + 89, y + 132, 0x555555);
                     drawCenteredString(poseStack, this.font, "auto-fill it.", x + 89, y + 144, 0x555555);
                 }
             }

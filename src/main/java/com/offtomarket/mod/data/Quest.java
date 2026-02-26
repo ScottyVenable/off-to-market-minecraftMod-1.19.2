@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import com.offtomarket.mod.debug.DebugConfig;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.*;
@@ -239,6 +240,10 @@ public class Quest {
         }
 
         if (needs.isEmpty() && surplus.isEmpty()) return quests;
+
+        DebugConfig.WATCH_QUEST_GEN_TOWN    = town.getId();
+        DebugConfig.WATCH_QUEST_GEN_NEEDS   = needs.size();
+        DebugConfig.WATCH_QUEST_GEN_SURPLUS = surplus.size();
 
         // Determine quest type distribution
         // Villages: more charity/bulk, Towns: balanced, Cities: more specialty/rush

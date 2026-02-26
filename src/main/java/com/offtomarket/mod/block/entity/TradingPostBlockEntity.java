@@ -129,6 +129,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public Map<String, Long> getEarningsByItem() { return Collections.unmodifiableMap(earningsByItem); }
     public List<BuyOrder> getActiveBuyOrders() { return activeBuyOrders; }
     public List<Quest> getActiveQuests() { return activeQuests; }
+    public long getLastQuestRefreshDay() { return lastQuestRefreshDay; }
     public Worker getNegotiator() { return negotiator; }
     public Worker getTradingCart() { return tradingCart; }
     public Worker getBookkeeper() { return bookkeeper; }
@@ -638,10 +639,11 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
      */
     public boolean buyFromMarket(Player player, MarketListing listing) {
         int totalCost = listing.getTotalPrice();
-        if (!hasEnoughCoins(player, totalCost)) return false;
+        FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+        if (!hasEnoughCoins(player, totalCost, ft)) return false;
 
-        // Deduct coins
-        deductCoins(player, totalCost);
+        // Deduct coins (draws from Finance Table if player inventory runs short)
+        deductCoins(player, totalCost, ft);
 
         // Give item to player
         net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(listing.getItemId());
@@ -783,6 +785,69 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (gp > 0) player.getInventory().add(new ItemStack(ModItems.GOLD_COIN.get(), gp));
         if (sp > 0) player.getInventory().add(new ItemStack(ModItems.SILVER_COIN.get(), sp));
         if (copperAmount > 0) player.getInventory().add(new ItemStack(ModItems.COPPER_COIN.get(), copperAmount));
+    }
+
+    /**
+     * Check if the player (plus an optional connected Finance Table) has enough copper.
+     * Pass null for financeTable to check only player inventory.
+     */
+    public static boolean hasEnoughCoins(Player player, int copperAmount,
+            @Nullable FinanceTableBlockEntity financeTable) {
+        int total = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.getItem() instanceof CoinItem coin) {
+                total += coin.getValue() * stack.getCount();
+            }
+        }
+        total += getCoinBagValue(player);
+        if (financeTable != null) total += financeTable.getBalance();
+        return total >= copperAmount;
+    }
+
+    /**
+     * Deduct copper from the player, drawing from a connected Finance Table if the
+     * player's own coins are insufficient. Pass null for financeTable to deduct from
+     * player only (same as the single-arg overload).
+     */
+    public static void deductCoins(Player player, int copperAmount,
+            @Nullable FinanceTableBlockEntity financeTable) {
+        if (financeTable == null) {
+            deductCoins(player, copperAmount);
+            return;
+        }
+        // Determine how much the player can cover from inventory + coin bag
+        int playerTotal = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.getItem() instanceof CoinItem coin) {
+                playerTotal += coin.getValue() * stack.getCount();
+            }
+        }
+        playerTotal += getCoinBagValue(player);
+
+        int fromPlayer = Math.min(playerTotal, copperAmount);
+        int fromBank   = copperAmount - fromPlayer;
+
+        if (fromPlayer > 0) deductCoins(player, fromPlayer);
+        if (fromBank   > 0) financeTable.setBalance(Math.max(0, financeTable.getBalance() - fromBank));
+    }
+
+    /**
+     * Find a Finance Table block entity within 8 blocks of pos.
+     * Used to check for a connected Finance Table when processing purchases.
+     */
+    @Nullable
+    public static FinanceTableBlockEntity findNearbyFinanceTable(Level level, BlockPos pos) {
+        if (level == null) return null;
+        int radius = 8;
+        for (BlockPos candidate : BlockPos.betweenClosed(
+                pos.offset(-radius, -radius, -radius),
+                pos.offset(radius, radius, radius))) {
+            BlockEntity be = level.getBlockEntity(candidate);
+            if (be instanceof FinanceTableBlockEntity ftbe) return ftbe;
+        }
+        return null;
     }
 
     // ==================== Buy Order Methods ====================
@@ -1078,9 +1143,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (worker.isHired()) return false;
 
         int cost = worker.getHireCost();
-        if (!hasEnoughCoins(player, cost)) return false;
+        FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+        if (!hasEnoughCoins(player, cost, ft)) return false;
 
-        deductCoins(player, cost);
+        deductCoins(player, cost, ft);
         worker.setHired(true);
         syncToClient();
         return true;
@@ -1298,7 +1364,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         for (DiplomatRequest req : activeDiplomatRequests) {
             if (req.getId().equals(requestId) && req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
                 int cost = req.getProposedPrice();
-                if (!hasEnoughCoins(player, cost)) {
+                FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+                if (!hasEnoughCoins(player, cost, ft)) {
                     // Not enough coins - decline automatically
                     req.setStatus(DiplomatRequest.Status.DECLINED);
                     TownData costTown = TownRegistry.getTown(req.getTownId());
@@ -1314,7 +1381,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     return false;
                 }
                 
-                deductCoins(player, cost);
+                deductCoins(player, cost, ft);
                 req.setStatus(DiplomatRequest.Status.WAITING_FOR_GOODS);
                 syncToClient();
                 return true;

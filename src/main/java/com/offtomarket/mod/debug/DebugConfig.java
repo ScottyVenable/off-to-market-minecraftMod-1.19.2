@@ -132,6 +132,25 @@ public class DebugConfig {
     /** Read-only: last error/event message */
     public static String WATCH_LAST_EVENT = "none";
 
+    /** Read-only: number of active quests on the nearest Trading Post */
+    public static int WATCH_ACTIVE_QUEST_COUNT = 0;
+    /** Read-only: last day quests were refreshed on the nearest Trading Post */
+    public static long WATCH_LAST_QUEST_REFRESH_DAY = -1;
+    /** Read-only: selected town ID on the nearest Trading Post */
+    public static String WATCH_SELECTED_TOWN_ID = "none";
+    /** Read-only: balance of the nearest Finance Table (copper pieces) */
+    public static int WATCH_FINANCE_TABLE_BALANCE = 0;
+    /** Read-only: registry name of the last item evaluated by PriceCalculator */
+    public static String WATCH_LAST_PRICE_ITEM = "none";
+    /** Read-only: base CP value returned by PriceCalculator for the last item */
+    public static int WATCH_LAST_PRICE_VALUE = 0;
+    /** Read-only: town ID used in the most recent Quest.generateQuests() call */
+    public static String WATCH_QUEST_GEN_TOWN = "none";
+    /** Read-only: number of needs found in the most recent Quest.generateQuests() call */
+    public static int WATCH_QUEST_GEN_NEEDS = 0;
+    /** Read-only: number of surplus items found in the most recent Quest.generateQuests() call */
+    public static int WATCH_QUEST_GEN_SURPLUS = 0;
+
     // ===================== Config Apply =====================
 
     /**

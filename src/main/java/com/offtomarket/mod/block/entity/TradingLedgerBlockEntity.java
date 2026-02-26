@@ -536,10 +536,12 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         int toInsert = Math.min(stack.getCount(), maxByWeight);
         int inserted = 0;
 
-        // 1) Merge into existing compatible stacks
+        // 1) Merge into existing compatible stacks (skip virtual snapshots — their count
+        //    is managed by syncFromAdjacentContainers and must not be inflated by real adds)
         for (int i = 0; i < BIN_SIZE && inserted < toInsert; i++) {
             ItemStack existing = items.get(i);
             if (existing.isEmpty()) continue;
+            if (slotToVirtualSource.containsKey(i)) continue;
             if (!ItemStack.isSameItemSameTags(existing, stack)) continue;
 
             int room = Math.max(0, MAX_STACK_PER_SLOT - existing.getCount());
@@ -550,10 +552,12 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             inserted += add;
         }
 
-        // 2) Fill empty slots
+        // 2) Fill empty slots (skip slots reserved for virtual sources — those will be
+        //    populated by syncFromAdjacentContainers on the next tick)
         for (int i = 0; i < BIN_SIZE && inserted < toInsert; i++) {
             ItemStack existing = items.get(i);
             if (!existing.isEmpty()) continue;
+            if (slotToVirtualSource.containsKey(i)) continue;
 
             int add = Math.min(MAX_STACK_PER_SLOT, toInsert - inserted);
             ItemStack placed = stack.copy();
@@ -631,6 +635,11 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         // Track which ledger slots were refreshed this cycle
         List<Integer> updatedLedgerSlots = new ArrayList<>();
         boolean changed = false;
+        // Track whether we actually found (and iterated) at least one adjacent container.
+        // Used to guard stale-slot cleanup: if no container was visible on tick 1 after a
+        // world reload (neighbours not yet loaded), we must NOT prematurely clear the
+        // VirtualSource mappings that were just restored from NBT.
+        boolean seenAnyContainer = false;
 
         for (Direction dir : Direction.values()) {
             BlockPos adjPos = pos.relative(dir);
@@ -640,6 +649,8 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
 
             // Skip containers suppressed by recent "To Container" withdrawal
             if (withdrawSuppressedPos.getOrDefault(adjPos, 0L) > now) continue;
+
+            seenAnyContainer = true;
 
             for (int cSlot = 0; cSlot < container.getContainerSize(); cSlot++) {
                 ItemStack stack = container.getItem(cSlot);
@@ -678,18 +689,23 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             }
         }
 
-        // Remove stale virtual slots whose source container slot is now empty/moved
-        List<Integer> staleSlots = new ArrayList<>();
-        for (Map.Entry<Integer, VirtualSource> entry : slotToVirtualSource.entrySet()) {
-            if (!updatedLedgerSlots.contains(entry.getKey())) {
-                staleSlots.add(entry.getKey());
+        // Remove stale virtual slots whose source container slot is now empty/moved.
+        // Only run stale cleanup when we actually found at least one adjacent container;
+        // otherwise we would falsely remove freshly-restored VirtualSource entries on
+        // the first tick after a world reload, before neighbours have had a chance to load.
+        if (seenAnyContainer) {
+            List<Integer> staleSlots = new ArrayList<>();
+            for (Map.Entry<Integer, VirtualSource> entry : slotToVirtualSource.entrySet()) {
+                if (!updatedLedgerSlots.contains(entry.getKey())) {
+                    staleSlots.add(entry.getKey());
+                }
             }
-        }
-        for (int staleSlot : staleSlots) {
-            items.set(staleSlot, ItemStack.EMPTY);
-            slotPrices.remove(staleSlot);
-            slotToVirtualSource.remove(staleSlot);
-            changed = true;
+            for (int staleSlot : staleSlots) {
+                items.set(staleSlot, ItemStack.EMPTY);
+                slotPrices.remove(staleSlot);
+                slotToVirtualSource.remove(staleSlot);
+                changed = true;
+            }
         }
 
         if (changed) {
@@ -711,10 +727,12 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             // Client side: use the set synced from server via NBT
             return clientVirtualSlots.contains(slot);
         }
-        // Server: check live tick-populated map first, then fall back to the NBT-loaded set
-        // (clientVirtualSlots is populated from NBT in load() on both sides, so it is reliable
-        // during block break even before the first server-tick scan has run).
-        return slotToVirtualSource.containsKey(slot) || clientVirtualSlots.contains(slot);
+        // Server: slotToVirtualSource is persisted and fully restored from NBT in load(), so it
+        // is authoritative from the moment the block entity is loaded — no fallback needed.
+        // Do NOT fall back to clientVirtualSlots here: that set is only written once at load()
+        // and stays stale during play, causing real items in formerly-virtual slots to be
+        // misidentified as virtual (excluded from saves / not dropped on block break).
+        return slotToVirtualSource.containsKey(slot);
     }
 
     /**
@@ -732,10 +750,15 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         return null;
     }
 
-    /** Find the first items[] slot that is completely empty (not occupied by real or virtual item). */
+    /**
+     * Find the first items[] slot that is completely empty AND has no pending virtual
+     * source mapping.  Slots with a virtual mapping but empty items (e.g. right after
+     * a world reload, before the first syncFromAdjacentContainers tick) are reserved
+     * for their mapped source and must not be reused for new virtual items.
+     */
     private int findFreeLedgerSlot() {
         for (int i = 0; i < BIN_SIZE; i++) {
-            if (items.get(i).isEmpty()) return i;
+            if (items.get(i).isEmpty() && !slotToVirtualSource.containsKey(i)) return i;
         }
         return -1;
     }
@@ -812,10 +835,12 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         if (stack.getCount() > getMaxStackSize()) {
             stack.setCount(getMaxStackSize());
         }
-        // Remove virtual tracking when a slot is cleared
-        if (stack.isEmpty()) {
-            slotToVirtualSource.remove(slot);
-        }
+        // Always remove virtual tracking when the container protocol touches a slot.
+        // If a real item is being placed (e.g. shift-click from player inventory), the
+        // slot must no longer be considered virtual — otherwise saveAdditional() would
+        // exclude the real item from NBT, permanently losing it on the next save/load.
+        // If the slot is being cleared, the mapping is stale anyway.
+        slotToVirtualSource.remove(slot);
         // Auto-apply price based on AutoPriceMode
         if (!stack.isEmpty() && getSetPrice(slot) <= 0) {
             int autoPrice = computeAutoPrice(stack);
@@ -917,7 +942,18 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
-        ContainerHelper.saveAllItems(tag, items);
+        // Exclude virtual (mirrored) slots from persistence. Virtual slots are snapshots of
+        // items in adjacent containers; saving them causes item duplication on reload because
+        // those items are also stored in their source containers' own NBT.
+        // Only use slotToVirtualSource (the authoritative live map) — NOT clientVirtualSlots,
+        // which is only updated at load() and stays stale during play.  Using it would wrongly
+        // exclude real items placed into formerly-virtual slots after stale-cleanup removed them
+        // from slotToVirtualSource.
+        NonNullList<ItemStack> saveItems = NonNullList.withSize(BIN_SIZE, ItemStack.EMPTY);
+        for (int i = 0; i < BIN_SIZE; i++) {
+            if (!slotToVirtualSource.containsKey(i)) saveItems.set(i, items.get(i));
+        }
+        ContainerHelper.saveAllItems(tag, saveItems);
 
         CompoundTag pricesTag = new CompoundTag();
         for (Map.Entry<Integer, Integer> entry : slotPrices.entrySet()) {
@@ -950,11 +986,26 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         tag.putInt("RareMarkupPercent", rareMarkupPercent);
         tag.putInt("CaravanWeightUpgradeLevel", caravanWeightUpgradeLevel);
 
-        // Virtual slot indices for client-side display
-        int[] virtualIndices = new int[slotToVirtualSource.size()];
-        int vi = 0;
-        for (int idx : slotToVirtualSource.keySet()) virtualIndices[vi++] = idx;
+        // Virtual slot indices for client-side display.
+        // slotToVirtualSource is now persisted and restored in load(), so it is authoritative
+        // from the very first tick.  No need to union with the stale clientVirtualSlots set.
+        int[] virtualIndices = slotToVirtualSource.keySet().stream().mapToInt(Integer::intValue).toArray();
         tag.putIntArray("VirtualSlots", virtualIndices);
+
+        // Persist virtual source mappings (sourcePos + sourceSlot per ledger slot) so items
+        // can be immediately re-resolved after a world reload without waiting for the first
+        // syncFromAdjacentContainers() tick.
+        ListTag virtualSourcesTag = new ListTag();
+        for (Map.Entry<Integer, VirtualSource> e : slotToVirtualSource.entrySet()) {
+            CompoundTag vsTag = new CompoundTag();
+            vsTag.putInt("LedgerSlot", e.getKey());
+            vsTag.putInt("SX", e.getValue().sourcePos.getX());
+            vsTag.putInt("SY", e.getValue().sourcePos.getY());
+            vsTag.putInt("SZ", e.getValue().sourcePos.getZ());
+            vsTag.putInt("SSlot", e.getValue().sourceSlot);
+            virtualSourcesTag.add(vsTag);
+        }
+        tag.put("VirtualSources", virtualSourcesTag);
 
         // Shipment history (most recent first)
         ListTag historyTag = new ListTag();
@@ -1006,6 +1057,21 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             CompoundTag memoryTag = tag.getCompound("PriceMemory");
             for (String key : memoryTag.getAllKeys()) {
                 priceMemory.put(key, memoryTag.getInt(key));
+            }
+        }
+
+        // Restore virtual source mappings persisted during saveAdditional so the first
+        // syncFromAdjacentContainers() tick can refresh items at the correct ledger slots
+        // instead of allocating new (potentially wrong) free slots.
+        slotToVirtualSource.clear();
+        if (tag.contains("VirtualSources")) {
+            ListTag vsList = tag.getList("VirtualSources", 10);
+            for (int i = 0; i < vsList.size(); i++) {
+                CompoundTag vsTag = vsList.getCompound(i);
+                int ledgerSlot = vsTag.getInt("LedgerSlot");
+                BlockPos sp = new BlockPos(vsTag.getInt("SX"), vsTag.getInt("SY"), vsTag.getInt("SZ"));
+                int sSlot = vsTag.getInt("SSlot");
+                slotToVirtualSource.put(ledgerSlot, new VirtualSource(sp, sSlot));
             }
         }
 
