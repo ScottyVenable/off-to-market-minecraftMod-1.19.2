@@ -43,6 +43,7 @@ public class WithdrawBinItemPacket {
         ctx.get().enqueueWork(() -> {
             ServerPlayer player = ctx.get().getSender();
             if (player != null) {
+                if (player.distanceToSqr(msg.pos.getX() + 0.5, msg.pos.getY() + 0.5, msg.pos.getZ() + 0.5) > 64.0) return;
                 BlockEntity be = player.level.getBlockEntity(msg.pos);
                 if (be instanceof TradingLedgerBlockEntity tbbe) {
                     if (msg.slot >= 0 && msg.slot < TradingLedgerBlockEntity.BIN_SIZE) {
@@ -58,6 +59,7 @@ public class WithdrawBinItemPacket {
                                     tbbe.removeVirtualTracking(msg.slot);
                                 } else {
                                     // "To Inventory": remove from source container, give to player
+                                    boolean extracted = false;
                                     BlockEntity srcBe = player.level.getBlockEntity(vs.sourcePos);
                                     if (srcBe instanceof net.minecraft.world.Container srcCont) {
                                         ItemStack srcStack = srcCont.getItem(vs.sourceSlot);
@@ -68,13 +70,17 @@ public class WithdrawBinItemPacket {
                                             srcStack.shrink(take);
                                             srcCont.setItem(vs.sourceSlot, srcStack.isEmpty() ? ItemStack.EMPTY : srcStack);
                                             srcCont.setChanged();
+                                            extracted = true;
                                         }
                                     }
-                                    // Clear virtual ledger slot
+                                    // Always clear the stale virtual snapshot
                                     tbbe.setItem(msg.slot, ItemStack.EMPTY);
                                     tbbe.setChanged();
-                                    if (!player.getInventory().add(toGive)) {
-                                        player.drop(toGive, false);
+                                    // Only give the player items if source extraction succeeded
+                                    if (extracted) {
+                                        if (!player.getInventory().add(toGive)) {
+                                            player.drop(toGive, false);
+                                        }
                                     }
                                 }
                             } else {

@@ -1,5 +1,16 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.5.7 — Security, Duplication & World Compat Fixes
+
+### Security
+- **WithdrawBinItemPacket distance validation**: Added `distanceToSqr` check (> 64.0 blocks) to the withdraw packet handler. Previously, a modified client could withdraw items from any loaded Trading Ledger regardless of distance.
+
+### Bug Fixes
+- **Virtual slot stale cache duplication**: When withdrawing a virtual slot "To Inventory", the code now only gives the player the item if extraction from the source container actually succeeded. Previously, if the source container was removed or the slot was empty, the player would still receive a copy of the stale snapshot data.
+- **Registry remap handler for `trading_bin` to `trading_ledger`**: Added a `MissingMappingsEvent` handler that remaps the old `offtomarket:trading_bin` registry IDs (blocks, items, block entity types) to `offtomarket:trading_ledger`. This prevents worlds created before the rename from losing their Trading Ledger blocks on load.
+
+---
+
 ## Version 0.5.6 — Trading Ledger Virtual Slot Isolation
 
 ### Bug Fixes
