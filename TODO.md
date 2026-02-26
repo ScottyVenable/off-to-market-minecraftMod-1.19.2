@@ -25,6 +25,9 @@ VERSION 0.6
 
 
 0.6.1
+- The items are STILL disappearing from the Trading Ledger block and will occassionally pop back in but then disappear again.
 - Gold in Finance Table doesn't update after buying items
 - Expand and improve the functionality of the Finance Table, especially by making you choose how much coin to withdraw/deposit by using input fields.
-- 
+- Add more error handling to log any errors or warnings.
+- Cannot select Beau's market in the towns tab (due to maybe being a custom town). Make it so custom towns are automatically added instead of needing to be hardcoded in - And make sure that all the town JSON files contain all the data fields it needs to work and be seemlessly added to the game.
+- Create a new worker that assesses the stock of a town/market and returns with info on it to update in the Town window.

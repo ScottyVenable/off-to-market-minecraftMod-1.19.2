@@ -1,5 +1,6 @@
 package com.offtomarket.mod.block.entity;
 
+import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.block.MailboxBlock;
 import com.offtomarket.mod.data.*;
 import com.offtomarket.mod.debug.DebugConfig;
@@ -18,6 +19,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import org.slf4j.Logger;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.Containers;
 import net.minecraft.world.MenuProvider;
@@ -44,6 +46,8 @@ import java.util.*;
  * - Incoming coin storage
  */
 public class TradingPostBlockEntity extends BlockEntity implements MenuProvider {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     // Trader progression
     private int traderLevel = 1;
@@ -96,6 +100,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     private Worker negotiator = new Worker(Worker.WorkerType.NEGOTIATOR);
     private Worker tradingCart = new Worker(Worker.WorkerType.TRADING_CART);
     private Worker bookkeeper = new Worker(Worker.WorkerType.BOOKKEEPER);
+    private Worker stockScout = new Worker(Worker.WorkerType.STOCK_SCOUT);
+
+    // Stock Scout mission state
+    private String scoutTargetTownId = "";  // town currently being scouted (empty = idle)
+    private long scoutReturnTime = 0;       // game time when scout returns
+    private final java.util.Map<String, ScoutReport> scoutReports = new java.util.LinkedHashMap<>();
 
     // Diplomat requests (player requests specific items from towns)
     private final List<DiplomatRequest> activeDiplomatRequests = new ArrayList<>();
@@ -133,6 +143,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public Worker getNegotiator() { return negotiator; }
     public Worker getTradingCart() { return tradingCart; }
     public Worker getBookkeeper() { return bookkeeper; }
+    public Worker getStockScout() { return stockScout; }
 
     /**
      * Get a worker by type.
@@ -142,12 +153,20 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             case NEGOTIATOR -> negotiator;
             case TRADING_CART -> tradingCart;
             case BOOKKEEPER -> bookkeeper;
+            case STOCK_SCOUT -> stockScout;
         };
     }
 
     public List<DiplomatRequest> getActiveDiplomatRequests() { return activeDiplomatRequests; }
     public long getLastRefreshDay() { return lastRefreshDay; }
     public Map<String, Integer> getTownReputation() { return Collections.unmodifiableMap(townReputation); }
+
+    // Scout accessors
+    public String getScoutTargetTownId() { return scoutTargetTownId; }
+    public long getScoutReturnTime() { return scoutReturnTime; }
+    public boolean isScoutOnMission() { return !scoutTargetTownId.isEmpty() && scoutReturnTime > 0; }
+    public ScoutReport getScoutReport(String townId) { return scoutReports.get(townId); }
+    public java.util.Map<String, ScoutReport> getScoutReports() { return Collections.unmodifiableMap(scoutReports); }
     
     /**
      * Get reputation with a specific town. Returns 0 if no reputation exists.
@@ -262,6 +281,14 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         tag.put("Negotiator", negotiator.save());
         tag.put("TradingCart", tradingCart.save());
         tag.put("Bookkeeper", bookkeeper.save());
+        tag.put("StockScout", stockScout.save());
+
+        // Scout mission state
+        tag.putString("ScoutTarget", scoutTargetTownId);
+        tag.putLong("ScoutReturn", scoutReturnTime);
+        ListTag reportList = new ListTag();
+        for (ScoutReport r : scoutReports.values()) reportList.add(r.save());
+        tag.put("ScoutReports", reportList);
 
         ListTag diplomatList = new ListTag();
         for (DiplomatRequest dr : activeDiplomatRequests) diplomatList.add(dr.save());
@@ -350,6 +377,20 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("Bookkeeper")) {
             bookkeeper = Worker.load(tag.getCompound("Bookkeeper"));
+        }
+        if (tag.contains("StockScout")) {
+            stockScout = Worker.load(tag.getCompound("StockScout"));
+        }
+
+        scoutTargetTownId = tag.getString("ScoutTarget");
+        scoutReturnTime = tag.getLong("ScoutReturn");
+        scoutReports.clear();
+        if (tag.contains("ScoutReports")) {
+            ListTag rptList = tag.getList("ScoutReports", Tag.TAG_COMPOUND);
+            for (int i = 0; i < rptList.size(); i++) {
+                ScoutReport r = ScoutReport.load(rptList.getCompound(i));
+                scoutReports.put(r.getTownId(), r);
+            }
         }
 
         activeDiplomatRequests.clear();
@@ -843,7 +884,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         int fromBank   = copperAmount - fromPlayer;
 
         if (fromPlayer > 0) deductCoins(player, fromPlayer);
-        if (fromBank   > 0) financeTable.setBalance(Math.max(0, financeTable.getBalance() - fromBank));
+        if (fromBank   > 0) {
+            financeTable.setBalance(Math.max(0, financeTable.getBalance() - fromBank));
+            financeTable.syncToClient(); // push updated balance to the client immediately
+        }
     }
 
     /**
@@ -1254,6 +1298,154 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         return Math.max(1, earnings - totalCosts);
     }
 
+    // ==================== Stock Scout Methods ====================
+
+    /**
+     * Dispatch the stock scout to a town. The scout travels there, gathers intel,
+     * and returns with a ScoutReport. Per-trip cost is deducted from the player
+     * (using the finance table if available).
+     *
+     * @return true if the scout was dispatched successfully
+     */
+    public boolean dispatchScout(String townId, Player player) {
+        if (!stockScout.isHired()) {
+            LOGGER.warn("[OTM] Cannot dispatch scout — not hired");
+            return false;
+        }
+        if (isScoutOnMission()) {
+            LOGGER.debug("[OTM] Scout already on mission to {}", scoutTargetTownId);
+            return false;
+        }
+
+        TownData town = TownRegistry.getTown(townId);
+        if (town == null) {
+            LOGGER.warn("[OTM] Cannot dispatch scout — town '{}' not found", townId);
+            return false;
+        }
+        if (town.getMinTraderLevel() > traderLevel) return false;
+
+        int tripCost = stockScout.getPerTripCost();
+        FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+        if (!hasEnoughCoins(player, tripCost, ft)) return false;
+
+        deductCoins(player, tripCost, ft);
+
+        // Scout travels faster than shipments (no cargo). Use 60% of normal travel time.
+        long gameTime = level.getGameTime();
+        int baseTravelTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
+        int scoutTravelTicks = (int) (baseTravelTicks * 0.6 * getTravelTimeMultiplier());
+        // Round trip: there and back
+        scoutReturnTime = gameTime + (scoutTravelTicks * 2L);
+        scoutTargetTownId = townId;
+
+        LOGGER.debug("[OTM] Scout dispatched to {} — returns at tick {}", townId, scoutReturnTime);
+        syncToClient();
+        return true;
+    }
+
+    /**
+     * Called when the scout returns from a mission. Builds a ScoutReport from
+     * the town's current inventory, filtered by the scout's level capabilities.
+     */
+    private void completeScoutMission(long gameTime) {
+        if (scoutTargetTownId == null || scoutTargetTownId.isEmpty()) return;
+        TownData town = TownRegistry.getTown(scoutTargetTownId);
+        TownInventory inv = TownInventoryManager.getInventory(scoutTargetTownId);
+
+        ScoutReport report = new ScoutReport(scoutTargetTownId);
+        report.setScoutedAt(gameTime);
+        report.setScoutLevel(stockScout.getLevel());
+
+        if (inv != null && town != null) {
+            List<TownInventory.StockSlot> slots = inv.getSlots();
+            int totalStock = 0;
+            for (TownInventory.StockSlot s : slots) totalStock += s.getQuantity();
+
+            report.setTotalUniqueItems(slots.size());
+            report.setTotalStock(totalStock);
+            report.setStockHealth(ScoutReport.StockHealth.fromStock(totalStock, slots.size()));
+            report.setPricesRevealed(stockScout.scoutRevealsPrices());
+            report.setBestDealsRevealed(stockScout.scoutRevealsBestDeals());
+
+            // Build item entries (limited by scout level)
+            int revealCount = stockScout.getScoutRevealCount();
+
+            // Sort slots by quantity descending so the scout reports the most notable items
+            List<TownInventory.StockSlot> sorted = new ArrayList<>(slots);
+            sorted.sort((a, b) -> Integer.compare(b.getQuantity(), a.getQuantity()));
+
+            // Identify best deal (lowest price relative to base value)
+            String bestDealKey = "";
+            if (stockScout.scoutRevealsBestDeals() && !sorted.isEmpty()) {
+                double bestRatio = Double.MAX_VALUE;
+                for (TownInventory.StockSlot s : sorted) {
+                    if (s.getQuantity() <= 0) continue;
+                    int baseVal = PriceCalculator.getBaseValue(s.createSampleStack());
+                    if (baseVal <= 0) continue;
+                    ItemStack sample = s.createSampleStack();
+                    int townPrice = PriceCalculator.calculateFinalValue(sample, baseVal, town);
+                    double ratio = (double) townPrice / baseVal;
+                    if (ratio < bestRatio) {
+                        bestRatio = ratio;
+                        bestDealKey = s.getStockKey();
+                    }
+                }
+            }
+
+            int count = 0;
+            for (TownInventory.StockSlot s : sorted) {
+                if (count >= revealCount) break;
+                if (s.getQuantity() <= 0) continue;
+
+                int price = 0;
+                if (stockScout.scoutRevealsPrices()) {
+                    int baseVal = PriceCalculator.getBaseValue(s.createSampleStack());
+                    price = PriceCalculator.calculateFinalValue(
+                            s.createSampleStack(), baseVal, town);
+                }
+
+                boolean isBestDeal = stockScout.scoutRevealsBestDeals()
+                        && s.getStockKey().equals(bestDealKey);
+
+                report.getEntries().add(new ScoutReport.ReportEntry(
+                        s.getDisplayName(),
+                        s.getItemId().toString(),
+                        s.getQuantity(),
+                        price,
+                        s.isOnSale(),
+                        isBestDeal
+                ));
+                count++;
+            }
+        } else {
+            // Town inventory not available — minimal report
+            report.setTotalUniqueItems(0);
+            report.setTotalStock(0);
+            report.setStockHealth(ScoutReport.StockHealth.EMPTY);
+        }
+
+        scoutReports.put(scoutTargetTownId, report);
+
+        // Award XP/trip to scout
+        stockScout.completedTrip();
+        stockScout.addXp(10 + stockScout.getLevel() * 2);
+        stockScout.addLifetimeBonusValue(1); // "Towns scouted" counter
+
+        // Notify
+        String townName = town != null ? town.getDisplayName() : scoutTargetTownId;
+        notifyNearbyPlayers(level, worldPosition,
+                Component.literal("\uD83D\uDD0D Scout returned from " + townName + " with a stock report!")
+                        .withStyle(ChatFormatting.GREEN));
+        SoundHelper.playShipmentArrive(level, worldPosition);
+
+        // Clear mission state
+        scoutTargetTownId = "";
+        scoutReturnTime = 0;
+
+        LOGGER.debug("[OTM] Scout mission complete — report generated for {}", report.getTownId());
+        syncToClient();
+    }
+
     // ==================== Diplomat Methods ====================
 
     /**
@@ -1487,6 +1679,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     public static void serverTick(Level level, BlockPos pos, BlockState state,
                                    TradingPostBlockEntity be) {
+        try {
+            serverTickInternal(level, pos, state, be);
+        } catch (Exception e) {
+            LOGGER.error("[OTM] TradingPostBlockEntity.serverTick crashed at {}. Tick skipped.", pos, e);
+        }
+    }
+
+    private static void serverTickInternal(Level level, BlockPos pos, BlockState state,
+                                            TradingPostBlockEntity be) {
         long gameTime = level.getGameTime();
 
         // Only one trading post processes the global tick logic per game tick.
@@ -1714,6 +1915,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             }
         }
         be.activeDiplomatRequests.removeAll(failedRequests);
+
+        // Process stock scout return
+        if (be.isScoutOnMission() && gameTime >= be.scoutReturnTime) {
+            be.completeScoutMission(gameTime);
+            changed = true;
+        }
 
         // Quest reward arrival check — DELIVERING quests whose rewards have arrived
         for (Quest quest : be.activeQuests) {
@@ -2040,6 +2247,14 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         tag.put("Negotiator", negotiator.save());
         tag.put("TradingCart", tradingCart.save());
         tag.put("Bookkeeper", bookkeeper.save());
+        tag.put("StockScout", stockScout.save());
+
+        // Scout mission state
+        tag.putString("ScoutTarget", scoutTargetTownId);
+        tag.putLong("ScoutReturn", scoutReturnTime);
+        ListTag reportList = new ListTag();
+        for (ScoutReport r : scoutReports.values()) reportList.add(r.save());
+        tag.put("ScoutReports", reportList);
 
         // Diplomat requests
         ListTag diplomatList = new ListTag();
@@ -2073,6 +2288,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
+        try {
+            loadInternal(tag);
+        } catch (Exception e) {
+            LOGGER.error("[OTM] TradingPostBlockEntity failed to load NBT at {}. Data may be partially loaded.", worldPosition, e);
+        }
+    }
+
+    /** Deserialises all Trading Post state from NBT. Called by load() inside a try-catch. */
+    private void loadInternal(CompoundTag tag) {
         traderLevel = tag.getInt("TraderLevel");
         if (traderLevel < 1) traderLevel = 1;
         traderXp = tag.getInt("TraderXp");
@@ -2140,6 +2364,21 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("Bookkeeper")) {
             bookkeeper = Worker.load(tag.getCompound("Bookkeeper"));
+        }
+        if (tag.contains("StockScout")) {
+            stockScout = Worker.load(tag.getCompound("StockScout"));
+        }
+
+        // Scout mission state
+        scoutTargetTownId = tag.getString("ScoutTarget");
+        scoutReturnTime = tag.getLong("ScoutReturn");
+        scoutReports.clear();
+        if (tag.contains("ScoutReports")) {
+            ListTag rptList = tag.getList("ScoutReports", Tag.TAG_COMPOUND);
+            for (int i = 0; i < rptList.size(); i++) {
+                ScoutReport r = ScoutReport.load(rptList.getCompound(i));
+                scoutReports.put(r.getTownId(), r);
+            }
         }
 
         // Diplomat requests

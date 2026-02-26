@@ -127,9 +127,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private Button questScrollUpBtn, questScrollDownBtn;
     private Button questSortBtn;
     // Workers tab
-    private Button hireNegotiatorBtn, hireCartBtn, hireBookkeeperBtn;
+    private Button hireNegotiatorBtn, hireCartBtn, hireBookkeeperBtn, hireScoutBtn;
     private Button fireWorkerBtn;
-    private int selectedWorkerIndex = 0; // 0=Negotiator, 1=Trading Cart, 2=Bookkeeper
+    private int selectedWorkerIndex = 0; // 0=Negotiator, 1=Trading Cart, 2=Bookkeeper, 3=Stock Scout
     // Diplomat tab
     private Button diplomatScrollUpBtn, diplomatScrollDownBtn;
     private Button newRequestBtn, sendRequestBtn, cancelRequestBtn;
@@ -273,6 +273,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                         new HireWorkerPacket(tbe.getBlockPos(),
                                 com.offtomarket.mod.data.Worker.WorkerType.BOOKKEEPER));
+            }
+        }));
+
+        hireScoutBtn = addRenderableWidget(new Button(x + 156, y + 208, 110, 14,
+                Component.literal("Hire Stock Scout"), btn -> {
+            TradingPostBlockEntity tbe = menu.getBlockEntity();
+            if (tbe != null) {
+                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                        new HireWorkerPacket(tbe.getBlockPos(),
+                                com.offtomarket.mod.data.Worker.WorkerType.STOCK_SCOUT));
             }
         }));
 
@@ -440,6 +450,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         hireNegotiatorBtn.visible = workers && selNotHired && selectedWorkerIndex == 0;
         hireCartBtn.visible = workers && selNotHired && selectedWorkerIndex == 1;
         hireBookkeeperBtn.visible = workers && selNotHired && selectedWorkerIndex == 2;
+        hireScoutBtn.visible = workers && selNotHired && selectedWorkerIndex == 3;
         fireWorkerBtn.visible = workers && selHired;
 
         diplomatScrollUpBtn.visible = diplomat && !creatingRequest;
@@ -1704,6 +1715,50 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             for (String[] e : oversatItems) { lines.add("  " + e[0]); colors.add(0x99BBDD); }
         }
 
+        // Scout report section (if scout has scouted this town)
+        if (be != null && unlocked) {
+            ScoutReport report = be.getScoutReport(town.getId());
+            if (report != null) {
+                lines.add(""); colors.add(0);
+                long gameTime = be.getLevel() != null ? be.getLevel().getGameTime() : 0;
+                String freshLabel = report.getFreshnessLabel(gameTime);
+                int freshColor = report.getFreshnessColor(gameTime);
+                boolean stale = report.isStale(gameTime);
+
+                String healthStr = report.getStockHealth() != null
+                        ? report.getStockHealth().getDisplayName() : "Unknown";
+                int healthColor = report.getStockHealth() != null
+                        ? report.getStockHealth().getColor() : 0x888888;
+
+                lines.add("\uD83D\uDD0D Scout Report (" + freshLabel + ")");
+                colors.add(stale ? 0xFF6666 : freshColor);
+
+                lines.add("Stock: " + healthStr + " (" + report.getTotalStock()
+                        + " items, " + report.getTotalUniqueItems() + " types)");
+                colors.add(healthColor);
+
+                // Show item entries
+                if (!report.getEntries().isEmpty()) {
+                    lines.add(""); colors.add(0);
+                    lines.add("Top Items:"); colors.add(0xBBAAAA);
+                    for (ScoutReport.ReportEntry entry : report.getEntries()) {
+                        StringBuilder sb = new StringBuilder("  ");
+                        if (entry.isBestDeal()) sb.append("\u2605 ");
+                        if (entry.isOnSale()) sb.append("\u25BC ");
+                        sb.append(entry.getItemName());
+                        sb.append(" x").append(entry.getQuantity());
+                        if (entry.getPrice() > 0) {
+                            sb.append(" - ").append(formatCoinText(entry.getPrice()));
+                        }
+                        int entryColor = entry.isBestDeal() ? 0xFFD700
+                                : entry.isOnSale() ? 0x88CC88 : 0x999999;
+                        lines.add(sb.toString());
+                        colors.add(entryColor);
+                    }
+                }
+            }
+        }
+
         // Draw scrollable content (y=84 to y=190)
         int contentStartY = 84;
         int contentBottomY = 190;
@@ -1727,7 +1782,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             this.font.draw(poseStack, "\u25BC", rightX + 165, contentBottomY - lineH + 2, 0x6B5A3E);
         }
 
-        // Trade shortcut button label
+        // Trade shortcut button label + Scout button label
         if (!allTowns.isEmpty()) {
             TownData viewed = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
             boolean viewedUnlocked = viewed.getMinTraderLevel() <= traderLevel;
@@ -1736,6 +1791,19 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int tradeBtnX = rightX + 93;
             int tradeTxtW = this.font.width(tradeBtnTxt);
             this.font.draw(poseStack, tradeBtnTxt, tradeBtnX + (70 - tradeTxtW) / 2.0f, 195, tradeBtnColor);
+
+            // Scout button (to the left of Trade)
+            if (be != null && viewedUnlocked) {
+                com.offtomarket.mod.data.Worker scout = be.getStockScout();
+                if (scout.isHired()) {
+                    boolean onMission = be.isScoutOnMission();
+                    String scoutBtnTxt = onMission ? "Scouting..." : "\uD83D\uDD0D Scout";
+                    int scoutColor = onMission ? 0x888888 : 0x88CC88;
+                    int scoutBtnX = rightX;
+                    int scoutTxtW = this.font.width(scoutBtnTxt);
+                    this.font.draw(poseStack, scoutBtnTxt, scoutBtnX + (90 - scoutTxtW) / 2.0f, 195, scoutColor);
+                }
+            }
         }
     }
 
@@ -2035,10 +2103,40 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 } else {
                     lifetimeValue = seconds + "s";
                 }
+            } else if (worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.STOCK_SCOUT) {
+                lifetimeValue = String.valueOf(worker.getLifetimeBonusValue());
             } else {
                 lifetimeValue = formatCoinText((int) Math.min(worker.getLifetimeBonusValue(), Integer.MAX_VALUE));
             }
             this.font.draw(poseStack, lifetimeLabel + lifetimeValue, px, perkY + 34, 0x776655);
+        }
+
+        // Scout mission status (only for Stock Scout)
+        if (worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.STOCK_SCOUT) {
+            TradingPostBlockEntity sbe = menu.getBlockEntity();
+            if (sbe != null && sbe.isScoutOnMission()) {
+                TownData targetTown = TownRegistry.getTown(sbe.getScoutTargetTownId());
+                String targetName = targetTown != null ? targetTown.getDisplayName() : sbe.getScoutTargetTownId();
+                this.font.draw(poseStack, "\uD83D\uDD0D Scouting: " + targetName, px, perkY + 44, 0xFFAA44);
+
+                // ETA display
+                long gameTime = sbe.getLevel() != null ? sbe.getLevel().getGameTime() : 0;
+                long ticksLeft = sbe.getScoutReturnTime() - gameTime;
+                if (ticksLeft > 0) {
+                    long secsLeft = ticksLeft / 20;
+                    String eta = secsLeft >= 60 ? (secsLeft / 60) + "m " + (secsLeft % 60) + "s"
+                            : secsLeft + "s";
+                    this.font.draw(poseStack, "Returns in: " + eta, px, perkY + 53, 0x888888);
+                }
+            } else if (sbe != null) {
+                this.font.draw(poseStack, "Ready to scout", px, perkY + 44, 0x88CC88);
+                // Show number of reports
+                int reportCount = sbe.getScoutReports().size();
+                if (reportCount > 0) {
+                    this.font.draw(poseStack, reportCount + " town report" + (reportCount > 1 ? "s" : "") + " on file",
+                            px, perkY + 53, 0x888888);
+                }
+            }
         }
     }
 
@@ -2691,15 +2789,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int x = this.leftPos;
         int y = this.topPos;
 
-        // Block player-inventory slot clicks on non-Trade tabs (inventory is hidden),
-        // but allow clicks on the Towns tab Trade shortcut button (y+193 to y+203, x+289 to x+359).
-        if (currentTab != Tab.TRADE && mouseY >= y + 148) {
-            boolean isTownsTradeBtn = currentTab == Tab.TOWNS
-                    && mouseX >= x + 289 && mouseX <= x + 359
-                    && mouseY >= y + 193 && mouseY <= y + 203;
-            if (!isTownsTradeBtn) {
-                return true; // consume and ignore
-            }
+        // Block clicks that fall into the invisible player-inventory region on non-Trade
+        // tabs.  The menu has coin exchange slots (y+72) which are already gated by
+        // coinSlotsActive, so the only area we need to protect is below the content
+        // panels (y+220 to bottom).  All tab content lives inside {x+6..x+378, y+35..y+220}
+        // so clicks within that rectangle must always be allowed through.
+        if (currentTab != Tab.TRADE && mouseY >= y + 220) {
+            return true; // consume and ignore — nothing interactive here
         }
 
         // Tab click detection (6 tabs)
@@ -2970,6 +3066,23 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 }
                 return true;
             }
+            // Scout button (left of Trade): dispatch scout to the viewed town
+            if (lx >= 196 && lx <= 286 && ly >= 193 && ly <= 203) {
+                TradingPostBlockEntity sbe = menu.getBlockEntity();
+                if (sbe != null && sbe.getStockScout().isHired() && !sbe.isScoutOnMission()) {
+                    List<TownData> allT = new ArrayList<>(TownRegistry.getAllTowns());
+                    if (!allT.isEmpty()) {
+                        TownData viewed = allT.get(Math.min(townViewPage, allT.size() - 1));
+                        if (viewed.getMinTraderLevel() <= menu.getTraderLevel()) {
+                            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                    new DispatchScoutPacket(sbe.getBlockPos(), viewed.getId()));
+                            SoundHelper.playUIClick();
+                            return true;
+                        }
+                    }
+                }
+                return true;
+            }
         }
 
         // Towns tab: click town in list to select it (left page)
@@ -2989,9 +3102,10 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         if (currentTab == Tab.WORKERS && button == 0) {
             double lx = mouseX - x;
             double ly = mouseY - y;
-            // Left list panel: x+6 to x+146, rows at y+38, y+70, y+102 (each 32px)
+            // Left list panel: x+6 to x+146, rows at y+38, y+70, y+102, y+134 (each 32px)
             if (lx >= 6 && lx <= 146) {
-                for (int i = 0; i < 3; i++) {
+                com.offtomarket.mod.data.Worker.WorkerType[] clickTypes = com.offtomarket.mod.data.Worker.WorkerType.values();
+                for (int i = 0; i < clickTypes.length; i++) {
                     int rowTop = 38 + i * 32;
                     if (ly >= rowTop && ly < rowTop + 32) {
                         if (selectedWorkerIndex != i) {

@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.6.0-blue" alt="Version 0.6.0">
+  <img src="https://img.shields.io/badge/Version-0.6.1-blue" alt="Version 0.6.1">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -100,6 +100,11 @@ When these mods are detected, specialized markets are created:
   - Charity missions (high rep, lower pay)
 - **Diplomat System** - Negotiate premium prices for your goods
 - **Shipments** - Send goods to distant markets via caravan
+- **Workers** - Hire specialized NPCs to boost your trading empire:
+  - **Negotiator** - Increases sale prices at markets
+  - **Trading Cart** - Reduces caravan travel time
+  - **Bookkeeper** - Reduces worker operating costs
+  - **Stock Scout** - Scouts towns to reveal stock levels, prices, and best deals
 
 ### Animal Trading
 

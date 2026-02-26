@@ -18,8 +18,8 @@ public class FinanceTableMenu extends AbstractContainerMenu {
     private final FinanceTableBlockEntity blockEntity;
 
     // Slot layout constants (relative to screen left/top)
-    public static final int PLAYER_INV_Y = 64;
-    public static final int HOTBAR_Y     = 122;
+    public static final int PLAYER_INV_Y = 96;
+    public static final int HOTBAR_Y     = 154;
 
     // Client-side constructor (block entity resolved via menu type factory)
     public FinanceTableMenu(int containerId, Inventory inv) {

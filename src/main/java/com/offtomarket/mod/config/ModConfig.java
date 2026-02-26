@@ -162,6 +162,10 @@ public class ModConfig {
             .comment("Maximum worker cost reduction from a max-level Bookkeeper (0.35 = 35%)")
             .defineInRange("bookkeeperMaxCostReduction", 0.35, 0.0, 0.95);
 
+    private static final ForgeConfigSpec.IntValue SCOUT_HIRE_COST = BUILDER
+            .comment("Cost in copper to hire a Stock Scout")
+            .defineInRange("scoutHireCost", 520, 0, 50000);
+
     static { BUILDER.pop(); }
 
     // ==================== DIPLOMATS ====================
@@ -312,6 +316,7 @@ public class ModConfig {
     public static double cartMaxSpeedBonus = 0.4;
     public static int bookkeeperHireCost = 1040;
     public static double bookkeeperMaxCostReduction = 0.35;
+    public static int scoutHireCost = 520;
 
     // Diplomats
     public static double diplomatBasePremium = 1.5;
@@ -382,6 +387,7 @@ public class ModConfig {
         cartMaxSpeedBonus = CART_MAX_SPEED_BONUS.get();
         bookkeeperHireCost = BOOKKEEPER_HIRE_COST.get();
         bookkeeperMaxCostReduction = BOOKKEEPER_MAX_COST_REDUCTION.get();
+        scoutHireCost = SCOUT_HIRE_COST.get();
 
         // Diplomats
         diplomatBasePremium = DIPLOMAT_BASE_PREMIUM.get();

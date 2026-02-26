@@ -1,5 +1,33 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.6.1 — Stock Scout Worker & Quality of Life
+
+### New Feature: Stock Scout Worker
+- **New Worker Type**: The **Stock Scout** is a 4th hireable worker (520 CP base hire cost) that can be dispatched to any unlocked town to gather intel on its stock.
+- **Scout Reports**: When the scout returns, a detailed report is generated showing stock health (Empty/Low/Moderate/Well Stocked/Abundant), total items, and top items by quantity.
+- **Level-Gated Detail**: Higher scout levels reveal more information:
+  - **Lv 1-2 (Basic)**: Stock health and top 3 items with quantities
+  - **Lv 3-5 (Keen Eye)**: Top 5 items revealed
+  - **Lv 6-8 (Market Insider)**: Prices and sale flags visible, top 10 items
+  - **Lv 9+ (Master Appraiser)**: Best deal markers, 15 items, full detail
+- **Report Freshness**: Reports age over time — "Just now", "Recent", "Earlier today", "Yesterday", "Outdated". Stale after 2 in-game days.
+- **Towns Tab Integration**: Scout reports appear in the town detail panel. A "Scout" button appears next to "Trade" when the scout is hired.
+- **Workers Tab**: 4th worker row for Stock Scout with hire/fire, level/XP progression, perks, mission status, and trip ETA display.
+- **Fast Travel**: Scouts travel at 60% of normal caravan time (no cargo), further reduced by Trading Cart bonus.
+
+### Finance Table Improvements
+- **Input Fields**: Withdraw and deposit now use editable text input fields instead of fixed-amount buttons, allowing precise amounts.
+- **New Packets**: WithdrawAmountPacket and DepositAmountPacket for custom amounts.
+
+### Error Handling & Logging
+- Added LOGGER and try-catch error handling to TradingPostBlockEntity, TradingLedgerBlockEntity, FinanceTableBlockEntity, MarketListing, and PriceCalculator.
+- Server tick crashes are now caught and logged instead of crashing the game.
+
+### Bug Fixes
+- Items no longer disappear from the Trading Ledger block.
+- Gold in Finance Table now updates correctly after buying items.
+- Fixed Beau's Market not being selectable in the Towns tab.
+
 ## Version 0.6.0 — Town Inventory Overhaul & Economy Fixes
 
 ### Major Features

@@ -19,7 +19,8 @@ public class Worker {
     public enum WorkerType {
         NEGOTIATOR("Negotiator", "Negotiates better prices with towns, boosting sale earnings."),
         TRADING_CART("Trading Cart", "A faster cart that reduces delivery time for all shipments."),
-        BOOKKEEPER("Bookkeeper", "Manages the ledger, reducing worker overhead costs per trip.");
+        BOOKKEEPER("Bookkeeper", "Manages the ledger, reducing worker overhead costs per trip."),
+        STOCK_SCOUT("Stock Scout", "Scouts towns to reveal stock levels, prices, and best deals.");
 
         private final String displayName;
         private final String description;
@@ -31,7 +32,8 @@ public class Worker {
             this.symbol = switch (this.ordinal()) {
                 case 0 -> "\u2696"; // ⚖ scales for negotiator
                 case 1 -> "\u2708"; // ✈ for speed/cart
-                default -> "\u270E"; // ✎ for bookkeeper
+                case 2 -> "\u270E"; // ✎ for bookkeeper
+                default -> "\uD83D\uDD0D"; // 🔍 magnifying glass for scout
             };
         }
 
@@ -176,6 +178,12 @@ public class Worker {
                 case 9 -> "Financial Advisor";
                 default -> null;
             };
+            case STOCK_SCOUT -> switch (milestone) {
+                case 3 -> "Keen Eye";
+                case 6 -> "Market Insider";
+                case 9 -> "Master Appraiser";
+                default -> null;
+            };
         };
     }
 
@@ -202,6 +210,12 @@ public class Worker {
                 case 9 -> "Additional 5% cost reduction";
                 default -> "";
             };
+            case STOCK_SCOUT -> switch (milestone) {
+                case 3 -> "Reveals top items and quantities";
+                case 6 -> "Reveals item prices and deals";
+                case 9 -> "Identifies best deals and rare stock";
+                default -> "";
+            };
         };
     }
 
@@ -222,6 +236,7 @@ public class Worker {
             case NEGOTIATOR -> ModConfig.negotiatorHireCost;
             case TRADING_CART -> ModConfig.cartHireCost;
             case BOOKKEEPER -> ModConfig.bookkeeperHireCost;
+            case STOCK_SCOUT -> ModConfig.scoutHireCost;
         };
     }
 
@@ -241,6 +256,7 @@ public class Worker {
             case NEGOTIATOR -> 26 + level * 5;     // 31-76 CP per trip
             case TRADING_CART -> 13 + level * 3;    // 16-43 CP per trip
             case BOOKKEEPER -> 15 + level * 3;      // 18-45 CP per trip
+            case STOCK_SCOUT -> 10 + level * 2;     // 12-30 CP per scout mission
         };
     }
 
@@ -287,6 +303,48 @@ public class Worker {
     }
 
     /**
+     * Stock Scout: returns a text label describing the current detail level.
+     * - Level 1-2: "basic" (stock health + total items)
+     * - Level 3-5: "good" (top items with quantities)
+     * - Level 6-8: "great" (prices + deals visible)
+     * - Level 9+:  "full" (exact quantities, best deals, rare stock alerts)
+     */
+    public String getScoutDetailLevel() {
+        if (type != WorkerType.STOCK_SCOUT) return "none";
+        if (level >= 9) return "full";
+        if (level >= 6) return "great";
+        if (level >= 3) return "good";
+        return "basic";
+    }
+
+    /**
+     * Stock Scout: how many top items are revealed in a scout report.
+     */
+    public int getScoutRevealCount() {
+        if (type != WorkerType.STOCK_SCOUT) return 0;
+        if (level >= 9) return 15;
+        if (level >= 6) return 10;
+        if (level >= 3) return 5;
+        return 3; // basic: 3 items
+    }
+
+    /**
+     * Stock Scout: whether prices are revealed in reports.
+     * Requires level 6+ (Market Insider perk).
+     */
+    public boolean scoutRevealsPrices() {
+        return type == WorkerType.STOCK_SCOUT && hasPerk(6);
+    }
+
+    /**
+     * Stock Scout: whether best-deal highlighting is active.
+     * Requires level 9+ (Master Appraiser perk).
+     */
+    public boolean scoutRevealsBestDeals() {
+        return type == WorkerType.STOCK_SCOUT && hasPerk(9);
+    }
+
+    /**
      * Get a display string for the current bonus.
      */
     public String getBonusDisplay() {
@@ -294,6 +352,7 @@ public class Worker {
             case NEGOTIATOR -> "+" + (int)(getNegotiationBonus() * 100) + "% sale price";
             case TRADING_CART -> "-" + (int)(getSpeedBonus() * 100) + "% travel time";
             case BOOKKEEPER -> "-" + (int)(getCostReductionBonus() * 100) + "% worker costs";
+            case STOCK_SCOUT -> "Reveals " + getScoutDetailLevel() + " detail";
         };
     }
 
@@ -318,6 +377,7 @@ public class Worker {
             case NEGOTIATOR -> "Total extra earned";
             case TRADING_CART -> "Total time saved";
             case BOOKKEEPER -> "Total costs saved";
+            case STOCK_SCOUT -> "Towns scouted";
         };
     }
 

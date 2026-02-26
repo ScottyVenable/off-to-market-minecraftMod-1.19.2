@@ -1,9 +1,11 @@
 package com.offtomarket.mod.data;
 
+import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.item.AnimalTradeSlipItem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.enchantment.Enchantment;
+import org.slf4j.Logger;
 
 import java.util.*;
 
@@ -12,6 +14,9 @@ import java.util.*;
  * These are items that towns are currently selling.
  */
 public class MarketListing {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     private final String townId;
     private final ResourceLocation itemId;
     private final String itemDisplayName;
@@ -85,17 +90,28 @@ public class MarketListing {
     }
 
     public static MarketListing load(CompoundTag tag) {
-        return new MarketListing(
-                tag.getString("Town"),
-                new ResourceLocation(tag.getString("Item")),
-                tag.getString("Name"),
-                tag.getInt("Count"),
-                tag.getInt("Price"),
-                tag.getLong("Listed"),
-                tag.getBoolean("OnSale"),
-                tag.getInt("Discount"),
-                tag.contains("ItemNbt") ? tag.getCompound("ItemNbt") : null
-        );
+        try {
+            return new MarketListing(
+                    tag.getString("Town"),
+                    new ResourceLocation(tag.getString("Item")),
+                    tag.getString("Name"),
+                    tag.getInt("Count"),
+                    tag.getInt("Price"),
+                    tag.getLong("Listed"),
+                    tag.getBoolean("OnSale"),
+                    tag.getInt("Discount"),
+                    tag.contains("ItemNbt") ? tag.getCompound("ItemNbt") : null
+            );
+        } catch (Exception e) {
+            LOGGER.error("[OTM] Failed to load MarketListing from NBT: {}", e.getMessage());
+            // Return a safe placeholder listing that will not crash the game
+            return new MarketListing(
+                    "unknown",
+                    new ResourceLocation("minecraft", "air"),
+                    "<corrupt>",
+                    0, 0, 0, false, 0, null
+            );
+        }
     }
 
     /**

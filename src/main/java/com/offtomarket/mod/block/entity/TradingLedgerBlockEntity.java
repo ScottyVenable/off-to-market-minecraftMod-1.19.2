@@ -1,5 +1,6 @@
 package com.offtomarket.mod.block.entity;
 
+import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.data.PriceCalculator;
 import com.offtomarket.mod.menu.TradingLedgerMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -40,6 +42,9 @@ import java.util.Set;
  * 9 slots for items, plus the note appears in slot 0 after pickup.
  */
 public class TradingLedgerBlockEntity extends BlockEntity implements Container, MenuProvider {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     public static final int BIN_SIZE = 200;
     public static final int MAX_STACK_PER_SLOT = 200;
     public static final int BASE_CARAVAN_WEIGHT_CAPACITY = 800;
@@ -624,6 +629,14 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
      * Skips containers that were recently used as "To Container" withdrawal targets.
      */
     private void syncFromAdjacentContainers() {
+        try {
+            syncFromAdjacentContainersInternal();
+        } catch (Exception e) {
+            LOGGER.error("[OTM] TradingLedgerBlockEntity.syncFromAdjacentContainers crashed at {}. Sync skipped.", worldPosition, e);
+        }
+    }
+
+    private void syncFromAdjacentContainersInternal() {
         Level level = this.getLevel();
         if (level == null || level.isClientSide()) return;
         BlockPos pos = this.getBlockPos();
@@ -833,14 +846,24 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     public ItemStack removeItem(int slot, int amount) {
         if (slot < 0 || slot >= BIN_SIZE) return ItemStack.EMPTY;
         ItemStack result = ContainerHelper.removeItem(items, slot, amount);
-        if (!result.isEmpty()) setChanged();
+        if (!result.isEmpty()) {
+            // If the slot is now empty after removal, clear virtual tracking so the
+            // next syncFromAdjacentContainers() doesn't silently restore the item.
+            if (items.get(slot).isEmpty()) {
+                slotToVirtualSource.remove(slot);
+            }
+            setChanged();
+        }
         return result;
     }
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
         if (slot < 0 || slot >= BIN_SIZE) return ItemStack.EMPTY;
-        return ContainerHelper.takeItem(items, slot);
+        ItemStack result = ContainerHelper.takeItem(items, slot);
+        // Always clear virtual tracking on full removal
+        slotToVirtualSource.remove(slot);
+        return result;
     }
 
     @Override
@@ -927,10 +950,29 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         }
     }
 
+    /**
+     * Build the tag sent to the client for block entity sync packets.
+     * Unlike saveAdditional() which excludes virtual items (to prevent disk
+     * duplication), the client tag includes ALL items so virtual slots render
+     * correctly without the flicker caused by load() zeroing them out.
+     */
     @Override
     public CompoundTag getUpdateTag() {
         CompoundTag tag = super.getUpdateTag();
-        saveAdditional(tag);
+        // Write ALL items (including virtual snapshots) so the client sees them
+        ContainerHelper.saveAllItems(tag, items);
+
+        // Re-use saveAdditional() for everything EXCEPT the items list, which
+        // we already wrote above.  We call saveAdditional() but it will overwrite
+        // the "Items" key with the filtered list — so instead we manually write
+        // the non-item fields.  To keep this maintainable we call saveAdditional
+        // into a scratch tag and then copy all keys except "Items".
+        CompoundTag scratch = new CompoundTag();
+        saveAdditional(scratch);
+        for (String key : scratch.getAllKeys()) {
+            if (key.equals("Items")) continue; // keep our full item list
+            tag.put(key, scratch.get(key));
+        }
         return tag;
     }
 
@@ -1032,8 +1074,9 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        items = NonNullList.withSize(BIN_SIZE, ItemStack.EMPTY);
-        ContainerHelper.loadAllItems(tag, items);
+        try {
+            items = NonNullList.withSize(BIN_SIZE, ItemStack.EMPTY);
+            ContainerHelper.loadAllItems(tag, items);
 
         slotPrices.clear();
         if (tag.contains("Prices")) {
@@ -1105,5 +1148,8 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             }
         }
 
+        } catch (Exception e) {
+            LOGGER.error("[OTM] TradingLedgerBlockEntity failed to load NBT at {}. Data may be partially loaded.", worldPosition, e);
+        }
     }
 }

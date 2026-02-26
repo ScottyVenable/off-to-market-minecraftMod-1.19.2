@@ -194,5 +194,20 @@ public class ModNetwork {
                 WithdrawCoinsPacket::encode, WithdrawCoinsPacket::decode,
                 WithdrawCoinsPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, WithdrawAmountPacket.class,
+                WithdrawAmountPacket::encode, WithdrawAmountPacket::decode,
+                WithdrawAmountPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DepositAmountPacket.class,
+                DepositAmountPacket::encode, DepositAmountPacket::decode,
+                DepositAmountPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DispatchScoutPacket.class,
+                DispatchScoutPacket::encode, DispatchScoutPacket::decode,
+                DispatchScoutPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

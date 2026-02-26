@@ -1,5 +1,6 @@
 package com.offtomarket.mod.data;
 
+import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.item.AnimalTradeSlipItem;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +18,7 @@ import net.minecraft.world.item.alchemy.PotionUtils;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -44,6 +46,8 @@ import java.util.function.Predicate;
  * </ol>
  */
 public class PriceCalculator {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     // ===================== Value Tiers =====================
 
@@ -470,7 +474,9 @@ public class PriceCalculator {
                 int val = MaterialValues.getValue(repairItems[0].getItem());
                 if (val > 1) return val;
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.debug("[OTM] Failed to read repair ingredient for modded tool tier: {}", e.getMessage());
+        }
 
         // Fallback: interpolate from durability
         return estimateFromDurability(tier.getUses());
@@ -497,7 +503,9 @@ public class PriceCalculator {
                 int val = MaterialValues.getValue(repairItems[0].getItem());
                 if (val > 1) return val;
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.debug("[OTM] Failed to read repair ingredient for modded armor material: {}", e.getMessage());
+        }
 
         // Fallback: estimate from chest-slot durability
         int durability = mat.getDurabilityForSlot(EquipmentSlot.CHEST);
