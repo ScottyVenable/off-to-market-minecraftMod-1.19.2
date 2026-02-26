@@ -7,6 +7,7 @@ import com.offtomarket.mod.content.CustomMenuLoader;
 import com.offtomarket.mod.content.TownLoader;
 import com.offtomarket.mod.data.ModCompatibility;
 import com.offtomarket.mod.data.SupplyDemandManager;
+import com.offtomarket.mod.data.TownInventoryManager;
 import com.offtomarket.mod.debug.DebugCommands;
 import com.offtomarket.mod.debug.DebugHooks;
 import com.offtomarket.mod.network.ModNetwork;
@@ -80,6 +81,13 @@ public class OffToMarket {
             DebugHooks.onServerTick(event.getServer());
             SupplyDemandManager.onServerTick(event.getServer());
         }
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(net.minecraftforge.event.server.ServerStoppingEvent event) {
+        // Reset static managers so state doesn't leak between server sessions
+        SupplyDemandManager.reset();
+        TownInventoryManager.reset();
     }
 
     @SubscribeEvent

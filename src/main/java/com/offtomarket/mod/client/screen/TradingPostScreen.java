@@ -2691,9 +2691,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int x = this.leftPos;
         int y = this.topPos;
 
-        // Block player-inventory slot clicks on non-Trade tabs (inventory is hidden)
+        // Block player-inventory slot clicks on non-Trade tabs (inventory is hidden),
+        // but allow clicks on the Towns tab Trade shortcut button (y+193 to y+203, x+289 to x+359).
         if (currentTab != Tab.TRADE && mouseY >= y + 148) {
-            return true; // consume and ignore
+            boolean isTownsTradeBtn = currentTab == Tab.TOWNS
+                    && mouseX >= x + 289 && mouseX <= x + 359
+                    && mouseY >= y + 193 && mouseY <= y + 203;
+            if (!isTownsTradeBtn) {
+                return true; // consume and ignore
+            }
         }
 
         // Tab click detection (6 tabs)

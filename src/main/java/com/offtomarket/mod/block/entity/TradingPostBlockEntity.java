@@ -636,6 +636,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     /**
      * Buy an item from the market board using coins from the player.
+     * Deducts stock from the town's persistent inventory so items
+     * remain depleted until the town restocks at dawn.
      */
     public boolean buyFromMarket(Player player, MarketListing listing) {
         int totalCost = listing.getTotalPrice();
@@ -649,13 +651,24 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(listing.getItemId());
         if (item != null) {
             ItemStack stack = new ItemStack(item, listing.getCount());
+            if (listing.getItemNbt() != null) stack.setTag(listing.getItemNbt().copy());
             if (!player.getInventory().add(stack)) {
                 // Drop on ground if inventory is full
                 player.drop(stack, false);
             }
         }
 
+        // Decrease stock in the town's persistent inventory
+        String stockKey = TownInventory.StockSlot.makeStockKey(listing.getItemId(), listing.getItemNbt());
+        TownInventoryManager.recordPurchase(listing.getTownId(), stockKey, listing.getCount());
+
         marketListings.remove(listing);
+
+        // Mark TradingData dirty so town inventory changes persist
+        if (level instanceof ServerLevel serverLevel) {
+            TradingData.get(serverLevel).setDirty();
+        }
+
         syncToClient();
         // Always issue purchase receipts to mailbox
         if (level != null && !level.isClientSide()) {
@@ -1595,15 +1608,28 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (be.lastRefreshDay < 0 || be.marketListings.isEmpty()) {
             // First time or empty: do initial refresh
             be.lastRefreshDay = dayNumber;
+            TownInventoryManager.initializeIfNeeded();
+            TownInventoryManager.restockAll(dayNumber);
             be.refreshMarketListings(gameTime);
             changed = true;
         } else if (dayTime >= 0 && dayTime < 200 && dayNumber > be.lastRefreshDay) {
-            // Dawn of a new day: refresh market
+            // Dawn of a new day: restock town inventories, then refresh listings
             be.lastRefreshDay = dayNumber;
+            TownInventoryManager.restockAll(dayNumber);
             be.refreshMarketListings(gameTime);
+            // Mark TradingData dirty so restocked inventories persist
+            if (level instanceof ServerLevel sl) {
+                TradingData.get(sl).setDirty();
+            }
             notifyNearbyPlayers(level, pos,
                     Component.literal("\u2600 The market has refreshed with new goods at dawn!")
                             .withStyle(ChatFormatting.GOLD));
+            // Announce black market if it just appeared
+            if (TownInventoryManager.isBlackMarketActive()) {
+                notifyNearbyPlayers(level, pos,
+                        Component.literal("\u2620 A mysterious black market dealer has arrived...")
+                                .withStyle(ChatFormatting.DARK_RED, ChatFormatting.ITALIC));
+            }
             changed = true;
         }
 
@@ -1845,13 +1871,23 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     private void refreshMarketListings(long gameTime) {
         marketListings.clear();
-        Random rand = new Random();
         List<TownData> availableTowns = TownRegistry.getAvailableTowns(traderLevel);
+
+        // Ensure town inventories are initialized
+        TownInventoryManager.initializeIfNeeded();
 
         for (TownData town : availableTowns) {
             if (town.getDistance() >= minDistance && town.getDistance() <= maxDistance) {
-                marketListings.addAll(MarketListing.generateListings(town, gameTime, rand));
+                TownInventory inv = TownInventoryManager.getInventory(town.getId());
+                if (inv != null) {
+                    marketListings.addAll(inv.toListings(town, gameTime));
+                }
             }
+        }
+
+        // Add black market listings if active
+        if (TownInventoryManager.isBlackMarketActive()) {
+            marketListings.addAll(TownInventoryManager.getBlackMarketListings(gameTime));
         }
     }
 

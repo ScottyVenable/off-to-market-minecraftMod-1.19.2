@@ -696,9 +696,24 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         if (seenAnyContainer) {
             List<Integer> staleSlots = new ArrayList<>();
             for (Map.Entry<Integer, VirtualSource> entry : slotToVirtualSource.entrySet()) {
-                if (!updatedLedgerSlots.contains(entry.getKey())) {
-                    staleSlots.add(entry.getKey());
-                }
+                if (updatedLedgerSlots.contains(entry.getKey())) continue; // refreshed this cycle
+
+                BlockPos srcPos = entry.getValue().sourcePos;
+
+                // Do NOT clean up virtual slots from suppressed containers — the item still
+                // exists in the source chest; it was simply excluded from this sync cycle
+                // because of a recent "To Container" withdrawal on that container.
+                // Wiping it here would make items appear to vanish from the ledger until
+                // the suppression expires and the next sync re-creates the snapshot.
+                if (withdrawSuppressedPos.getOrDefault(srcPos, 0L) > now) continue;
+
+                // Do NOT clean up virtual slots for containers in chunks that haven't loaded
+                // yet — the item is still there, we just can't see it yet.  Clearing eagerly
+                // would cause items to disappear immediately after a world reload if any
+                // other adjacent container happens to be visible first (seenAnyContainer=true).
+                if (!level.isLoaded(srcPos)) continue;
+
+                staleSlots.add(entry.getKey());
             }
             for (int staleSlot : staleSlots) {
                 items.set(staleSlot, ItemStack.EMPTY);

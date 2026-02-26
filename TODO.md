@@ -24,7 +24,7 @@ VERSION 0.6
 - Make sure to add the custom Enchanted items and Enchanted Book feature.
 
 
-Fixes:
-- src/main/java/com/offtomarket/mod/network/WithdrawBinItemPacket.java -  lines +46 to +48: This packet handler mutates ledger contents and gives items to the sender without validating that the sender is near the block (or has the menu open), unlike other server-bound packets in this commit. A modified client can send arbitrary BlockPos values and withdraw from any loaded ledger in the same dimension, enabling remote theft on multiplayer servers.
-- When withdrawing a virtual slot to inventory, the code only updates toGive if the source container slot is still non-empty; otherwise it still hands the player the old snapshot copy. If the source item was removed between sync ticks (or by another player), this path creates items from stale cache data and duplicates inventory. The give/drop path should only run when a real source extraction succeeded.
-- This change replaces the trading_bin registry ID with trading_ledger but does not keep an alias or add a missing-mappings remap handler, so existing worlds/items saved with offtomarket:trading_bin will deserialize as missing content after upgrade. Adding an explicit remap is needed to preserve player builds and inventories across versions.
+0.6.1
+- Gold in Finance Table doesn't update after buying items
+- Expand and improve the functionality of the Finance Table, especially by making you choose how much coin to withdraw/deposit by using input fields.
+- 

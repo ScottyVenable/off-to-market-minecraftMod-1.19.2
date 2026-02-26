@@ -14,7 +14,8 @@ import java.util.Set;
 /**
  * World-level saved data that stores the shared trading state.
  * All Trading Posts in a world share the same trader progression,
- * shipments, quests, diplomats, market data, and economy stats.
+ * shipments, quests, diplomats, market data, economy stats, and
+ * town inventories.
  *
  * Each Trading Post registers/unregisters itself, and any change
  * to the shared state is pushed here so that all posts stay in sync.
@@ -96,6 +97,9 @@ public class TradingData extends SavedData {
         }
         tag.put("RegisteredPosts", positionList);
 
+        // Persist town inventories (global, shared across all trading posts)
+        tag.put("TownInventories", TownInventoryManager.save());
+
         return tag;
     }
 
@@ -111,6 +115,10 @@ public class TradingData extends SavedData {
                 data.registeredPosts.add(new BlockPos(
                         posTag.getInt("X"), posTag.getInt("Y"), posTag.getInt("Z")));
             }
+        }
+        // Restore town inventories
+        if (tag.contains("TownInventories")) {
+            TownInventoryManager.load(tag.getCompound("TownInventories"));
         }
         return data;
     }

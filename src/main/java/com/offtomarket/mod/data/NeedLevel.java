@@ -8,22 +8,22 @@ package com.offtomarket.mod.data;
  * <p>
  * <b>Tiers (from most demand to least):</b>
  * <pre>
- *   DESPERATE       → 2.00× price  (crisis-level shortage)
- *   HIGH_NEED       → 1.50× price  (significant demand)
- *   MODERATE_NEED   → 1.25× price  (noticeable demand)
+ *   DESPERATE       → 1.75× price  (crisis-level shortage)
+ *   HIGH_NEED       → 1.40× price  (significant demand)
+ *   MODERATE_NEED   → 1.20× price  (noticeable demand)
  *   BALANCED        → 1.00× price  (fair market equilibrium)
- *   SURPLUS         → 0.75× price  (oversupplied, lower prices)
- *   OVERSATURATED   → 0.50× price  (flooded, hard to sell at all)
+ *   SURPLUS         → 0.70× price  (oversupplied, lower prices)
+ *   OVERSATURATED   → 0.45× price  (flooded, hard to sell at all)
  * </pre>
  */
 public enum NeedLevel {
 
-    DESPERATE      ("Desperate",       2.00, 0xFF5555, "Crisis-level shortage"),
-    HIGH_NEED      ("High Need",       1.50, 0xFF8800, "Significant demand"),
-    MODERATE_NEED  ("Moderate Need",   1.25, 0xFFFF55, "Noticeable demand"),
+    DESPERATE      ("Desperate",       1.75, 0xFF5555, "Crisis-level shortage"),
+    HIGH_NEED      ("High Need",       1.40, 0xFF8800, "Significant demand"),
+    MODERATE_NEED  ("Moderate Need",   1.20, 0xFFFF55, "Noticeable demand"),
     BALANCED       ("Balanced",        1.00, 0x55FF55, "Fair market equilibrium"),
-    SURPLUS        ("Surplus",         0.75, 0x55AAFF, "Oversupplied"),
-    OVERSATURATED  ("Oversaturated",   0.50, 0xAAAAAA, "Market is flooded");
+    SURPLUS        ("Surplus",         0.70, 0x55AAFF, "Oversupplied"),
+    OVERSATURATED  ("Oversaturated",   0.45, 0xAAAAAA, "Market is flooded");
 
     private final String displayName;
     private final double priceMultiplier;

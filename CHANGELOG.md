@@ -1,5 +1,37 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.6.0 — Town Inventory Overhaul & Economy Fixes
+
+### Major Features
+- **Persistent Town Inventories**: Each town now maintains its own inventory of items that persists across sessions. When players buy items, the stock depletes; towns restock at dawn with a configurable mix of specialty goods. This replaces the old system where listings were regenerated from scratch every dawn.
+- **Dynamic Pricing**: Item prices now fluctuate based on purchase frequency (demand surcharge: +3% per buy, capped at 2x) and remaining stock (scarcity premium when stock falls below 50% or 25%). Prices reset gradually as demand decays by 50% each dawn.
+- **Production Chain Multipliers**: Towns now produce bonus stock when their "needs" items are well-supplied. A mining town with plenty of pickaxes produces 1.3-1.5x more ore. Poorly supplied towns produce as little as 0.5x their normal output, creating interdependent trade incentives.
+- **Black Market**: An 8% chance each dawn triggers a mysterious black market dealer offering 3-6 rare items (elytra, netherite gear, beacons, nether stars, high-level enchanted books) at steep premiums (2.5-3.5x base price). The dealer disappears after 2-3 days.
+
+### Bug Fixes
+- **Desperate towns no longer sell what they need**: Towns at DESPERATE or HIGH_NEED demand for an item will no longer list it for sale. MODERATE_NEED items appear only 25% of the time at reduced quantities.
+- **Trade button on Towns tab now works**: The click guard that prevented off-area clicks was incorrectly blocking the Trade shortcut button below the town detail panel.
+- **Trade imbalance rebalancing**: Tightened player sell multipliers (DESPERATE 2.0 to 1.75, HIGH_NEED 1.5 to 1.40) and raised NPC buy prices (MODERATE_NEED 1.30x, SURPLUS 0.85x, OVERSATURATED 0.70x) to prevent same-town buy/sell arbitrage while preserving cross-town trade profits as intended gameplay.
+
+### Technical
+- New `TownInventory` class: per-town stock with `StockSlot` data model, unique keys for NBT variants (enchanted books, potions, tipped arrows, animal slips), price computation with distance/type/need/demand/scarcity multipliers.
+- New `TownInventoryManager` class: static global manager with restock logic, production chain calculations, black market generation, and persistence via `TradingData`.
+- `TradingData` now saves and loads town inventory state alongside existing shared trader data.
+- Server stopping event now resets both `SupplyDemandManager` and `TownInventoryManager` static state.
+- `MarketListing` helper methods (enchanted book generation, potion NBT, roman numeral formatting) changed to package-private for reuse by `TownInventoryManager`.
+
+---
+
+## Version 0.5.8 — Trading Ledger Item Disappearance Fix
+
+### Bug Fixes
+- **Items disappearing from Trading Ledger**: Fixed two cases in `syncFromAdjacentContainers()` where the stale-slot cleanup incorrectly cleared virtual slot entries, making items appear to vanish from the ledger:
+  1. **Suppressed containers**: When a "To Container" withdrawal suppressed a container, any other active adjacent container would set `seenAnyContainer = true`, causing the stale cleanup to wipe virtual slots from the suppressed container — even though those items still existed in the chest. Items would disappear until the suppression expired and the next sync re-populated them.
+  2. **Partially-loaded chunks**: On world load, if one adjacent container's chunk loaded before another's, `seenAnyContainer = true` would fire stale cleanup against the still-loading container's virtual slots. Virtual slots from unloaded chunks are now skipped until their chunk is loaded.
+  The stale cleanup now checks each slot individually: entries from suppressed containers (`withdrawSuppressedPos`) or unloaded chunk positions (`level.isLoaded`) are skipped rather than cleared.
+
+---
+
 ## Version 0.5.7 — Security, Duplication & World Compat Fixes
 
 ### Security

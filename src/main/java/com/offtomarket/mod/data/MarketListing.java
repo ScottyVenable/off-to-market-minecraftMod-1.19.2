@@ -117,7 +117,16 @@ public class MarketListing {
             ResourceLocation itemId = specialties.get(i);
             net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
             if (item != null && item != net.minecraft.world.item.Items.AIR) {
-                int qty = 1 + random.nextInt(16);
+                // A town would not sell items it desperately needs or has high demand for.
+                // MODERATE_NEED items appear rarely (25% chance) with reduced stock.
+                NeedLevel itemNeed = town.getNeedLevel(item);
+                if (itemNeed == NeedLevel.DESPERATE || itemNeed == NeedLevel.HIGH_NEED) continue;
+                boolean moderateScarcity = itemNeed == NeedLevel.MODERATE_NEED;
+                if (moderateScarcity && random.nextFloat() > 0.25f) continue;
+
+                int qty = moderateScarcity
+                        ? 1 + random.nextInt(3) // 1-3 for moderate need
+                        : 1 + random.nextInt(16);
                 CompoundTag nbt = null;
                 String displayName;
 
@@ -213,13 +222,17 @@ public class MarketListing {
         };
 
         // Keep NPC sell listings moderate compared to full buy-price multipliers.
+        // DESPERATE/HIGH_NEED items are filtered out of listings entirely (see generateListings),
+        // so those tiers here are safety fallbacks.  For MODERATE_NEED items that do
+        // slip through, the NPC price must exceed what the town pays to prevent
+        // buy-from-NPC → sell-back-to-same-town arbitrage.
         double needBias = switch (need) {
-            case DESPERATE -> 1.20;
-            case HIGH_NEED -> 1.12;
-            case MODERATE_NEED -> 1.06;
+            case DESPERATE -> 1.80;      // safety fallback (shouldn't appear in listings)
+            case HIGH_NEED -> 1.55;      // safety fallback (shouldn't appear in listings)
+            case MODERATE_NEED -> 1.30;  // above 1.20x player sell rate → no same-town exploit
             case BALANCED -> 1.00;
-            case SURPLUS -> 0.92;
-            case OVERSATURATED -> 0.85;
+            case SURPLUS -> 0.85;        // good deal on surplus stock
+            case OVERSATURATED -> 0.70;  // deep discount on flooded items
         };
 
         // Small market noise for variety
@@ -230,12 +243,12 @@ public class MarketListing {
 
         // Floor by need level (prevents very low prices on modded catalogues).
         double floorFactor = switch (need) {
-            case DESPERATE -> 0.90;
-            case HIGH_NEED -> 0.88;
-            case MODERATE_NEED -> 0.86;
+            case DESPERATE -> 1.20;      // safety fallback
+            case HIGH_NEED -> 1.10;      // safety fallback
+            case MODERATE_NEED -> 0.95;
             case BALANCED -> 0.80;
-            case SURPLUS -> 0.72;
-            case OVERSATURATED -> 0.65;
+            case SURPLUS -> 0.65;
+            case OVERSATURATED -> 0.50;
         };
         int floor = Math.max(1, (int) Math.floor(basePrice * floorFactor));
 
@@ -324,7 +337,7 @@ public class MarketListing {
     /**
      * Data holder for a randomly generated enchanted book.
      */
-    private static class EnchantBookData {
+    static class EnchantBookData {
         final CompoundTag nbt;
         final String displayName;
         EnchantBookData(CompoundTag nbt, String displayName) {
@@ -336,7 +349,7 @@ public class MarketListing {
     /**
      * Generate a random enchanted book with a single enchantment at a random valid level.
      */
-    private static EnchantBookData generateRandomEnchantedBook(Random random) {
+    static EnchantBookData generateRandomEnchantedBook(Random random) {
         // Get all registered enchantments
         List<Enchantment> allEnchants = new ArrayList<>();
         for (Enchantment ench : net.minecraftforge.registries.ForgeRegistries.ENCHANTMENTS) {
@@ -371,7 +384,7 @@ public class MarketListing {
     }
 
     // Valid potion types that produce proper display names
-    private static final String[] VALID_POTIONS = {
+    static final String[] VALID_POTIONS = {
         "minecraft:water", "minecraft:night_vision", "minecraft:long_night_vision",
         "minecraft:invisibility", "minecraft:long_invisibility",
         "minecraft:leaping", "minecraft:strong_leaping", "minecraft:long_leaping",
@@ -388,13 +401,13 @@ public class MarketListing {
         "minecraft:luck"
     };
 
-    private static CompoundTag generateRandomPotionNbt(Random random) {
+    static CompoundTag generateRandomPotionNbt(Random random) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Potion", VALID_POTIONS[random.nextInt(VALID_POTIONS.length)]);
         return tag;
     }
 
-    private static String toRoman(int num) {
+    static String toRoman(int num) {
         return switch (num) {
             case 1 -> "I";
             case 2 -> "II";
