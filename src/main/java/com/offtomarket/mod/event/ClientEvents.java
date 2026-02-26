@@ -2,8 +2,10 @@ package com.offtomarket.mod.event;
 
 import com.offtomarket.mod.OffToMarket;
 import com.offtomarket.mod.client.screen.CoinBagScreen;
+import com.offtomarket.mod.client.screen.FinanceTableScreen;
+import com.offtomarket.mod.client.screen.MailboxScreen;
 import com.offtomarket.mod.client.screen.MarketBoardScreen;
-import com.offtomarket.mod.client.screen.TradingBinScreen;
+import com.offtomarket.mod.client.screen.TradingLedgerScreen;
 import com.offtomarket.mod.client.screen.TradingPostScreen;
 import com.offtomarket.mod.debug.DebugOverlay;
 import com.offtomarket.mod.registry.ModMenuTypes;
@@ -21,9 +23,11 @@ public class ClientEvents {
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             MenuScreens.register(ModMenuTypes.TRADING_POST.get(), TradingPostScreen::new);
-            MenuScreens.register(ModMenuTypes.TRADING_BIN.get(), TradingBinScreen::new);
+            MenuScreens.register(ModMenuTypes.TRADING_LEDGER.get(), TradingLedgerScreen::new);
             MenuScreens.register(ModMenuTypes.MARKET_BOARD.get(), MarketBoardScreen::new);
             MenuScreens.register(ModMenuTypes.COIN_BAG.get(), CoinBagScreen::new);
+            MenuScreens.register(ModMenuTypes.MAILBOX.get(), MailboxScreen::new);
+            MenuScreens.register(ModMenuTypes.FINANCE_TABLE.get(), FinanceTableScreen::new);
 
             // Register debug overlay on the FORGE bus (game events, not mod lifecycle)
             MinecraftForge.EVENT_BUS.register(new DebugOverlay());

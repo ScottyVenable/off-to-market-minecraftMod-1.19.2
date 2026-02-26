@@ -1,7 +1,7 @@
 package com.offtomarket.mod.debug;
 
 import com.offtomarket.mod.OffToMarket;
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import com.offtomarket.mod.data.Shipment;
 import net.minecraft.core.BlockPos;
@@ -62,6 +62,9 @@ public class DebugHooks {
             DebugConfig.WATCH_PENDING_COINS = tpbe.getPendingCoins();
             DebugConfig.WATCH_TRADER_LEVEL = tpbe.getTraderLevel();
             DebugConfig.WATCH_TRADER_XP = tpbe.getTraderXp();
+            DebugConfig.WATCH_ACTIVE_QUEST_COUNT    = tpbe.getActiveQuests().size();
+            DebugConfig.WATCH_LAST_QUEST_REFRESH_DAY = tpbe.getLastQuestRefreshDay();
+            DebugConfig.WATCH_SELECTED_TOWN_ID       = tpbe.getSelectedTownId() != null ? tpbe.getSelectedTownId() : "none";
 
             // ---- GRANT_COINS ----
             if (DebugConfig.GRANT_COINS > 0) {

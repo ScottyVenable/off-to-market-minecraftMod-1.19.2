@@ -2,6 +2,7 @@ package com.offtomarket.mod.network;
 
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
 import com.offtomarket.mod.data.MarketListing;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -64,16 +65,20 @@ public class BuyMarketItemPacket {
             MarketListing listing = listings.get(msg.listingIndex);
             int totalCost = listing.getTotalPrice();
 
-            // Check if player has enough coins
-            if (!TradingPostBlockEntity.hasEnoughCoins(player, totalCost)) {
+            // Find a connected Finance Table near the Market Board (optional)
+            FinanceTableBlockEntity financeTable = TradingPostBlockEntity.findNearbyFinanceTable(
+                    player.level, msg.pos);
+
+            // Check if player has enough coins (including Finance Table balance)
+            if (!TradingPostBlockEntity.hasEnoughCoins(player, totalCost, financeTable)) {
                 player.displayClientMessage(
                         Component.literal("Not enough coins! Need " + formatCoinValue(totalCost))
                                 .withStyle(ChatFormatting.RED), true);
                 return;
             }
 
-            // Deduct coins from player inventory
-            TradingPostBlockEntity.deductCoins(player, totalCost);
+            // Deduct coins (draws from Finance Table if player inventory runs short)
+            TradingPostBlockEntity.deductCoins(player, totalCost, financeTable);
 
             // Give the purchased item to the player
             ItemStack stack = listing.createItemStack(listing.getCount());

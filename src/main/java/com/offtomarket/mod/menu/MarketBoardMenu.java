@@ -5,7 +5,6 @@ import com.offtomarket.mod.registry.ModMenuTypes;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -24,18 +23,7 @@ public class MarketBoardMenu extends AbstractContainerMenu {
     public MarketBoardMenu(int containerId, Inventory inv, MarketBoardBlockEntity be) {
         super(ModMenuTypes.MARKET_BOARD.get(), containerId);
         this.blockEntity = be;
-
-        // Player inventory (3 rows of 9)
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(inv, col + row * 9 + 9, 48 + col * 18, 140 + row * 18));
-            }
-        }
-
-        // Player hotbar
-        for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(inv, col, 48 + col * 18, 198));
-        }
+        // No player inventory slots — Market Board is read-only; coins are read directly from Inventory.
     }
 
     public MarketBoardBlockEntity getBlockEntity() { return blockEntity; }

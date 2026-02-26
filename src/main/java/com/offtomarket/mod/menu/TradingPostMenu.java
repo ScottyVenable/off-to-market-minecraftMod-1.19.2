@@ -25,15 +25,17 @@ public class TradingPostMenu extends AbstractContainerMenu {
     private boolean coinSlotsActive = false;
 
     /** Index of the first coin exchange slot in this.slots */
-    public static final int COIN_SLOT_START = 36; // after 27 inv + 9 hotbar
+    public static final int COIN_SLOT_START = 0; // player inventory removed — coins are the first slots
 
     // Data indices
-    public static final int DATA_TRADER_LEVEL = 0;
-    public static final int DATA_TRADER_XP = 1;
-    public static final int DATA_PENDING_COINS = 2;
-    public static final int DATA_MIN_DISTANCE = 3;
-    public static final int DATA_MAX_DISTANCE = 4;
-    public static final int DATA_SIZE = 5;
+    public static final int DATA_TRADER_LEVEL   = 0;
+    public static final int DATA_TRADER_XP      = 1;
+    public static final int DATA_PENDING_COINS  = 2;
+    public static final int DATA_MIN_DISTANCE   = 3;
+    public static final int DATA_MAX_DISTANCE   = 4;
+    /** 1 when the nearest Trading Ledger has items, 0 when empty or absent. */
+    public static final int DATA_BIN_HAS_ITEMS  = 5;
+    public static final int DATA_SIZE           = 6;
 
     // Client-side constructor
     public TradingPostMenu(int containerId, Inventory inv) {
@@ -49,11 +51,12 @@ public class TradingPostMenu extends AbstractContainerMenu {
                 @Override
                 public int get(int index) {
                     return switch (index) {
-                        case DATA_TRADER_LEVEL -> be.getTraderLevel();
-                        case DATA_TRADER_XP -> be.getTraderXp();
+                        case DATA_TRADER_LEVEL  -> be.getTraderLevel();
+                        case DATA_TRADER_XP     -> be.getTraderXp();
                         case DATA_PENDING_COINS -> be.getPendingCoins();
-                        case DATA_MIN_DISTANCE -> be.getMinDistance();
-                        case DATA_MAX_DISTANCE -> be.getMaxDistance();
+                        case DATA_MIN_DISTANCE  -> be.getMinDistance();
+                        case DATA_MAX_DISTANCE  -> be.getMaxDistance();
+                        case DATA_BIN_HAS_ITEMS -> be.isBinEmpty() ? 0 : 1;
                         default -> 0;
                     };
                 }
@@ -75,14 +78,10 @@ public class TradingPostMenu extends AbstractContainerMenu {
 
         addDataSlots(this.data);
 
-        // Player inventory slots (3 rows of 9 + hotbar)
-        addPlayerInventory(inv, 48, 148);
-        addPlayerHotbar(inv, 48, 206);
-
         // Coin exchange slots (3 slots for drag-and-drop coin conversion)
         // isActive() returns false when not on Coins tab, hiding them automatically
         for (int i = 0; i < 3; i++) {
-            this.addSlot(new CoinSlot(coinExchange, i, 72 + i * 36, 72));
+            this.addSlot(new CoinSlot(coinExchange, i, 138 + i * 36, 72));
         }
     }
 
@@ -97,6 +96,8 @@ public class TradingPostMenu extends AbstractContainerMenu {
     public int getPendingCoins() { return data.get(DATA_PENDING_COINS); }
     public int getMinDistance() { return data.get(DATA_MIN_DISTANCE); }
     public int getMaxDistance() { return data.get(DATA_MAX_DISTANCE); }
+    /** Returns true when the nearest Trading Ledger contains at least one item. */
+    public boolean hasBinItems() { return data.get(DATA_BIN_HAS_ITEMS) != 0; }
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
@@ -127,20 +128,6 @@ public class TradingPostMenu extends AbstractContainerMenu {
                 blockEntity.getBlockPos().getX() + 0.5,
                 blockEntity.getBlockPos().getY() + 0.5,
                 blockEntity.getBlockPos().getZ() + 0.5) <= 64.0;
-    }
-
-    private void addPlayerInventory(Inventory inv, int x, int y) {
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(inv, col + row * 9 + 9, x + col * 18, y + row * 18));
-            }
-        }
-    }
-
-    private void addPlayerHotbar(Inventory inv, int x, int y) {
-        for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(inv, col, x + col * 18, y));
-        }
     }
 
     /**

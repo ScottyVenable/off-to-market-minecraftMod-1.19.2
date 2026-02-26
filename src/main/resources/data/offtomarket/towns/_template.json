@@ -1,0 +1,55 @@
+{
+  "_comment": "Copy this file, rename it to your-town-id.json, fill it in, then add the filename to _index.json.",
+  "id": "my_town",
+  "displayName": "My Town Name",
+  "description": "A short flavour text description shown in the Market Board listing.",
+  "_distance_help": "Abstract travel distance 1 (nearby) to 10 (very far). Farther towns add a price premium.",
+  "distance": 3,
+
+  "_type_help": "One of: VILLAGE, TOWN, CITY, MARKET, OUTPOST. Affects price bias of listings.",
+  "type": "TOWN",
+
+  "_level_help": "Minimum trader level (1-5) before this town appears in the list.",
+  "minTraderLevel": 1,
+
+  "_sells_help": "Items this town lists on the Market Board. Use full registry IDs.",
+  "sells": [
+    "minecraft:example_item",
+    "minecraft:another_item"
+  ],
+
+  "_needLevels_help": "Demand level per item. Options: DESPERATE (2x), HIGH_NEED (1.5x), MODERATE_NEED (1.25x), BALANCED (1x, default), SURPLUS (0.75x), OVERSATURATED (0.5x). Items not listed default to BALANCED.",
+  "needLevels": {
+    "minecraft:iron_ingot": "DESPERATE",
+    "minecraft:bread": "HIGH_NEED",
+    "minecraft:wheat": "OVERSATURATED"
+  },
+
+  "_letters_help": "Letters the town NPC may send to the player when specific events fire. Each key is an event type; each value is a list of candidate letters — one is chosen at random (weighted by chanceWeight) among those whose minReputation/maxReputation bounds match the player's current rep. Supported events: shipment_received, shipment_returned, quest_complete, quest_expired, first_trade, reputation_increase, reputation_decrease, buy_order_fulfilled, market_refresh, diplomat_proposed, diplomat_accepted, level_up.",
+  "letters": {
+    "shipment_received": [
+      {
+        "sender": "Townsperson",
+        "subject": "Your goods arrived!",
+        "body": "Hello {player},\n\nYour shipment arrived safely. We appreciate the trade!\n\n- The people of {town}",
+        "chanceWeight": 1
+      }
+    ],
+    "quest_complete": [
+      {
+        "sender": "Townsperson",
+        "subject": "Quest complete - thank you!",
+        "body": "Dear {player},\n\nYou came through for us. The {item} you delivered made a real difference.\n\n- {town}",
+        "chanceWeight": 1
+      }
+    ],
+    "first_trade": [
+      {
+        "sender": "Townsperson",
+        "subject": "Welcome, new trader!",
+        "body": "Hello {player},\n\nThis is the first we have heard of you — welcome! We look forward to doing business.\n\n- {town}",
+        "chanceWeight": 1
+      }
+    ]
+  }
+}

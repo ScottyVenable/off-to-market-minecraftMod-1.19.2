@@ -2,6 +2,7 @@ package com.offtomarket.mod.network;
 
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
 import com.offtomarket.mod.data.BuyOrder;
 import com.offtomarket.mod.data.MarketListing;
 import com.offtomarket.mod.data.TownData;
@@ -87,6 +88,10 @@ public class CartCheckoutPacket {
                 return;
             }
 
+            // Find nearby Finance Table (optional — supplements player coins if connected)
+            FinanceTableBlockEntity financeTable = TradingPostBlockEntity.findNearbyFinanceTable(
+                    player.level, tradingPost.getBlockPos());
+
             List<MarketListing> listings = marketBoard.getListings();
 
             // Validate all entries and calculate total cost
@@ -109,15 +114,15 @@ public class CartCheckoutPacket {
                 return;
             }
 
-            if (!TradingPostBlockEntity.hasEnoughCoins(player, totalCost)) {
+            if (!TradingPostBlockEntity.hasEnoughCoins(player, totalCost, financeTable)) {
                 player.displayClientMessage(
                         Component.literal("Not enough coins for this purchase!")
                                 .withStyle(ChatFormatting.RED), true);
                 return;
             }
 
-            // Deduct coins with change-making
-            TradingPostBlockEntity.deductCoins(player, totalCost);
+            // Deduct coins with change-making (draws from Finance Table if needed)
+            TradingPostBlockEntity.deductCoins(player, totalCost, financeTable);
 
             // Create buy orders for each item
             long gameTime = player.level.getGameTime();

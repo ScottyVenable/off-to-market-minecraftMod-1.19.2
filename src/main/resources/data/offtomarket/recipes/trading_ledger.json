@@ -10,7 +10,7 @@
     "C": { "item": "minecraft:chest" }
   },
   "result": {
-    "item": "offtomarket:trading_bin",
+    "item": "offtomarket:trading_ledger",
     "count": 1
   }
 }

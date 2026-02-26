@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "offtomarket:block/trading_bin"
+    "all": "offtomarket:block/mailbox"
   }
 }

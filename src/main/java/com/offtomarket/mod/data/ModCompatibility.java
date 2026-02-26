@@ -340,8 +340,13 @@ public class ModCompatibility {
             discoveredMods.add(modId);
             modItemCount++;
 
-            // Categorize item
-            categorizeItem(item, rl);
+            // Categorize item (wrapped in try-catch so one bad modded item can't crash everything)
+            try {
+                categorizeItem(item, rl);
+            } catch (Exception e) {
+                OffToMarket.LOGGER.warn("[ModCompat] Failed to categorize item {}: {}", rl, e.getMessage());
+                continue;
+            }
             
             // Log if enabled
             if (ModConfig.logDiscoveredItems) {
@@ -416,14 +421,16 @@ public class ModCompatibility {
         } else if (item instanceof BowItem || item instanceof CrossbowItem) {
             itemsByCategory.get(ItemCategory.BOWS).add(item);
         } else if (item instanceof ArmorItem armor) {
-            // Get equipment slot from a stack of the item
+            // Get equipment slot from a stack of the item (may be null for some modded armor)
             EquipmentSlot slot = armor.getEquipmentSlot(new ItemStack(armor));
-            switch (slot) {
-                case HEAD -> itemsByCategory.get(ItemCategory.HELMETS).add(item);
-                case CHEST -> itemsByCategory.get(ItemCategory.CHESTPLATES).add(item);
-                case LEGS -> itemsByCategory.get(ItemCategory.LEGGINGS).add(item);
-                case FEET -> itemsByCategory.get(ItemCategory.BOOTS).add(item);
-                default -> {} // Ignore non-standard slots
+            if (slot != null) {
+                switch (slot) {
+                    case HEAD -> itemsByCategory.get(ItemCategory.HELMETS).add(item);
+                    case CHEST -> itemsByCategory.get(ItemCategory.CHESTPLATES).add(item);
+                    case LEGS -> itemsByCategory.get(ItemCategory.LEGGINGS).add(item);
+                    case FEET -> itemsByCategory.get(ItemCategory.BOOTS).add(item);
+                    default -> {} // Ignore non-standard slots
+                }
             }
         } else if (item instanceof PotionItem || item instanceof TippedArrowItem) {
             itemsByCategory.get(ItemCategory.POTIONS).add(item);

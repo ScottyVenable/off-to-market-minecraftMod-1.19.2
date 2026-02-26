@@ -8,5 +8,6 @@
     "**/build": true,
     "**/.settings": true,
     "run/": true
-  }
+  },
+  "java.debug.settings.onBuildFailureProceed": true
 }

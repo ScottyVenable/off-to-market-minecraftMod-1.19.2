@@ -3,6 +3,7 @@ package com.offtomarket.mod.data;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Default town definitions. These are the fictional towns/villages available
@@ -11,6 +12,19 @@ import java.util.*;
  */
 public class TownRegistry {
     private static final Map<String, TownData> TOWNS = new LinkedHashMap<>();
+
+    // ------------------------------------------------------------------
+    // List caches: populated lazily, never invalidated (towns are static
+    // after mod-load and dynamic towns are populated once at startup).
+    // ------------------------------------------------------------------
+    private static volatile Collection<TownData> cachedAllTowns = null;
+    private static final ConcurrentHashMap<Integer, List<TownData>> cachedAvailableTowns = new ConcurrentHashMap<>();
+
+    /** Invalidate list caches (call if dynamic towns change after startup). */
+    public static void invalidateTownCaches() {
+        cachedAllTowns = null;
+        cachedAvailableTowns.clear();
+    }
 
     static {
         // Close farming village - Level 1
@@ -419,8 +433,14 @@ public class TownRegistry {
         setNeed("peenam", "minecraft:chicken", NeedLevel.SURPLUS);
     }
 
-    private static void register(TownData town) {
+    /**
+     * Register a town. Called by TownLoader (JSON files), ModCompatibility (dynamic towns),
+     * or the static initializer. Overwrites any existing town with the same ID,
+     * so JSON definitions always take priority over hardcoded fallbacks.
+     */
+    public static void register(TownData town) {
         TOWNS.put(town.getId(), town);
+        invalidateTownCaches();
     }
 
     /**
@@ -453,30 +473,37 @@ public class TownRegistry {
     }
 
     public static Collection<TownData> getAllTowns() {
-        // Combine static and dynamic towns
-        List<TownData> allTowns = new ArrayList<>(TOWNS.values());
-        allTowns.addAll(ModCompatibility.getDynamicTowns().values());
-        return Collections.unmodifiableCollection(allTowns);
+        Collection<TownData> cached = cachedAllTowns;
+        if (cached == null) {
+            // Combine static and dynamic towns
+            List<TownData> allTowns = new ArrayList<>(TOWNS.values());
+            allTowns.addAll(ModCompatibility.getDynamicTowns().values());
+            cached = Collections.unmodifiableCollection(allTowns);
+            cachedAllTowns = cached;
+        }
+        return cached;
     }
 
     /**
      * Get towns available for a given trader level.
      */
     public static List<TownData> getAvailableTowns(int traderLevel) {
-        List<TownData> available = new ArrayList<>();
-        // Add static towns
-        for (TownData town : TOWNS.values()) {
-            if (town.getMinTraderLevel() <= traderLevel) {
-                available.add(town);
+        return cachedAvailableTowns.computeIfAbsent(traderLevel, level -> {
+            List<TownData> available = new ArrayList<>();
+            // Add static towns
+            for (TownData town : TOWNS.values()) {
+                if (town.getMinTraderLevel() <= level) {
+                    available.add(town);
+                }
             }
-        }
-        // Add dynamic mod towns
-        for (TownData town : ModCompatibility.getDynamicTowns().values()) {
-            if (town.getMinTraderLevel() <= traderLevel) {
-                available.add(town);
+            // Add dynamic mod towns
+            for (TownData town : ModCompatibility.getDynamicTowns().values()) {
+                if (town.getMinTraderLevel() <= level) {
+                    available.add(town);
+                }
             }
-        }
-        return available;
+            return Collections.unmodifiableList(available);
+        });
     }
 
     /**

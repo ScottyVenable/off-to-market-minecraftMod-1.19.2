@@ -116,7 +116,7 @@ public class MarketListing {
         for (int i = 0; i < Math.min(count, specialties.size()); i++) {
             ResourceLocation itemId = specialties.get(i);
             net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
-            if (item != null) {
+            if (item != null && item != net.minecraft.world.item.Items.AIR) {
                 int qty = 1 + random.nextInt(16);
                 CompoundTag nbt = null;
                 String displayName;
@@ -127,8 +127,30 @@ public class MarketListing {
                     var enchantData = generateRandomEnchantedBook(random);
                     nbt = enchantData.nbt;
                     displayName = enchantData.displayName;
+
+                // Special handling for potions, splash potions, and lingering potions
+                } else if (item instanceof net.minecraft.world.item.PotionItem) {
+                    qty = 1 + random.nextInt(6); // 1-6 potions
+                    nbt = generateRandomPotionNbt(random);
+                    net.minecraft.world.item.ItemStack tempStack = new net.minecraft.world.item.ItemStack(item);
+                    tempStack.setTag(nbt.copy());
+                    displayName = tempStack.getHoverName().getString();
+                    // Skip if name still contains "Uncraftable" (shouldn't happen with valid NBT)
+                    if (displayName.contains("Uncraftable")) continue;
+
+                // Special handling for tipped arrows
+                } else if (item instanceof net.minecraft.world.item.TippedArrowItem) {
+                    qty = 2 + random.nextInt(8); // 2-9 arrows
+                    nbt = generateRandomPotionNbt(random);
+                    net.minecraft.world.item.ItemStack tempStack = new net.minecraft.world.item.ItemStack(item);
+                    tempStack.setTag(nbt.copy());
+                    displayName = tempStack.getHoverName().getString();
+                    if (displayName.contains("Uncraftable")) continue;
+
                 } else {
                     displayName = new net.minecraft.world.item.ItemStack(item).getHoverName().getString();
+                    // Skip items that render as "Uncraftable" without NBT
+                    if (displayName.contains("Uncraftable")) continue;
                 }
 
                 int basePrice = PriceCalculator.getBaseValue(new net.minecraft.world.item.ItemStack(item));
@@ -140,16 +162,16 @@ public class MarketListing {
                     basePrice = PriceCalculator.getBaseValue(tempStack);
                 }
 
-                // Towns sell at fair value +/- 20%
-                int price = (int) (basePrice * (0.8 + random.nextDouble() * 0.4));
-                price = Math.max(1, price);
+                // Town-aware pricing (distance/type/need-aware), with a protective floor.
+                int price = computeTownListingPrice(town, item, basePrice, random);
 
                 // ~20% chance the item is on sale with 10-30% discount
                 boolean sale = random.nextFloat() < 0.2f;
                 int discount = 0;
                 if (sale) {
                     discount = 10 + random.nextInt(21); // 10 to 30
-                    price = Math.max(1, (int) (price * (1.0 - discount / 100.0)));
+                    int minSalePrice = Math.max(1, (int) Math.floor(basePrice * 0.5));
+                    price = Math.max(minSalePrice, (int) (price * (1.0 - discount / 100.0)));
                 }
 
                 listings.add(new MarketListing(
@@ -160,6 +182,64 @@ public class MarketListing {
         }
 
         return listings;
+    }
+
+    /**
+     * Compute a town-specific listing price for an item.
+     *
+     * Factors:
+     * - Distance premium (farther towns trend more expensive)
+     * - Town type bias (cities/outposts/markets generally pricier than villages)
+     * - Need level bias (what the town is short on trends pricier)
+     * - Small random band for variety
+     *
+     * Also applies a floor relative to fair value so listings don't collapse to
+     * unrealistically low prices in dynamic/modded towns.
+     */
+    private static int computeTownListingPrice(TownData town, net.minecraft.world.item.Item item,
+                                               int basePrice, Random random) {
+        NeedLevel need = town.getNeedLevel(item);
+
+        // Distance premium: +0% to +27% across distance 1..10
+        double distancePremium = Math.max(0, town.getDistance() - 1) * 0.03;
+
+        // Town role bias
+        double typeBias = switch (town.getType()) {
+            case VILLAGE -> -0.04;
+            case TOWN -> 0.00;
+            case MARKET -> 0.03;
+            case OUTPOST -> 0.07;
+            case CITY -> 0.10;
+        };
+
+        // Keep NPC sell listings moderate compared to full buy-price multipliers.
+        double needBias = switch (need) {
+            case DESPERATE -> 1.20;
+            case HIGH_NEED -> 1.12;
+            case MODERATE_NEED -> 1.06;
+            case BALANCED -> 1.00;
+            case SURPLUS -> 0.92;
+            case OVERSATURATED -> 0.85;
+        };
+
+        // Small market noise for variety
+        double randomBand = 0.90 + random.nextDouble() * 0.20; // 0.90 - 1.10
+
+        double adjusted = basePrice * (1.0 + distancePremium + typeBias) * needBias * randomBand;
+        int computed = Math.max(1, (int) Math.round(adjusted));
+
+        // Floor by need level (prevents very low prices on modded catalogues).
+        double floorFactor = switch (need) {
+            case DESPERATE -> 0.90;
+            case HIGH_NEED -> 0.88;
+            case MODERATE_NEED -> 0.86;
+            case BALANCED -> 0.80;
+            case SURPLUS -> 0.72;
+            case OVERSATURATED -> 0.65;
+        };
+        int floor = Math.max(1, (int) Math.floor(basePrice * floorFactor));
+
+        return Math.max(floor, computed);
     }
 
     /**
@@ -288,6 +368,30 @@ public class MarketListing {
         }
 
         return new EnchantBookData(bookStack.getTag(), displayName);
+    }
+
+    // Valid potion types that produce proper display names
+    private static final String[] VALID_POTIONS = {
+        "minecraft:water", "minecraft:night_vision", "minecraft:long_night_vision",
+        "minecraft:invisibility", "minecraft:long_invisibility",
+        "minecraft:leaping", "minecraft:strong_leaping", "minecraft:long_leaping",
+        "minecraft:fire_resistance", "minecraft:long_fire_resistance",
+        "minecraft:swiftness", "minecraft:long_swiftness", "minecraft:strong_swiftness",
+        "minecraft:slowness", "minecraft:long_slowness", "minecraft:strong_slowness",
+        "minecraft:water_breathing", "minecraft:long_water_breathing",
+        "minecraft:healing", "minecraft:strong_healing",
+        "minecraft:harming", "minecraft:strong_harming",
+        "minecraft:poison", "minecraft:long_poison", "minecraft:strong_poison",
+        "minecraft:regeneration", "minecraft:long_regeneration", "minecraft:strong_regeneration",
+        "minecraft:strength", "minecraft:long_strength", "minecraft:strong_strength",
+        "minecraft:weakness", "minecraft:long_weakness",
+        "minecraft:luck"
+    };
+
+    private static CompoundTag generateRandomPotionNbt(Random random) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Potion", VALID_POTIONS[random.nextInt(VALID_POTIONS.length)]);
+        return tag;
     }
 
     private static String toRoman(int num) {

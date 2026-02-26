@@ -3,8 +3,11 @@ package com.offtomarket.mod.client.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.offtomarket.mod.OffToMarket;
+import com.offtomarket.mod.block.FinanceTableBlock;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.data.MarketListing;
+import com.offtomarket.mod.data.NeedLevel;
 import com.offtomarket.mod.data.TownData;
 import com.offtomarket.mod.data.TownRegistry;
 import com.offtomarket.mod.debug.DebugConfig;
@@ -12,7 +15,6 @@ import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.menu.MarketBoardMenu;
 import com.offtomarket.mod.network.CartCheckoutPacket;
 import com.offtomarket.mod.network.ModNetwork;
-import com.offtomarket.mod.network.RefreshMarketPacket;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
@@ -26,14 +28,20 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
 
 public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> {
     private static final ResourceLocation TEXTURE =
             new ResourceLocation(OffToMarket.MODID, "textures/gui/market_board.png");
 
     private int scrollOffset = 0;
-    private static final int VISIBLE_LISTINGS = 8;
+    private static final int VISIBLE_LISTINGS = 14;
+
+    /** Persists cart entries across screen close/reopen (client-side, keyed by block position). */
+    private static final Map<BlockPos, List<int[]>> SAVED_CARTS = new HashMap<>();
 
     /** Row index (0-based within visible rows) the mouse is currently hovering, or -1. */
     private int hoveredRow = -1;
@@ -72,7 +80,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private final List<CartEntry> cart = new ArrayList<>();
     private boolean showingCart = false;
     private int cartScrollOffset = 0;
-    private static final int VISIBLE_CART_ROWS = 7;
+    private static final int VISIBLE_CART_ROWS = 13;
     private int hoveredCartRow = -1;
 
     // Quantity selection overlay
@@ -83,15 +91,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private int selectedPricePerItem = 0;
 
     // Overlay geometry (relative to leftPos/topPos)
-    private static final int OVL_X = 28;
+    private static final int OVL_X = 92;
     private static final int OVL_Y = 30;
     private static final int OVL_W = 200;
     private static final int OVL_H = 96;
 
     // ==================== Buttons ====================
 
-    private Button scrollUpBtn, scrollDownBtn, refreshBtn;
-    private Button cartToggleBtn;
+    private Button scrollUpBtn, scrollDownBtn;
     private Button checkoutBtn, clearCartBtn;
     private Button cartScrollUpBtn, cartScrollDownBtn;
 
@@ -101,7 +108,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
     public MarketBoardScreen(MarketBoardMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
-        this.imageWidth = 256;
+        this.imageWidth = 384;
         this.imageHeight = 222;
         this.playerInv = inv;
     }
@@ -114,49 +121,34 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // ==== Listing view buttons ====
 
-        scrollUpBtn = addRenderableWidget(new Button(x + 238, y + 20, 14, 14,
+        scrollUpBtn = addRenderableWidget(new Button(x + 366, y + 20, 14, 14,
                 Component.literal("^"), btn -> {
             if (scrollOffset > 0) scrollOffset--;
         }));
 
-        scrollDownBtn = addRenderableWidget(new Button(x + 238, y + 110, 14, 14,
+        scrollDownBtn = addRenderableWidget(new Button(x + 366, y + 183, 14, 14,
                 Component.literal("v"), btn -> scrollOffset++));
 
-        refreshBtn = addRenderableWidget(new Button(x + 130, y + 3, 48, 14,
-                Component.literal("Refresh"), btn -> {
-            MarketBoardBlockEntity be = menu.getBlockEntity();
-            if (be != null) {
-                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                        new RefreshMarketPacket(be.getBlockPos()));
-            }
-        }));
-
-        // Cart toggle button (shows item count)
-        cartToggleBtn = addRenderableWidget(new Button(x + 184, y + 3, 54, 14,
-                Component.literal("Cart (0)"), btn -> {
-            showingCart = !showingCart;
-            selectedListingIndex = -1;
-            updateButtonVisibility();
-        }));
+        // Cart toggle and refresh button replaced by manual drawing and click detection
 
         // ==== Cart view buttons ====
 
-        checkoutBtn = addRenderableWidget(new Button(x + 8, y + 115, 110, 14,
+        checkoutBtn = addRenderableWidget(new Button(x + 8, y + 188, 170, 14,
                 Component.literal("Checkout"), btn -> doCheckout()));
 
-        clearCartBtn = addRenderableWidget(new Button(x + 122, y + 115, 110, 14,
+        clearCartBtn = addRenderableWidget(new Button(x + 192, y + 188, 170, 14,
                 Component.literal("Clear Cart"), btn -> {
             cart.clear();
             showingCart = false;
             updateButtonVisibility();
         }));
 
-        cartScrollUpBtn = addRenderableWidget(new Button(x + 238, y + 20, 14, 14,
+        cartScrollUpBtn = addRenderableWidget(new Button(x + 366, y + 20, 14, 14,
                 Component.literal("^"), btn -> {
             if (cartScrollOffset > 0) cartScrollOffset--;
         }));
 
-        cartScrollDownBtn = addRenderableWidget(new Button(x + 238, y + 110, 14, 14,
+        cartScrollDownBtn = addRenderableWidget(new Button(x + 366, y + 183, 14, 14,
                 Component.literal("v"), btn -> cartScrollOffset++));
 
         // ==== Quantity overlay buttons ====
@@ -199,7 +191,40 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             updateButtonVisibility();
         }));
 
+        // Restore previously saved cart for this market board
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            List<int[]> saved = SAVED_CARTS.get(be.getBlockPos());
+            if (saved != null && !saved.isEmpty()) {
+                List<MarketListing> listings = be.getListings();
+                for (int[] entry : saved) {
+                    int li = entry[0], qty = entry[1];
+                    if (li >= 0 && li < listings.size()) {
+                        MarketListing ml = listings.get(li);
+                        cart.add(new CartEntry(li, qty, ml.getItemDisplayName(),
+                                ml.getTownId(), ml.getPricePerItem(), ml.getCount()));
+                    }
+                }
+            }
+        }
+
         updateButtonVisibility();
+    }
+
+    @Override
+    public void onClose() {
+        // Persist the current cart so it survives screen close/reopen
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null) {
+            if (cart.isEmpty()) {
+                SAVED_CARTS.remove(be.getBlockPos());
+            } else {
+                List<int[]> toSave = new ArrayList<>();
+                for (CartEntry e : cart) toSave.add(new int[]{e.listingIndex, e.quantity});
+                SAVED_CARTS.put(be.getBlockPos(), toSave);
+            }
+        }
+        super.onClose();
     }
 
     private void updateButtonVisibility() {
@@ -209,10 +234,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         scrollUpBtn.visible = listing;
         scrollDownBtn.visible = listing;
-        refreshBtn.visible = !cartView;
+        // refreshBtn removed — market board auto-refreshes; timer shown in title bar
 
-        cartToggleBtn.visible = !qtyOverlay;
-        cartToggleBtn.setMessage(Component.literal("Cart (" + cart.size() + ")"));
+        // cartToggleBtn not a widget; visibility tracked via selectedListingIndex check in mouseClicked
 
         checkoutBtn.visible = cartView && !cart.isEmpty();
         clearCartBtn.visible = cartView && !cart.isEmpty();
@@ -225,6 +249,11 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         qtyPlus10Btn.visible = qtyOverlay;
         addToCartBtn.visible = qtyOverlay;
         cancelQtyBtn.visible = qtyOverlay;
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
     }
 
     // ==================== Cart Logic ====================
@@ -275,6 +304,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 new CartCheckoutPacket(be.getBlockPos(), entries));
 
         cart.clear();
+        SAVED_CARTS.remove(be.getBlockPos()); // cart fulfilled, remove persistence
         showingCart = false;
         updateButtonVisibility();
     }
@@ -299,6 +329,25 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                     total += bagTag.getInt("Gold") * 100
                            + bagTag.getInt("Silver") * 10
                            + bagTag.getInt("Copper");
+                }
+            }
+        }
+        // Include coins stored in nearby Finance Tables (within 16 blocks)
+        if (minecraft != null && minecraft.level != null && minecraft.player != null) {
+            BlockPos playerPos = minecraft.player.blockPosition();
+            int r = 16;
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dy = -3; dy <= 3; dy++) {
+                    for (int dz = -r; dz <= r; dz++) {
+                        BlockPos p = playerPos.offset(dx, dy, dz);
+                        if (minecraft.level.getBlockState(p).getBlock() instanceof FinanceTableBlock) {
+                            net.minecraft.world.level.block.entity.BlockEntity fbe =
+                                    minecraft.level.getBlockEntity(p);
+                            if (fbe instanceof FinanceTableBlockEntity ftbe) {
+                                total += ftbe.getBalance();
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -334,45 +383,32 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
     private void drawSortHeader(PoseStack ps, String label, int x, int y, SortMode mode) {
         boolean active = sortMode == mode;
-        int color = active ? 0xFFFF88 : 0xFFD700;
-        String arrow = active ? (sortAscending ? " \u25B2" : " \u25BC") : "";
-        this.font.draw(ps, label + arrow, x, y, color);
+        this.font.draw(ps, OtmGuiTheme.sortLabel(label, active, sortAscending), x, y, OtmGuiTheme.sortColor(active));
     }
 
     private String formatCoinText(int copperPieces) {
         if (DebugConfig.isGoldOnlyMode()) {
             int gp = Math.max(1, (copperPieces + 99) / 100);
-            return gp + "g";
+            return "\u00A7e" + gp + "g\u00A7r";
         }
         int gp = copperPieces / 100;
         int sp = (copperPieces % 100) / 10;
         int cp = copperPieces % 10;
         StringBuilder sb = new StringBuilder();
-        if (gp > 0) sb.append(gp).append("g");
-        if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append(sp).append("s"); }
-        if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append(cp).append("c"); }
+        if (gp > 0) sb.append("\u00A7e").append(gp).append("g\u00A7r");
+        if (sp > 0) { if (sb.length() > 0) sb.append(" "); sb.append("\u00A77").append(sp).append("s\u00A7r"); }
+        if (cp > 0 || sb.length() == 0) { if (sb.length() > 0) sb.append(" "); sb.append("\u00A76").append(cp).append("c\u00A7r"); }
         return sb.toString();
     }
 
     // ==================== Drawing Helpers ====================
 
     private void drawPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF1A1209);
-        fill(ps, x + 1, y + 1, x + w - 1, y + 2, 0xFF8B7355);
-        fill(ps, x + 1, y + 1, x + 2, y + h - 1, 0xFF8B7355);
-        fill(ps, x + 1, y + h - 2, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + w - 2, y + 1, x + w - 1, y + h - 1, 0xFF2A1F14);
-        fill(ps, x + 2, y + 2, x + w - 2, y + h - 2, 0xFF5C4A32);
+        OtmGuiTheme.drawPanel(ps, x, y, w, h);
     }
 
     private void drawInsetPanel(PoseStack ps, int x, int y, int w, int h) {
-        fill(ps, x, y, x + w, y + h, 0xFF2A1F14);
-        fill(ps, x + 1, y + 1, x + w - 1, y + h - 1, 0xFF3E3226);
-    }
-
-    private void drawSlot(PoseStack ps, int x, int y) {
-        fill(ps, x - 1, y - 1, x + 17, y + 17, 0xFF373737);
-        fill(ps, x, y, x + 16, y + 16, 0xFF8B8B8B);
+        OtmGuiTheme.drawInsetPanel(ps, x, y, w, h);
     }
 
     // ==================== Render Background ====================
@@ -387,44 +423,47 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         int y = this.topPos;
 
         // Main background
-        drawPanel(poseStack, x, y, 256, 222);
+        drawPanel(poseStack, x, y, 384, 222);
 
         // Title bar
-        drawInsetPanel(poseStack, x + 4, y + 3, 248, 14);
+        drawInsetPanel(poseStack, x + 4, y + 3, 376, 14);
 
-        // Content area
-        drawInsetPanel(poseStack, x + 4, y + 19, 232, 108);
+        // Cart toggle tab (right side of title bar, Trading Post style)
+        if (selectedListingIndex < 0) {
+            int tx = x + 312;
+            int ty = y + 3;
+            if (showingCart) {
+                fill(poseStack, tx, ty, tx + 54, ty + 15, 0xFF8B7355);
+                fill(poseStack, tx + 1, ty + 1, tx + 53, ty + 15, 0xFF3E3226);
+            } else {
+                fill(poseStack, tx, ty + 2, tx + 54, ty + 14, 0xFF1A1209);
+                fill(poseStack, tx + 1, ty + 3, tx + 53, ty + 13, 0xFF2A1F14);
+            }
+        }
+
+        // Extended content area (listings / cart) — no inventory below
+        drawInsetPanel(poseStack, x + 4, y + 19, 360, 169);
+
+        // Coin balance strip at the bottom
+        drawInsetPanel(poseStack, x + 4, y + 200, 376, 14);
 
         if (showingCart) {
             renderCartBg(poseStack, x, y, mouseX, mouseY);
         } else {
             renderListingBg(poseStack, x, y, mouseX, mouseY);
         }
-
-        // Divider above inventory
-        fill(poseStack, x + 4, y + 130, x + 252, y + 131, 0xFF3B2E1E);
-
-        // Player inventory slots
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                drawSlot(poseStack, x + 48 + col * 18, y + 140 + row * 18);
-            }
-        }
-        for (int col = 0; col < 9; col++) {
-            drawSlot(poseStack, x + 48 + col * 18, y + 198);
-        }
     }
 
     private void renderListingBg(PoseStack poseStack, int x, int y, int mouseX, int mouseY) {
         // Table header row
-        fill(poseStack, x + 5, y + 20, x + 235, y + 30, 0xFF2C2318);
+        fill(poseStack, x + 5, y + 20, x + 363, y + 30, 0xFF2C2318);
 
         // Compute hover row
         hoveredRow = -1;
         if (selectedListingIndex < 0) {
             int relMouseX = mouseX - x;
             int relMouseY = mouseY - y;
-            if (relMouseX >= 5 && relMouseX <= 235 && relMouseY >= 31 && relMouseY < 31 + VISIBLE_LISTINGS * 11) {
+            if (relMouseX >= 5 && relMouseX <= 363 && relMouseY >= 31 && relMouseY < 31 + VISIBLE_LISTINGS * 11) {
                 hoveredRow = (relMouseY - 31) / 11;
             }
         }
@@ -441,21 +480,21 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             boolean isHovered = (i == hoveredRow && validListing);
 
             if (isHovered) {
-                fill(poseStack, x + 5, rowY, x + 235, rowY + 11, 0xFF5A4A30);
+                fill(poseStack, x + 5, rowY, x + 363, rowY + 11, 0xFF5A4A30);
                 fill(poseStack, x + 5, rowY, x + 6, rowY + 11, 0xFFFFD700);
             } else {
                 int rowColor = (i % 2 == 0) ? 0xFF3E3226 : 0xFF453929;
-                fill(poseStack, x + 5, rowY, x + 235, rowY + 11, rowColor);
+                fill(poseStack, x + 5, rowY, x + 363, rowY + 11, rowColor);
             }
         }
 
         // Sort column underline
         if (sortMode != SortMode.NONE) {
             int hlX1 = x + switch (sortMode) {
-                case NAME -> 5; case TOWN -> 88; case QTY -> 148; case PRICE -> 166; default -> 5;
+                case NAME -> 5; case TOWN -> 131; case QTY -> 233; case PRICE -> 259; default -> 5;
             };
             int hlX2 = x + switch (sortMode) {
-                case NAME -> 87; case TOWN -> 147; case QTY -> 165; case PRICE -> 213; default -> 87;
+                case NAME -> 130; case TOWN -> 232; case QTY -> 258; case PRICE -> 340; default -> 130;
             };
             fill(poseStack, hlX1, y + 29, hlX2, y + 30, 0xFFFFD700);
         }
@@ -485,12 +524,12 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
     private void renderCartBg(PoseStack poseStack, int x, int y, int mouseX, int mouseY) {
         // Cart header
-        fill(poseStack, x + 5, y + 20, x + 235, y + 30, 0xFF2C2318);
+        fill(poseStack, x + 5, y + 20, x + 363, y + 30, 0xFF2C2318);
 
         hoveredCartRow = -1;
         int relMouseX = mouseX - x;
         int relMouseY = mouseY - y;
-        if (relMouseX >= 5 && relMouseX <= 235 && relMouseY >= 31 && relMouseY < 31 + VISIBLE_CART_ROWS * 11) {
+        if (relMouseX >= 5 && relMouseX <= 363 && relMouseY >= 31 && relMouseY < 31 + VISIBLE_CART_ROWS * 11) {
             hoveredCartRow = (relMouseY - 31) / 11;
         }
 
@@ -501,18 +540,18 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             boolean isHovered = (i == hoveredCartRow && valid);
 
             if (isHovered) {
-                fill(poseStack, x + 5, rowY, x + 235, rowY + 11, 0xFF5A4A30);
+                fill(poseStack, x + 5, rowY, x + 363, rowY + 11, 0xFF5A4A30);
                 fill(poseStack, x + 5, rowY, x + 6, rowY + 11, 0xFFFF4444);
             } else {
                 int rowColor = (i % 2 == 0) ? 0xFF3E3226 : 0xFF453929;
-                fill(poseStack, x + 5, rowY, x + 235, rowY + 11, rowColor);
+                fill(poseStack, x + 5, rowY, x + 363, rowY + 11, rowColor);
             }
         }
     }
 
     private void renderQtyOverlayBg(PoseStack poseStack, int x, int y) {
-        // Fully opaque dimming layer over the entire content area
-        fill(poseStack, x + 4, y + 19, x + 252, y + 128, 0xFF000000);
+        // Qty overlay dims the content area only
+        fill(poseStack, x + 4, y + 19, x + 380, y + 192, 0xFF000000);
 
         // Overlay panel — centered in the content area
         int ox = x + OVL_X;
@@ -527,9 +566,29 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     protected void renderLabels(PoseStack poseStack, int mouseX, int mouseY) {
         // Title
         if (showingCart) {
-            drawCenteredString(poseStack, this.font, "Shopping Cart", 64, 6, 0xFFD700);
+            drawCenteredString(poseStack, this.font, "Shopping Cart", 96, 6, 0xFFD700);
         } else {
-            drawCenteredString(poseStack, this.font, "Market Board", 64, 6, 0xFFD700);
+            drawCenteredString(poseStack, this.font, "Market Board", 96, 6, 0xFFD700);
+        }
+
+        // Cart toggle tab label
+        if (selectedListingIndex < 0) {
+            String cartLabel = "Cart (" + cart.size() + ")";
+            int cartColor = showingCart ? 0xFFD700 : 0x888888;
+            drawCenteredString(poseStack, this.font, cartLabel, 339, showingCart ? 6 : 7, cartColor);
+        }
+
+        // Refresh countdown timer (shown in title bar when market is refreshing)
+        if (!showingCart) {
+            MarketBoardBlockEntity rbe = menu.getBlockEntity();
+            if (rbe != null && rbe.getRefreshCooldown() > 0 && !DebugConfig.UNLIMITED_REFRESHES) {
+                int remainTicks = rbe.getRefreshCooldown();
+                int totalSeconds = remainTicks / 20;
+                int minutes = totalSeconds / 60;
+                int seconds = totalSeconds % 60;
+                String countdownStr = "Next: " + String.format("%d:%02d", minutes, seconds);
+                this.font.draw(poseStack, countdownStr, 190, 6, 0xFF8888);
+            }
         }
 
         if (showingCart) {
@@ -538,8 +597,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             renderListingLabels(poseStack);
         }
 
-        // Inventory label
-        this.font.draw(poseStack, this.playerInventoryTitle, 48, 130, 0x404040);
+        // Coin balance strip label
+        int balance = getPlayerCoinBalance();
+        this.font.draw(poseStack, "\u00A77Coin Balance: " + formatCoinText(balance), 7, 203, 0xFFDD88);
     }
 
     private void renderListingLabels(PoseStack poseStack) {
@@ -552,15 +612,15 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         if (listings.isEmpty()) {
             this.font.draw(poseStack, "No listings available.", 10, 50, 0x888888);
-            this.font.draw(poseStack, "Click Refresh to load market data.", 10, 62, 0x888888);
+            this.font.draw(poseStack, "Market data will load automatically.", 10, 62, 0x888888);
             return;
         }
 
         // Sortable headers
         drawSortHeader(poseStack, "Item", 17, 22, SortMode.NAME);
-        drawSortHeader(poseStack, "Town", 88, 22, SortMode.TOWN);
-        drawSortHeader(poseStack, "Qty", 148, 22, SortMode.QTY);
-        drawSortHeader(poseStack, "Price Ea.", 166, 22, SortMode.PRICE);
+        drawSortHeader(poseStack, "Town", 132, 22, SortMode.TOWN);
+        drawSortHeader(poseStack, "Qty", 234, 22, SortMode.QTY);
+        drawSortHeader(poseStack, "Price Ea.", 260, 22, SortMode.PRICE);
 
         int balance = getPlayerCoinBalance();
         int yOff = 33;
@@ -580,14 +640,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             boolean inCart = isInCart(actualIdx);
 
             String itemName = listing.getItemDisplayName();
-            if (this.font.width(itemName) > 67) {
-                while (this.font.width(itemName + "..") > 67 && itemName.length() > 3) {
+            if (this.font.width(itemName) > 120) {
+                while (this.font.width(itemName + "..") > 120 && itemName.length() > 3) {
                     itemName = itemName.substring(0, itemName.length() - 1);
                 }
                 itemName += "..";
             }
-            if (this.font.width(townName) > 56) {
-                while (this.font.width(townName + "..") > 56 && townName.length() > 3) {
+            if (this.font.width(townName) > 84) {
+                while (this.font.width(townName + "..") > 84 && townName.length() > 3) {
                     townName = townName.substring(0, townName.length() - 1);
                 }
                 townName += "..";
@@ -599,19 +659,39 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 nameColor = canAfford ? 0xFFD700 : 0xCC8844;
             }
             this.font.draw(poseStack, itemName, 17, yOff, nameColor);
-            this.font.draw(poseStack, townName, 88, yOff, 0xAAAAAA);
-            this.font.draw(poseStack, String.valueOf(listing.getCount()), 148, yOff, 0xCCCCCC);
-            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 166, yOff, priceEach);
+
+            // Need level indicator dot before town name
+            Item listingItem = ForgeRegistries.ITEMS.getValue(listing.getItemId());
+            if (town != null && listingItem != null) {
+                NeedLevel need = town.getNeedLevel(listingItem);
+                int dotColor = 0xFF000000 | need.getColor();
+                this.font.draw(poseStack, "\u25CF", 132, yOff, dotColor); // filled circle
+
+                // Supply trend arrow
+                String itemKey = listing.getItemId().toString();
+                TownData.SupplyTrend trend = town.getTrend(itemKey);
+                if (trend == TownData.SupplyTrend.FALLING) {
+                    // Supply falling = demand rising → green up arrow
+                    this.font.draw(poseStack, "\u25B2", 136, yOff, 0xFF44CC44);
+                } else if (trend == TownData.SupplyTrend.RISING) {
+                    // Supply rising = demand falling → red down arrow
+                    this.font.draw(poseStack, "\u25BC", 136, yOff, 0xFFCC4444);
+                }
+            }
+
+            this.font.draw(poseStack, townName, 144, yOff, 0xAAAAAA);
+            this.font.draw(poseStack, String.valueOf(listing.getCount()), 234, yOff, 0xCCCCCC);
+            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 260, yOff, priceEach);
 
             // Cart status / Add button
             boolean isHovered = (displayed == hoveredRow);
             if (inCart) {
-                this.font.draw(poseStack, "\u2714", 217, yOff, 0x44CC44);
+                this.font.draw(poseStack, "\u2714", 345, yOff, 0x44CC44);
             } else if (canAfford) {
                 int col = isHovered ? 0x55FF55 : 0x44CC44;
-                this.font.draw(poseStack, "[+]", 214, yOff, col);
+                this.font.draw(poseStack, "[+]", 342, yOff, col);
             } else {
-                this.font.draw(poseStack, "[+]", 214, yOff, 0x664444);
+                this.font.draw(poseStack, "[+]", 342, yOff, 0x664444);
             }
 
             yOff += 11;
@@ -623,13 +703,13 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             countText += "  (" + (scrollOffset + 1) + "-" +
                     Math.min(scrollOffset + VISIBLE_LISTINGS, listings.size()) + ")";
         }
-        this.font.draw(poseStack, countText, 8, 120, 0x666666);
+        this.font.draw(poseStack, countText, 8, 188, 0x666666);
 
         // Cart summary
         if (!cart.isEmpty()) {
             String cartSummary = "Cart: " + formatCoinText(getCartTotal());
             int cartW = this.font.width(cartSummary);
-            this.font.draw(poseStack, cartSummary, 230 - cartW, 120, 0xFFCC44);
+            this.font.draw(poseStack, cartSummary, 358 - cartW, 188, 0xFFCC44);
         }
     }
 
@@ -642,9 +722,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // Cart headers
         this.font.draw(poseStack, "Item", 8, 22, 0xFFD700);
-        this.font.draw(poseStack, "Qty", 120, 22, 0xFFD700);
-        this.font.draw(poseStack, "Cost", 148, 22, 0xFFD700);
-        this.font.draw(poseStack, "Remove", 196, 22, 0xFFD700);
+        this.font.draw(poseStack, "Qty", 190, 22, 0xFFD700);
+        this.font.draw(poseStack, "Cost", 224, 22, 0xFFD700);
+        this.font.draw(poseStack, "Remove", 310, 22, 0xFFD700);
 
         int maxScroll = Math.max(0, cart.size() - VISIBLE_CART_ROWS);
         cartScrollOffset = Math.min(cartScrollOffset, maxScroll);
@@ -655,20 +735,20 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             CartEntry entry = cart.get(i);
 
             String itemName = entry.itemName;
-            if (this.font.width(itemName) > 108) {
-                while (this.font.width(itemName + "..") > 108 && itemName.length() > 3) {
+            if (this.font.width(itemName) > 175) {
+                while (this.font.width(itemName + "..") > 175 && itemName.length() > 3) {
                     itemName = itemName.substring(0, itemName.length() - 1);
                 }
                 itemName += "..";
             }
 
             this.font.draw(poseStack, itemName, 8, yOff, 0xFFFFFF);
-            this.font.draw(poseStack, "x" + entry.quantity, 120, yOff, 0xCCCCCC);
-            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 148, yOff, entry.totalCost());
+            this.font.draw(poseStack, "x" + entry.quantity, 190, yOff, 0xCCCCCC);
+            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 224, yOff, entry.totalCost());
 
             boolean isHovered = (displayed == hoveredCartRow);
             int removeColor = isHovered ? 0xFF4444 : 0xCC4444;
-            this.font.draw(poseStack, "[\u2718]", 210, yOff, removeColor);
+            this.font.draw(poseStack, "[\u2718]", 324, yOff, removeColor);
 
             yOff += 11;
         }
@@ -684,7 +764,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         String balStr = "Balance: " + formatCoinText(balance);
         int balColor = canAfford ? 0x55FF55 : 0xFF4444;
         int balW = this.font.width(balStr);
-        this.font.draw(poseStack, balStr, 230 - balW, 108, balColor);
+        this.font.draw(poseStack, balStr, 358 - balW, 108, balColor);
     }
 
     private void renderQtyOverlayLabels(PoseStack poseStack) {
@@ -801,6 +881,37 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                     .withStyle(ChatFormatting.GOLD));
             tooltip.add(Component.literal("Distance: " + town.getDistance())
                     .withStyle(ChatFormatting.GRAY));
+
+            // Show need level for this item in the town
+            net.minecraft.world.item.Item tooltipItem = ForgeRegistries.ITEMS.getValue(listing.getItemId());
+            if (tooltipItem != null) {
+                NeedLevel need = town.getNeedLevel(tooltipItem);
+                ChatFormatting needColor = switch (need) {
+                    case DESPERATE -> ChatFormatting.RED;
+                    case HIGH_NEED -> ChatFormatting.GOLD;
+                    case MODERATE_NEED -> ChatFormatting.YELLOW;
+                    case BALANCED -> ChatFormatting.GREEN;
+                    case SURPLUS -> ChatFormatting.AQUA;
+                    case OVERSATURATED -> ChatFormatting.GRAY;
+                };
+                String arrow = need.isInDemand() ? "\u25B2" : need.isOversupplied() ? "\u25BC" : "\u25CF";
+                tooltip.add(Component.literal(arrow + " Demand: " + need.getDisplayName() + " (" + String.format("%.0f", need.getPriceMultiplier() * 100) + "%)")
+                        .withStyle(needColor));
+
+                // Supply trend
+                String itemKey = listing.getItemId().toString();
+                TownData.SupplyTrend trend = town.getTrend(itemKey);
+                if (trend == TownData.SupplyTrend.FALLING) {
+                    tooltip.add(Component.literal("\u25B2 Demand trending UP")
+                            .withStyle(ChatFormatting.GREEN));
+                } else if (trend == TownData.SupplyTrend.RISING) {
+                    tooltip.add(Component.literal("\u25BC Demand trending DOWN")
+                            .withStyle(ChatFormatting.RED));
+                } else {
+                    tooltip.add(Component.literal("\u25CF Demand stable")
+                            .withStyle(ChatFormatting.DARK_GRAY));
+                }
+            }
         }
 
         renderComponentTooltip(ps, tooltip, mouseX, mouseY);
@@ -839,6 +950,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             double relX = mouseX - x;
             double relY = mouseY - y;
 
+            // Cart toggle tab click (right side of title bar)
+            if (selectedListingIndex < 0 && relX >= 312 && relX < 366 && relY >= 3 && relY < 17) {
+                showingCart = !showingCart;
+                selectedListingIndex = -1;
+                updateButtonVisibility();
+                return true;
+            }
+
             // If quantity overlay is showing, don't allow other clicks
             // (buttons handle overlay interaction)
             if (selectedListingIndex >= 0) {
@@ -857,12 +976,12 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 }
             } else {
                 // Listing view: header click for sorting
-                if (relY >= 20 && relY <= 30 && relX >= 5 && relX <= 235) {
+                if (relY >= 20 && relY <= 30 && relX >= 5 && relX <= 363) {
                     SortMode clickedMode = SortMode.NONE;
-                    if (relX < 88) clickedMode = SortMode.NAME;
-                    else if (relX < 148) clickedMode = SortMode.TOWN;
-                    else if (relX < 166) clickedMode = SortMode.QTY;
-                    else if (relX < 214) clickedMode = SortMode.PRICE;
+                    if (relX < 131) clickedMode = SortMode.NAME;
+                    else if (relX < 233) clickedMode = SortMode.TOWN;
+                    else if (relX < 259) clickedMode = SortMode.QTY;
+                    else if (relX < 341) clickedMode = SortMode.PRICE;
 
                     if (clickedMode != SortMode.NONE) {
                         if (sortMode == clickedMode) {
@@ -882,7 +1001,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                     List<MarketListing> listings = be.getListings();
                     List<Integer> sorted = getSortedIndices(listings);
 
-                    if (relX >= 5 && relX <= 235 && relY >= 31 && relY < 31 + VISIBLE_LISTINGS * 11) {
+                    if (relX >= 5 && relX <= 363 && relY >= 31 && relY < 31 + VISIBLE_LISTINGS * 11) {
                         int row = (int) ((relY - 31) / 11);
                         int sortedIdx = scrollOffset + row;
 

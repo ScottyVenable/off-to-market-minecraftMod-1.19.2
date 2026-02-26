@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.1.4-blue" alt="Version 0.1.4">
+  <img src="https://img.shields.io/badge/Version-0.5.7-blue" alt="Version 0.5.7">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -27,7 +27,7 @@ The central hub for all your trading activities. Use it to:
 - Complete quests for reputation and rewards
 - Track your merchant level progression
 
-#### Trading Bin
+#### Trading Ledger
 Your local storage for items to sell:
 - Set prices per item slot
 - Items are automatically valued when caravans come
@@ -41,20 +41,19 @@ Wall-mounted board to view:
 
 ### Town System
 
-Trade with 10+ unique towns, each with their own personality:
+Trade with 9 unique towns, each with their own personality:
 
-| Town | Type | Specialty |
-|------|------|-----------|
-| **Greenhollow Village** | Farming Village | Agricultural products, livestock |
-| **Irondeep Settlement** | Mining Village | Ores, metals, mining supplies |
-| **Mistwood Village** | Forest Village | Lumber, forestry products |
-| **Stonehaven** | Mountain Town | Stone, building materials |
-| **Silverbrook** | River Town | Fish, aquatic goods |
-| **Goldcrest City** | Capital City | Luxury goods, rare items |
-| **Redforge** | Industrial Town | Smithed goods, tools |
-| **Moonvale** | Mystical Town | Enchanting supplies, magic items |
-| **Sandport** | Coastal Town | Trade goods, exotic items |
-| **Frostholm** | Northern Outpost | Cold weather supplies |
+| Town | Type | Specialty | Min. Level |
+|------|------|-----------|------------|
+| **Greenhollow Village** | Village | Farming, crops, produce | 1 |
+| **Irondeep Settlement** | Village | Ores, metals, mining supplies | 1 |
+| **Peenam Animal Market** | Village | Livestock, animal trade slips | 1 |
+| **Saltmere Harbor** | Town | Fish, coastal goods | 1 |
+| **Timberwatch** | Town | Lumber, wood products | 2 |
+| **Crossroads Market** | Market | General trade, diverse goods | 2 |
+| **Basaltkeep Fortress** | City | Weapons, armor, construction | 3 |
+| **Arcaneveil Spire** | City | Enchanting supplies, magic items | 4 |
+| **Goldspire Capital** | City | Luxury goods, rare items, endgame trade | 5 |
 
 ### Dynamic Mod Compatibility
 
@@ -121,7 +120,7 @@ Trade livestock with the **Animal Trade Slip** system:
 ## Getting Started
 
 1. **Craft a Trading Post** - Your gateway to commerce
-2. **Craft a Trading Bin** - Store items you want to sell
+2. **Craft a Trading Ledger** - Store items you want to sell
 3. **Earn some coins** - Complete initial quests or sell goods
 4. **Build reputation** - Unlock access to more towns and better prices
 5. **Expand your empire** - Set up trade routes and grow wealth!
@@ -132,17 +131,46 @@ Trade livestock with the **Animal Trade Slip** system:
 
 ### Trading Post
 ```
-[Plank] [Emerald] [Plank]
-[Plank] [Chest]   [Plank]
-[Plank] [Plank]   [Plank]
+[Oak Log] [Oak Log] [Oak Log]
+[Oak Log] [Emerald] [Oak Log]
+[Oak Log] [Oak Log] [Oak Log]
 ```
 
-### Trading Bin
+### Trading Ledger
 ```
-[Plank] [      ] [Plank]
-[Plank] [Chest]  [Plank]
-[Plank] [Plank]  [Plank]
+[Oak Planks] [Oak Planks] [Oak Planks]
+[Oak Planks] [Chest]      [Oak Planks]
+[Oak Planks] [Oak Planks] [Oak Planks]
 ```
+
+### Market Board
+```
+[Oak Sign] [Oak Sign] [Oak Sign]
+[Oak Sign] [Paper]    [Oak Sign]
+[Oak Sign] [Oak Sign] [Oak Sign]
+```
+
+### Ledger
+```
+[Leather] [Ink Sac] [Leather]
+[Ink Sac] [Paper]   [Ink Sac]
+[Leather] [Ink Sac] [Leather]
+```
+
+### Coin Bag
+```
+[Leather] [String]  [Leather]
+[Leather] [       ] [Leather]
+[Leather] [Leather] [Leather]
+```
+
+### Guide Book
+*Shapeless recipe:*
+- Book + Emerald
+
+### Animal Trade Slip
+*Shapeless recipe (yields 3):*
+- 3× Paper + Ink Sac
 
 ## Configuration
 
@@ -200,13 +228,13 @@ Works alongside other economy mods and integrates automatically with item-adding
 ## Installation
 
 1. Install Minecraft Forge 1.19.2 (version 43.x or higher)
-2. Download `offtomarket-0.1.4.jar`
+2. Download `offtomarket-0.4.3.jar`
 3. Place in your `mods` folder
 4. Launch the game!
 
 ## Roadmap
 
-- [ ] Custom town creation via datapacks
+- [x] Custom town creation — data-driven JSON town system (v0.2)
 - [ ] Multiplayer trading between players
 - [ ] Trading caravans as entities
 - [ ] More mod integrations

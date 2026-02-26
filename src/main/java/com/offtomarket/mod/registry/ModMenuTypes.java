@@ -1,12 +1,16 @@
 package com.offtomarket.mod.registry;
 
 import com.offtomarket.mod.OffToMarket;
-import com.offtomarket.mod.block.entity.TradingBinBlockEntity;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
+import com.offtomarket.mod.block.entity.MailboxBlockEntity;
+import com.offtomarket.mod.block.entity.TradingLedgerBlockEntity;
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import com.offtomarket.mod.block.entity.MarketBoardBlockEntity;
 import com.offtomarket.mod.menu.CoinBagMenu;
+import com.offtomarket.mod.menu.FinanceTableMenu;
+import com.offtomarket.mod.menu.MailboxMenu;
 import com.offtomarket.mod.menu.MarketBoardMenu;
-import com.offtomarket.mod.menu.TradingBinMenu;
+import com.offtomarket.mod.menu.TradingLedgerMenu;
 import com.offtomarket.mod.menu.TradingPostMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.MenuType;
@@ -30,14 +34,14 @@ public class ModMenuTypes {
                 return new TradingPostMenu(windowId, inv);
             }));
 
-    public static final RegistryObject<MenuType<TradingBinMenu>> TRADING_BIN =
-            MENUS.register("trading_bin", () -> IForgeMenuType.create((windowId, inv, data) -> {
+    public static final RegistryObject<MenuType<TradingLedgerMenu>> TRADING_LEDGER =
+            MENUS.register("trading_ledger", () -> IForgeMenuType.create((windowId, inv, data) -> {
                 BlockPos pos = data.readBlockPos();
                 BlockEntity be = inv.player.level.getBlockEntity(pos);
-                if (be instanceof TradingBinBlockEntity tbbe) {
-                    return new TradingBinMenu(windowId, inv, tbbe);
+                if (be instanceof TradingLedgerBlockEntity tbbe) {
+                    return new TradingLedgerMenu(windowId, inv, tbbe);
                 }
-                return new TradingBinMenu(windowId, inv);
+                return new TradingLedgerMenu(windowId, inv);
             }));
 
     public static final RegistryObject<MenuType<MarketBoardMenu>> MARKET_BOARD =
@@ -54,5 +58,25 @@ public class ModMenuTypes {
             MENUS.register("coin_bag", () -> IForgeMenuType.create((windowId, inv, data) -> {
                 int slotIndex = data.readInt();
                 return new CoinBagMenu(windowId, inv, inv.player.getInventory().getItem(slotIndex), slotIndex);
+            }));
+
+    public static final RegistryObject<MenuType<MailboxMenu>> MAILBOX =
+            MENUS.register("mailbox", () -> IForgeMenuType.create((windowId, inv, data) -> {
+                BlockPos pos = data.readBlockPos();
+                BlockEntity be = inv.player.level.getBlockEntity(pos);
+                if (be instanceof MailboxBlockEntity mbe) {
+                    return new MailboxMenu(windowId, inv, mbe);
+                }
+                return new MailboxMenu(windowId, inv);
+            }));
+
+    public static final RegistryObject<MenuType<FinanceTableMenu>> FINANCE_TABLE =
+            MENUS.register("finance_table", () -> IForgeMenuType.create((windowId, inv, data) -> {
+                BlockPos pos = data.readBlockPos();
+                BlockEntity be = inv.player.level.getBlockEntity(pos);
+                if (be instanceof FinanceTableBlockEntity ftbe) {
+                    return new FinanceTableMenu(windowId, inv, ftbe);
+                }
+                return new FinanceTableMenu(windowId, inv);
             }));
 }

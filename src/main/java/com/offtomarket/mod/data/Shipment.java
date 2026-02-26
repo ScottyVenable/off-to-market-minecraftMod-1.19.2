@@ -6,6 +6,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
@@ -138,21 +139,30 @@ public class Shipment {
     public static class ShipmentItem {
         private final ResourceLocation itemId;
         private final int count;
-        private final int pricePerItem; // in copper pieces
+        private int pricePerItem; // in copper pieces (mutable for price adjustments)
         private final String displayName;
         private boolean sold;
+        /** Full item NBT (e.g. potion type), preserved so returned items are identical. */
+        private final CompoundTag itemNbt;
 
-        public ShipmentItem(ResourceLocation itemId, int count, int pricePerItem, String displayName) {
+        public ShipmentItem(ResourceLocation itemId, int count, int pricePerItem, String displayName, CompoundTag itemNbt) {
             this.itemId = itemId;
             this.count = count;
             this.pricePerItem = pricePerItem;
             this.displayName = displayName;
             this.sold = false;
+            this.itemNbt = itemNbt != null && !itemNbt.isEmpty() ? itemNbt.copy() : null;
+        }
+
+        /** Backward-compatible constructor for items with no special NBT. */
+        public ShipmentItem(ResourceLocation itemId, int count, int pricePerItem, String displayName) {
+            this(itemId, count, pricePerItem, displayName, null);
         }
 
         public ResourceLocation getItemId() { return itemId; }
         public int getCount() { return count; }
         public int getPricePerItem() { return pricePerItem; }
+        public void setPricePerItem(int price) { this.pricePerItem = Math.max(1, price); }
         public int getTotalPrice() { return pricePerItem * count; }
         public String getDisplayName() { return displayName; }
         public boolean isSold() { return sold; }
@@ -164,7 +174,10 @@ public class Shipment {
 
         public ItemStack createStack() {
             Item item = getItem();
-            return item != null ? new ItemStack(item, count) : ItemStack.EMPTY;
+            if (item == null || item == Items.AIR) return ItemStack.EMPTY;
+            ItemStack stack = new ItemStack(item, count);
+            if (itemNbt != null) stack.setTag(itemNbt.copy());
+            return stack;
         }
 
         public CompoundTag save() {
@@ -174,15 +187,18 @@ public class Shipment {
             tag.putInt("Price", pricePerItem);
             tag.putString("Name", displayName);
             tag.putBoolean("Sold", sold);
+            if (itemNbt != null) tag.put("Nbt", itemNbt.copy());
             return tag;
         }
 
         public static ShipmentItem load(CompoundTag tag) {
+            CompoundTag nbt = tag.contains("Nbt") ? tag.getCompound("Nbt") : null;
             ShipmentItem item = new ShipmentItem(
                     new ResourceLocation(tag.getString("ItemId")),
                     tag.getInt("Count"),
                     tag.getInt("Price"),
-                    tag.getString("Name")
+                    tag.getString("Name"),
+                    nbt
             );
             item.sold = tag.getBoolean("Sold");
             return item;

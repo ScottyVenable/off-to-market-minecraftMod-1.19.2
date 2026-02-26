@@ -95,6 +95,11 @@ public class ModNetwork {
                 HireWorkerPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
 
+        CHANNEL.registerMessage(id++, FireWorkerPacket.class,
+                FireWorkerPacket::encode, FireWorkerPacket::decode,
+                FireWorkerPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
         CHANNEL.registerMessage(id++, SendDiplomatPacket.class,
                 SendDiplomatPacket::encode, SendDiplomatPacket::decode,
                 SendDiplomatPacket::handle,
@@ -135,9 +140,59 @@ public class ModNetwork {
                 CollectReturnedItemsPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
 
+        CHANNEL.registerMessage(id++, AdjustShipmentPricePacket.class,
+                AdjustShipmentPricePacket::encode, AdjustShipmentPricePacket::decode,
+                AdjustShipmentPricePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, CreateRequestPacket.class,
+                CreateRequestPacket::encode, CreateRequestPacket::decode,
+                CreateRequestPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
         CHANNEL.registerMessage(id++, ShowToastPacket.class,
                 ShowToastPacket::encode, ShowToastPacket::new,
                 ShowToastPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+
+        CHANNEL.registerMessage(id++, MarkNoteReadPacket.class,
+                MarkNoteReadPacket::encode, MarkNoteReadPacket::decode,
+                MarkNoteReadPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DeleteNotePacket.class,
+                DeleteNotePacket::encode, DeleteNotePacket::decode,
+                DeleteNotePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DeleteAllReadNotesPacket.class,
+                DeleteAllReadNotesPacket::encode, DeleteAllReadNotesPacket::decode,
+                DeleteAllReadNotesPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, WithdrawBinItemPacket.class,
+                WithdrawBinItemPacket::encode, WithdrawBinItemPacket::decode,
+                WithdrawBinItemPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, UpgradeCaravanWeightPacket.class,
+                UpgradeCaravanWeightPacket::encode, UpgradeCaravanWeightPacket::decode,
+                UpgradeCaravanWeightPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, OpenCustomMenuPacket.class,
+                OpenCustomMenuPacket::encode, OpenCustomMenuPacket::decode,
+                OpenCustomMenuPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+
+        CHANNEL.registerMessage(id++, DepositCoinsPacket.class,
+                DepositCoinsPacket::encode, DepositCoinsPacket::decode,
+                DepositCoinsPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, WithdrawCoinsPacket.class,
+                WithdrawCoinsPacket::encode, WithdrawCoinsPacket::decode,
+                WithdrawCoinsPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

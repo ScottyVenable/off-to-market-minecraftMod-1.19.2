@@ -1,0 +1,6 @@
+{
+  "_comment": "Lists every custom menu JSON file to load at startup. Add new filenames here when you create a new menu. Files starting with _ are skipped automatically.",
+  "menus": [
+    "example_herbalist.json"
+  ]
+}

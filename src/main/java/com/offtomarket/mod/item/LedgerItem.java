@@ -13,13 +13,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import com.offtomarket.mod.registry.ModBlocks;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.network.NetworkHooks;
-import net.minecraft.server.level.ServerPlayer;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -69,7 +65,7 @@ public class LedgerItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
 
-        // Sneak + use opens the Coin Exchange (works even when not synced)
+        // Sneak + use opens the Coin Exchange
         if (player.isShiftKeyDown()) {
             if (level.isClientSide()) {
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -80,33 +76,14 @@ public class LedgerItem extends Item {
             return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
         }
 
-        if (!level.isClientSide() && isSynced(stack)) {
-            CompoundTag tag = stack.getTag();
-            BlockPos postPos = new BlockPos(
-                    tag.getInt(TAG_POST_X),
-                    tag.getInt(TAG_POST_Y),
-                    tag.getInt(TAG_POST_Z));
-
-            // Check if the trading post still exists and is loaded
-            if (level.isLoaded(postPos)) {
-                BlockEntity be = level.getBlockEntity(postPos);
-                if (be instanceof TradingPostBlockEntity tpbe) {
-                    // Open the trading post menu remotely with proper BlockPos data
-                    NetworkHooks.openScreen((ServerPlayer) player, tpbe, postPos);
-                    return InteractionResultHolder.success(stack);
-                }
-            }
-
-            player.displayClientMessage(
-                    Component.literal("Trading Post not found! It may have been destroyed.")
-                            .withStyle(ChatFormatting.RED), true);
-        } else if (!level.isClientSide() && !isSynced(stack)) {
-            player.displayClientMessage(
-                    Component.translatable("tooltip.offtomarket.ledger.not_synced")
-                            .withStyle(ChatFormatting.YELLOW), true);
+        // Normal use: open Master Ledger screen showing all nearby Trading Ledger bins
+        if (level.isClientSide()) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                net.minecraft.client.Minecraft.getInstance().setScreen(
+                        new com.offtomarket.mod.client.screen.MasterLedgerScreen());
+            });
         }
-
-        return InteractionResultHolder.pass(stack);
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
     }
 
     public static boolean isSynced(ItemStack stack) {

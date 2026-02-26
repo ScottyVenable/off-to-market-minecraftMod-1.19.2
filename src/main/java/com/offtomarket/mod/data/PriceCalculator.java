@@ -1,5 +1,8 @@
 package com.offtomarket.mod.data;
 
+import com.offtomarket.mod.debug.DebugConfig;
+import com.offtomarket.mod.item.AnimalTradeSlipItem;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -7,6 +10,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.alchemy.PotionUtils;
@@ -14,6 +18,7 @@ import net.minecraft.world.item.alchemy.Potions;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -52,36 +57,39 @@ public class PriceCalculator {
         public ValueTier(int basePrice) { this(basePrice, basePrice * 3); }
     }
 
-    // Pre-defined tiers (base, max)
-    public static final ValueTier TIER_JUNK       = new ValueTier(1,   3);     // dirt, cobble, sticks
-    public static final ValueTier TIER_BASIC       = new ValueTier(2,   8);     // planks, logs, sand
-    public static final ValueTier TIER_COMMON      = new ValueTier(3,   12);    // common food, wool
-    public static final ValueTier TIER_USEFUL      = new ValueTier(5,   20);    // coal, raw ores, bread
-    public static final ValueTier TIER_CRAFT_MAT   = new ValueTier(8,   30);    // copper, redstone, glowstone
-    public static final ValueTier TIER_FOOD_GOOD   = new ValueTier(6,   25);    // cooked meats, cake
-    public static final ValueTier TIER_TOOL_STONE  = new ValueTier(8,   30);    // stone tools
-    public static final ValueTier TIER_TOOL_IRON   = new ValueTier(25,  80);    // iron tools/armor
-    public static final ValueTier TIER_TOOL_GOLD   = new ValueTier(35,  120);   // gold tools/armor
-    public static final ValueTier TIER_TOOL_DIAMOND= new ValueTier(80,  300);   // diamond tools/armor
-    public static final ValueTier TIER_TOOL_NETHERITE = new ValueTier(500, 1800);// netherite gear
-    public static final ValueTier TIER_INGOT_IRON  = new ValueTier(15,  50);    // iron ingot
-    public static final ValueTier TIER_INGOT_GOLD  = new ValueTier(50,  160);   // gold ingot
-    public static final ValueTier TIER_GEM         = new ValueTier(100, 350);   // diamond, emerald
-    public static final ValueTier TIER_PRECIOUS    = new ValueTier(250, 800);   // netherite scrap
-    public static final ValueTier TIER_LEGENDARY   = new ValueTier(800, 2500);  // netherite ingot
-    public static final ValueTier TIER_TREASURE    = new ValueTier(1500, 5000); // nether star, elytra
-    public static final ValueTier TIER_PRICELESS   = new ValueTier(2500, 8000); // beacon, enchanted gapple
-    public static final ValueTier TIER_ENCHANTED   = new ValueTier(200, 700);   // enchanted books
-    public static final ValueTier TIER_POTION      = new ValueTier(20,  70);    // potions
-    public static final ValueTier TIER_RARE_DROP   = new ValueTier(40,  140);   // blaze rod, ender pearl
-    public static final ValueTier TIER_MUSIC       = new ValueTier(60,  200);   // music discs
-    public static final ValueTier TIER_DECORATION  = new ValueTier(3,   15);    // decorative blocks
-    public static final ValueTier TIER_MOB_DROP    = new ValueTier(5,   20);    // bones, string, gunpowder
-    public static final ValueTier TIER_SPAWN_EGG   = new ValueTier(150, 500);   // spawn eggs
+    // Pre-defined tiers (base, max)  — v0.2.0 rebalanced economy
+    public static final ValueTier TIER_JUNK       = new ValueTier(3,   10);     // dirt, cobble, sticks
+    public static final ValueTier TIER_BASIC       = new ValueTier(5,   18);     // planks, logs, sand
+    public static final ValueTier TIER_COMMON      = new ValueTier(8,   28);     // common food, wool
+    public static final ValueTier TIER_USEFUL      = new ValueTier(15,  50);     // coal, raw ores, bread
+    public static final ValueTier TIER_CRAFT_MAT   = new ValueTier(25,  85);     // copper, redstone, glowstone
+    public static final ValueTier TIER_FOOD_GOOD   = new ValueTier(18,  60);     // cooked meats, cake
+    public static final ValueTier TIER_TOOL_STONE  = new ValueTier(20,  70);     // stone tools
+    public static final ValueTier TIER_TOOL_IRON   = new ValueTier(65,  220);    // iron tools/armor
+    public static final ValueTier TIER_TOOL_GOLD   = new ValueTier(90,  320);    // gold tools/armor
+    public static final ValueTier TIER_TOOL_DIAMOND= new ValueTier(220, 800);    // diamond tools/armor
+    public static final ValueTier TIER_TOOL_NETHERITE = new ValueTier(1200, 4500);// netherite gear
+    public static final ValueTier TIER_INGOT_IRON  = new ValueTier(40,  140);    // iron ingot
+    public static final ValueTier TIER_INGOT_GOLD  = new ValueTier(120, 420);    // gold ingot
+    public static final ValueTier TIER_GEM         = new ValueTier(280, 950);    // diamond, emerald
+    public static final ValueTier TIER_PRECIOUS    = new ValueTier(650, 2200);   // netherite scrap
+    public static final ValueTier TIER_LEGENDARY   = new ValueTier(2000, 6500);  // netherite ingot
+    public static final ValueTier TIER_TREASURE    = new ValueTier(4000, 12000); // nether star, elytra
+    public static final ValueTier TIER_PRICELESS   = new ValueTier(6500, 20000); // beacon, enchanted gapple
+    public static final ValueTier TIER_ENCHANTED   = new ValueTier(500, 1800);   // enchanted books
+    public static final ValueTier TIER_POTION      = new ValueTier(50,  180);    // potions
+    public static final ValueTier TIER_RARE_DROP   = new ValueTier(100, 360);    // blaze rod, ender pearl
+    public static final ValueTier TIER_MUSIC       = new ValueTier(150, 500);    // music discs
+    public static final ValueTier TIER_DECORATION  = new ValueTier(8,   30);     // decorative blocks
+    public static final ValueTier TIER_MOB_DROP    = new ValueTier(12,  45);     // bones, string, gunpowder
+    public static final ValueTier TIER_SPAWN_EGG   = new ValueTier(400, 1400);   // spawn eggs
 
     // ===================== Exact Item Overrides =====================
 
     private static final Map<Item, ValueTier> ITEM_OVERRIDES = new LinkedHashMap<>();
+
+    /** Cache: Item → base (non-enchanted) ValueTier. Populated on first lookup; never invalidated (items are immutable). */
+    private static final Map<Item, ValueTier> BASE_TIER_CACHE = new HashMap<>(1024);
     static {
         // ---- Junk / ultra-common ----
         put(Items.DIRT,               TIER_JUNK);
@@ -163,53 +171,58 @@ public class PriceCalculator {
         put(Items.CAKE,               TIER_FOOD_GOOD);
         put(Items.COOKIE,             TIER_COMMON);
         put(Items.MUSHROOM_STEW,      TIER_FOOD_GOOD);
-        put(Items.RABBIT_STEW,        new ValueTier(10, 35));
-        put(Items.GOLDEN_CARROT,      new ValueTier(30, 100));
-        put(Items.GOLDEN_APPLE,       new ValueTier(120, 400));
+        put(Items.RABBIT_STEW,        new ValueTier(25, 90));
+        put(Items.GOLDEN_CARROT,      new ValueTier(80, 270));
+        put(Items.GOLDEN_APPLE,       new ValueTier(320, 1100));
         put(Items.ENCHANTED_GOLDEN_APPLE, TIER_PRICELESS);
 
         // ---- Fuel & common ores ----
         put(Items.COAL,               TIER_USEFUL);
         put(Items.CHARCOAL,           TIER_USEFUL);
         put(Items.RAW_COPPER,         TIER_USEFUL);
-        put(Items.RAW_IRON,           new ValueTier(10, 35));
-        put(Items.RAW_GOLD,           new ValueTier(30, 100));
+        put(Items.RAW_IRON,           new ValueTier(25, 90));
+        put(Items.RAW_GOLD,           new ValueTier(80, 270));
         put(Items.COPPER_INGOT,       TIER_CRAFT_MAT);
         put(Items.IRON_INGOT,         TIER_INGOT_IRON);
         put(Items.GOLD_INGOT,         TIER_INGOT_GOLD);
-        put(Items.IRON_NUGGET,        new ValueTier(2, 8));
-        put(Items.GOLD_NUGGET,        new ValueTier(6, 20));
-        put(Items.AMETHYST_SHARD,     new ValueTier(12, 40));
+        put(Items.IRON_NUGGET,        new ValueTier(5, 20));
+        put(Items.GOLD_NUGGET,        new ValueTier(15, 55));
+        put(Items.AMETHYST_SHARD,     new ValueTier(32, 110));
 
         // ---- Redstone & crafting ----
         put(Items.REDSTONE,           TIER_CRAFT_MAT);
-        put(Items.LAPIS_LAZULI,       new ValueTier(12, 40));
-        put(Items.QUARTZ,             new ValueTier(10, 35));
+        put(Items.LAPIS_LAZULI,       new ValueTier(32, 110));
+        put(Items.QUARTZ,             new ValueTier(25, 90));
         put(Items.GLOWSTONE_DUST,     TIER_CRAFT_MAT);
-        put(Items.GLOWSTONE,          new ValueTier(30, 100));
+        put(Items.GLOWSTONE,          new ValueTier(80, 270));
         put(Items.PRISMARINE_SHARD,   TIER_CRAFT_MAT);
-        put(Items.PRISMARINE_CRYSTALS,new ValueTier(10, 35));
-        put(Items.PHANTOM_MEMBRANE,   new ValueTier(20, 70));
-        put(Items.NAUTILUS_SHELL,     new ValueTier(60, 200));
-        put(Items.HEART_OF_THE_SEA,   new ValueTier(400, 1200));
+        put(Items.PRISMARINE_CRYSTALS,new ValueTier(25, 90));
+        put(Items.PHANTOM_MEMBRANE,   new ValueTier(55, 190));
+        put(Items.NAUTILUS_SHELL,     new ValueTier(160, 550));
+        put(Items.HEART_OF_THE_SEA,   new ValueTier(1050, 3200));
         put(Items.SLIME_BALL,         TIER_CRAFT_MAT);
 
         // ---- Gems & precious ----
         put(Items.DIAMOND,            TIER_GEM);
-        put(Items.EMERALD,            new ValueTier(80, 280));
+        put(Items.EMERALD,            new ValueTier(210, 750));
         put(Items.NETHERITE_SCRAP,    TIER_PRECIOUS);
         put(Items.NETHERITE_INGOT,    TIER_LEGENDARY);
+        put(Items.CRYING_OBSIDIAN,    new ValueTier(180, 620));
+        put(Items.ANCIENT_DEBRIS,     new ValueTier(520, 1750));
+        put(Items.SHULKER_SHELL,      new ValueTier(300, 1100));
+        put(Items.ECHO_SHARD,         new ValueTier(420, 1450));
+        put(Items.RECOVERY_COMPASS,   new ValueTier(1200, 4200));
 
         // ---- Blocks of material ----
-        put(Items.IRON_BLOCK,         new ValueTier(135, 450));
-        put(Items.GOLD_BLOCK,         new ValueTier(450, 1400));
-        put(Items.DIAMOND_BLOCK,      new ValueTier(900, 3000));
-        put(Items.EMERALD_BLOCK,      new ValueTier(720, 2400));
-        put(Items.NETHERITE_BLOCK,    new ValueTier(7200, 22000));
-        put(Items.COPPER_BLOCK,       new ValueTier(72, 220));
-        put(Items.LAPIS_BLOCK,        new ValueTier(108, 350));
-        put(Items.REDSTONE_BLOCK,     new ValueTier(72, 220));
-        put(Items.COAL_BLOCK,         new ValueTier(36, 120));
+        put(Items.IRON_BLOCK,         new ValueTier(360, 1260));
+        put(Items.GOLD_BLOCK,         new ValueTier(1080, 3780));
+        put(Items.DIAMOND_BLOCK,      new ValueTier(2520, 8550));
+        put(Items.EMERALD_BLOCK,      new ValueTier(1890, 6750));
+        put(Items.NETHERITE_BLOCK,    new ValueTier(18000, 58500));
+        put(Items.COPPER_BLOCK,       new ValueTier(225, 765));
+        put(Items.LAPIS_BLOCK,        new ValueTier(288, 990));
+        put(Items.REDSTONE_BLOCK,     new ValueTier(225, 765));
+        put(Items.COAL_BLOCK,         new ValueTier(135, 450));
 
         // ---- Mob drops ----
         put(Items.BONE,               TIER_MOB_DROP);
@@ -218,32 +231,32 @@ public class PriceCalculator {
         put(Items.SPIDER_EYE,         TIER_MOB_DROP);
         put(Items.ENDER_PEARL,        TIER_RARE_DROP);
         put(Items.BLAZE_ROD,          TIER_RARE_DROP);
-        put(Items.BLAZE_POWDER,       new ValueTier(25, 80));
-        put(Items.GHAST_TEAR,         new ValueTier(50, 160));
-        put(Items.MAGMA_CREAM,        new ValueTier(15, 50));
-        put(Items.RABBIT_FOOT,        new ValueTier(25, 80));
-        put(Items.SHULKER_SHELL,      new ValueTier(100, 350));
-        put(Items.WITHER_SKELETON_SKULL, new ValueTier(200, 650));
-        put(Items.DRAGON_BREATH,      new ValueTier(100, 350));
-        put(Items.NETHER_WART,        new ValueTier(8, 30));
+        put(Items.BLAZE_POWDER,       new ValueTier(65, 220));
+        put(Items.GHAST_TEAR,         new ValueTier(130, 440));
+        put(Items.MAGMA_CREAM,        new ValueTier(40, 140));
+        put(Items.RABBIT_FOOT,        new ValueTier(65, 220));
+        put(Items.SHULKER_SHELL,      new ValueTier(260, 950));
+        put(Items.WITHER_SKELETON_SKULL, new ValueTier(520, 1750));
+        put(Items.DRAGON_BREATH,      new ValueTier(260, 950));
+        put(Items.NETHER_WART,        new ValueTier(20, 80));
         put(Items.HONEYCOMB,          TIER_CRAFT_MAT);
-        put(Items.HONEY_BOTTLE,       new ValueTier(10, 35));
+        put(Items.HONEY_BOTTLE,       new ValueTier(25, 90));
 
         // ---- Special / treasure items ----
         put(Items.BEACON,             TIER_PRICELESS);
         put(Items.NETHER_STAR,        TIER_TREASURE);
-        put(Items.ELYTRA,             new ValueTier(3000, 9000));
-        put(Items.TOTEM_OF_UNDYING,   new ValueTier(1000, 3500));
+        put(Items.ELYTRA,             new ValueTier(7800, 24000));
+        put(Items.TOTEM_OF_UNDYING,   new ValueTier(2600, 9500));
         put(Items.ENCHANTED_BOOK,     TIER_ENCHANTED);
-        put(Items.EXPERIENCE_BOTTLE,  new ValueTier(50, 160));
-        put(Items.SADDLE,             new ValueTier(60, 200));
-        put(Items.NAME_TAG,           new ValueTier(50, 160));
-        put(Items.TRIDENT,            new ValueTier(400, 1400));
-        put(Items.CONDUIT,            new ValueTier(600, 2000));
-        put(Items.END_CRYSTAL,        new ValueTier(200, 650));
-        put(Items.DRAGON_EGG,         new ValueTier(5000, 15000));
-        put(Items.LODESTONE,          new ValueTier(300, 1000));
-        put(Items.RESPAWN_ANCHOR,     new ValueTier(200, 650));
+        put(Items.EXPERIENCE_BOTTLE,  new ValueTier(130, 440));
+        put(Items.SADDLE,             new ValueTier(160, 550));
+        put(Items.NAME_TAG,           new ValueTier(130, 440));
+        put(Items.TRIDENT,            new ValueTier(1050, 3800));
+        put(Items.CONDUIT,            new ValueTier(1550, 5400));
+        put(Items.END_CRYSTAL,        new ValueTier(520, 1750));
+        put(Items.DRAGON_EGG,         new ValueTier(13000, 40000));
+        put(Items.LODESTONE,          new ValueTier(780, 2700));
+        put(Items.RESPAWN_ANCHOR,     new ValueTier(520, 1750));
 
         // NOTE: Tools and armor are NO LONGER hardcoded here.
         // They are priced dynamically by computeIngredientPrice() which
@@ -252,14 +265,14 @@ public class PriceCalculator {
 
         // ---- Other equipment (non-tiered / non-armor) ----
         put(Items.BOW,                TIER_TOOL_IRON);
-        put(Items.CROSSBOW,           new ValueTier(30, 100));
-        put(Items.SHIELD,             new ValueTier(20, 65));
-        put(Items.FISHING_ROD,        new ValueTier(8, 30));
+        put(Items.CROSSBOW,           new ValueTier(80, 270));
+        put(Items.SHIELD,             new ValueTier(55, 180));
+        put(Items.FISHING_ROD,        new ValueTier(20, 80));
         put(Items.FLINT_AND_STEEL,    TIER_CRAFT_MAT);
         put(Items.SHEARS,             TIER_CRAFT_MAT);
-        put(Items.COMPASS,            new ValueTier(20, 65));
-        put(Items.CLOCK,              new ValueTier(25, 80));
-        put(Items.SPYGLASS,           new ValueTier(30, 100));
+        put(Items.COMPASS,            new ValueTier(55, 180));
+        put(Items.CLOCK,              new ValueTier(65, 220));
+        put(Items.SPYGLASS,           new ValueTier(80, 270));
         put(Items.LEAD,               TIER_CRAFT_MAT);
 
         // ---- Music discs ----
@@ -275,8 +288,8 @@ public class PriceCalculator {
         put(Items.MUSIC_DISC_WARD,    TIER_MUSIC);
         put(Items.MUSIC_DISC_11,      TIER_MUSIC);
         put(Items.MUSIC_DISC_WAIT,    TIER_MUSIC);
-        put(Items.MUSIC_DISC_OTHERSIDE, new ValueTier(100, 350));
-        put(Items.MUSIC_DISC_PIGSTEP,   new ValueTier(150, 500));
+        put(Items.MUSIC_DISC_OTHERSIDE, new ValueTier(260, 950));
+        put(Items.MUSIC_DISC_PIGSTEP,   new ValueTier(400, 1350));
 
         // ---- Dyes & decorative ----
         put(Items.WHITE_DYE,          TIER_COMMON);
@@ -297,8 +310,8 @@ public class PriceCalculator {
 
         // ---- Brewing ----
         put(Items.GLASS_BOTTLE,       TIER_JUNK);
-        put(Items.FERMENTED_SPIDER_EYE, new ValueTier(10, 35));
-        put(Items.BREWING_STAND,      new ValueTier(30, 100));
+        put(Items.FERMENTED_SPIDER_EYE, new ValueTier(25, 90));
+        put(Items.BREWING_STAND,      new ValueTier(80, 270));
     }
 
     private static void put(Item item, ValueTier tier) {
@@ -313,21 +326,21 @@ public class PriceCalculator {
      */
     private static final CategoryRule[] TAG_RULES = {
         // Ores (raw blocks / ore blocks)
-        tagRule(Tags.Items.ORES,                   new ValueTier(12, 40)),
-        tagRule(Tags.Items.RAW_MATERIALS,           new ValueTier(10, 35)),
+        tagRule(Tags.Items.ORES,                   new ValueTier(32, 110)),
+        tagRule(Tags.Items.RAW_MATERIALS,           new ValueTier(25, 90)),
 
         // Ingots
         tagRule(Tags.Items.INGOTS,                 TIER_INGOT_IRON),
 
         // Gems & dusts
-        tagRule(Tags.Items.GEMS,                   new ValueTier(60, 200)),
+        tagRule(Tags.Items.GEMS,                   new ValueTier(160, 550)),
         tagRule(Tags.Items.DUSTS,                  TIER_CRAFT_MAT),
 
         // Storage blocks (blocks of ingots/gems)
-        tagRule(Tags.Items.STORAGE_BLOCKS,         new ValueTier(100, 350)),
+        tagRule(Tags.Items.STORAGE_BLOCKS,         new ValueTier(260, 950)),
 
         // Nuggets
-        tagRule(Tags.Items.NUGGETS,                new ValueTier(3, 12)),
+        tagRule(Tags.Items.NUGGETS,                new ValueTier(8, 32)),
 
 
         // Logs & planks
@@ -519,14 +532,14 @@ public class PriceCalculator {
 
     /**
      * Interpolates material value from durability, using vanilla reference points.
-     * Wood=59→1, Stone=131→1, Iron=250→15, Diamond=1561→100, Netherite=2031→800.
+     * Wood=59→2, Stone=131→2, Iron=250→40, Diamond=1561→260, Netherite=2031→2100.
      */
     private static int estimateFromDurability(int durability) {
-        if (durability <= 59)   return 1;
-        if (durability <= 250)  return 1  + (int) ((durability -   59.0) / ( 250.0 -   59.0) *  14);
-        if (durability <= 1561) return 15 + (int) ((durability -  250.0) / (1561.0 -  250.0) *  85);
-        if (durability <= 2031) return 100+ (int) ((durability - 1561.0) / (2031.0 - 1561.0) * 700);
-        return 800 + (int) ((durability - 2031.0) / 1000.0 * 400); // beyond netherite
+        if (durability <= 59)   return 2;
+        if (durability <= 250)  return 2  + (int) ((durability -   59.0) / ( 250.0 -   59.0) *  38);
+        if (durability <= 1561) return 40 + (int) ((durability -  250.0) / (1561.0 -  250.0) * 220);
+        if (durability <= 2031) return 260+ (int) ((durability - 1561.0) / (2031.0 - 1561.0) * 1840);
+        return 2100 + (int) ((durability - 2031.0) / 1000.0 * 1000); // beyond netherite
     }
 
     // ===================== Class-based Heuristics =====================
@@ -539,10 +552,10 @@ public class PriceCalculator {
     private static ValueTier classifyByClass(ItemStack stack) {
         Item item = stack.getItem();
 
-        if (item instanceof BowItem)           return new ValueTier(18, 54);  // 3 sticks + 3 string
-        if (item instanceof CrossbowItem)      return new ValueTier(36, 108); // 3 sticks + 2 string + iron + hook
-        if (item instanceof ShieldItem)        return new ValueTier(20, 65);
-        if (item instanceof TridentItem)       return new ValueTier(400, 1400);
+        if (item instanceof BowItem)           return new ValueTier(35, 105);  // 3 sticks + 3 string
+        if (item instanceof CrossbowItem)      return new ValueTier(76, 228); // 3 sticks + 2 string + iron + hook
+        if (item instanceof ShieldItem)        return new ValueTier(55, 165);
+        if (item instanceof TridentItem)       return new ValueTier(1050, 3800);
         if (item instanceof PotionItem)        return computePotionPrice(stack);
         if (item instanceof SpawnEggItem)      return TIER_SPAWN_EGG;
         if (item instanceof RecordItem)        return TIER_MUSIC;
@@ -550,7 +563,35 @@ public class PriceCalculator {
         if (item instanceof BannerItem)        return TIER_DECORATION;
         if (item instanceof BlockItem)         return null; // fall through to path heuristics
 
+        // Food items — price based on actual nutrition/saturation stats.
+        // This naturally handles all modded foods without requiring explicit overrides.
+        FoodProperties food = item.getFoodProperties(stack, null);
+        if (food != null) return classifyFoodByNutrition(food);
+
         return null; // unknown
+    }
+
+    /**
+     * Price a food item based on its nutrition and saturation modifier.
+     * Uses an "effective value" metric: nutrition × (1 + saturationMod).
+     * <p>
+     * Reference points (vanilla):
+     * <ul>
+     *   <li>Potato (1 n, 0.3s) → ~1.3 → TIER_COMMON (8cp)</li>
+     *   <li>Bread   (5 n, 0.6s) → ~8.0 → TIER_FOOD_GOOD (18cp)</li>
+     *   <li>Steak   (8 n, 0.8s) → ~14.4 → complex meal tier (35cp)</li>
+     *   <li>Rabbit Stew (10 n, 0.6s) → ~16 → complex meal tier</li>
+     * </ul>
+     */
+    private static ValueTier classifyFoodByNutrition(FoodProperties food) {
+        int nutrition = food.getNutrition();
+        float satMod = food.getSaturationModifier();
+        double effectiveValue = nutrition * (1.0 + satMod);
+        if (effectiveValue >= 14.0) return new ValueTier(35, 120); // hearty multi-ingredient meals
+        if (effectiveValue >=  9.0) return TIER_FOOD_GOOD;         // 18cp – cooked meat quality
+        if (effectiveValue >=  5.0) return TIER_USEFUL;            // 15cp – decent food
+        if (effectiveValue >=  2.0) return TIER_COMMON;            // 8cp – basic food
+        return new ValueTier(5, 18);                                // 5cp – minimal/novelty food
     }
 
     // ===================== Potion Pricing =====================
@@ -576,28 +617,28 @@ public class PriceCalculator {
         // Intermediate / base potions with no useful effects
         if (potion == Potions.WATER || potion == Potions.MUNDANE
                 || potion == Potions.THICK || potion == Potions.AWKWARD) {
-            return new ValueTier(2, 8);
+            return new ValueTier(3, 10);
         }
 
         java.util.List<MobEffectInstance> effects = potion.getEffects();
-        if (effects.isEmpty()) return new ValueTier(3, 10);
+        if (effects.isEmpty()) return new ValueTier(5, 16);
 
-        // Base brewing cost: glass bottle(1) + nether wart(8) + blaze powder fuel(~1)
-        int totalBase = 10;
+        // Base brewing cost: glass bottle(2) + nether wart(20) + blaze powder fuel(~2)
+        int totalBase = 24;
 
         // Sum up value from every effect on this potion
         for (MobEffectInstance effect : effects) {
             int reagent = getEffectReagentCost(effect.getEffect());
 
-            // Level II+ potions require glowstone dust (8 CP) per amplifier level
+            // Level II+ potions require glowstone dust per amplifier level
             if (effect.getAmplifier() > 0) {
-                reagent += 8 * effect.getAmplifier();
+                reagent += MaterialValues.getValue(Items.GLOWSTONE_DUST) * effect.getAmplifier();
             }
 
-            // Extended-duration potions require redstone (8 CP)
+            // Extended-duration potions require redstone
             // Non-instant effects with >4800 ticks (~4 min) are "long" variants
             if (!effect.getEffect().isInstantenous() && effect.getDuration() > 4800) {
-                reagent += 8;
+                reagent += MaterialValues.getValue(Items.REDSTONE);
             }
 
             totalBase += reagent;
@@ -605,16 +646,16 @@ public class PriceCalculator {
 
         // Multi-effect potions (Turtle Master) need extra brewing steps
         if (effects.size() > 1) {
-            totalBase += 3;
+            totalBase += 8;
         }
 
         // Delivery type costs
         if (item instanceof LingeringPotionItem) {
-            // Dragon's Breath (100 CP) + extra brewing step
-            totalBase = (int) (totalBase * 2.5) + 80;
+            // Dragon's Breath + extra brewing step
+            totalBase = (int) (totalBase * 2.5) + MaterialValues.getValue(Items.DRAGON_BREATH);
         } else if (item instanceof SplashPotionItem) {
-            // Gunpowder (5 CP) + extra brewing step
-            totalBase = (int) (totalBase * 1.3) + 4;
+            // Gunpowder + extra brewing step
+            totalBase = (int) (totalBase * 1.3) + MaterialValues.getValue(Items.GUNPOWDER);
         }
 
         // 15% crafting labor premium
@@ -623,7 +664,7 @@ public class PriceCalculator {
         // Max price = 3.5× base
         int maxPrice = (int) (totalBase * 3.5);
 
-        return new ValueTier(Math.max(totalBase, 5), Math.max(maxPrice, 20));
+        return new ValueTier(Math.max(totalBase, 8), Math.max(maxPrice, 30));
     }
 
     /**
@@ -645,14 +686,14 @@ public class PriceCalculator {
         if (effect == MobEffects.SLOW_FALLING)       return MaterialValues.getValue(Items.PHANTOM_MEMBRANE);
         if (effect == MobEffects.POISON)             return MaterialValues.getValue(Items.SPIDER_EYE);
         if (effect == MobEffects.WEAKNESS)           return MaterialValues.getValue(Items.FERMENTED_SPIDER_EYE);
-        if (effect == MobEffects.HARM)               return MaterialValues.getValue(Items.FERMENTED_SPIDER_EYE) + 25; // Healing/Poison + Fermented Spider Eye (2 steps)
+        if (effect == MobEffects.HARM)               return MaterialValues.getValue(Items.FERMENTED_SPIDER_EYE) + 65; // Healing/Poison + Fermented Spider Eye (2 steps)
         if (effect == MobEffects.MOVEMENT_SLOWDOWN)  return MaterialValues.getValue(Items.FERMENTED_SPIDER_EYE); // modifier on Speed
         if (effect == MobEffects.DIG_SLOWDOWN)       return MaterialValues.getValue(Items.FERMENTED_SPIDER_EYE); // Part of Turtle Master
         if (effect == MobEffects.DAMAGE_RESISTANCE)  return MaterialValues.getIngredientCost(Items.SCUTE, 5) / 2; // Turtle Shell (5 scute ÷ 2)
-        if (effect == MobEffects.LUCK)               return 20; // Lucky potion (creative/rare)
-        if (effect == MobEffects.ABSORPTION)         return 35; // Golden Apple effect (valuable)
-        if (effect == MobEffects.SATURATION)         return 15; // Dandelion (suspicious stew)
-        return 10; // Unknown / modded effect – reasonable default
+        if (effect == MobEffects.LUCK)               return 52; // Lucky potion (creative/rare)
+        if (effect == MobEffects.ABSORPTION)         return 90; // Golden Apple effect (valuable)
+        if (effect == MobEffects.SATURATION)         return 40; // Dandelion (suspicious stew)
+        return 26; // Unknown / modded effect – reasonable default
     }
 
     // ===================== Path-based Heuristics =====================
@@ -669,23 +710,23 @@ public class PriceCalculator {
         // Ingots & metals
         if (path.contains("netherite") && path.contains("ingot")) return TIER_LEGENDARY;
         if (path.contains("ingot"))     return TIER_INGOT_IRON;
-        if (path.contains("nugget"))    return new ValueTier(3, 12);
+        if (path.contains("nugget"))    return new ValueTier(8, 32);
 
         // Gems
         if (path.contains("diamond") || path.contains("gem") || path.contains("ruby")
                 || path.contains("sapphire") || path.contains("amethyst")) return TIER_GEM;
-        if (path.contains("emerald"))   return new ValueTier(80, 280);
+        if (path.contains("emerald"))   return new ValueTier(210, 750);
 
         // Ores & raw
         if (path.contains("raw_") && (path.contains("iron") || path.contains("gold")
-                || path.contains("copper"))) return new ValueTier(10, 35);
-        if (path.contains("_ore"))      return new ValueTier(12, 40);
+                || path.contains("copper"))) return new ValueTier(25, 90);
+        if (path.contains("_ore"))      return new ValueTier(32, 110);
 
         // Storage blocks of materials
         if (path.contains("_block") && (path.contains("iron") || path.contains("gold")
                 || path.contains("diamond") || path.contains("emerald")
                 || path.contains("copper") || path.contains("netherite")))
-            return new ValueTier(100, 350);
+            return new ValueTier(260, 950);
 
         // Tools & weapons
         if (path.contains("netherite") && (path.contains("sword") || path.contains("pickaxe")
@@ -709,9 +750,35 @@ public class PriceCalculator {
                 || path.contains("leggings") || path.contains("boots"))
             return TIER_TOOL_IRON;
 
-        // Food
-        if (path.contains("cooked_") || path.contains("baked_") || path.contains("stew")
-                || path.contains("soup"))
+        // ---- Magic items (before stone check to avoid false positives) ----
+        if (path.contains("spell") || path.contains("scroll") || path.contains("_tome")
+                || path.contains("grimoire") || path.contains("_wand") || path.contains("_staff")
+                || path.contains("spellbook") || path.contains("spell_book"))
+            return TIER_ENCHANTED;   // 500cp
+
+        // ---- Potion-like consumables (elixirs, tonics, vials) ----
+        if (path.contains("elixir") || path.contains("tonic") || path.contains("_vial")
+                || path.contains("serum") || path.contains("_flask") || path.contains("infusion")
+                || path.contains("_brew") || path.contains("essence") && path.contains("bottle"))
+            return TIER_POTION;      // 50cp
+
+        // ---- Structural decoratives: doors, gates, windows ----
+        if (path.contains("_door") || path.contains("_gate") || path.contains("_trapdoor")
+                || path.contains("_window") || path.contains("_shutter"))
+            return TIER_DECORATION;  // 8cp (already has 3× ceiling)
+
+        // ---- Furniture (crafted, non-trivial) ----
+        if (path.contains("_desk") || path.contains("_chair") || path.contains("_bench")
+                || path.contains("_table") || path.contains("_stool") || path.contains("_cabinet")
+                || path.contains("_shelf") || path.contains("_bookcase") || path.contains("_sofa")
+                || path.contains("_couch") || path.contains("_wardrobe"))
+            return TIER_CRAFT_MAT;   // 25cp
+
+        // Food (path-based, for items that somehow bypassed classifyByClass)
+        if (path.contains("cooked_") || path.contains("baked_") || path.contains("_stew")
+                || path.contains("_soup") || path.contains("_roast") || path.contains("_meal")
+                || path.contains("_pie") || path.contains("_cake") || path.contains("_cookie")
+                || path.contains("_sandwich") || path.contains("_salad") || path.contains("_bowl"))
             return TIER_FOOD_GOOD;
         if (path.contains("raw_") && (path.contains("beef") || path.contains("pork")
                 || path.contains("chicken") || path.contains("fish") || path.contains("mutton")
@@ -730,8 +797,18 @@ public class PriceCalculator {
         if (path.contains("_log") || path.contains("_stem") || path.contains("_wood"))
             return TIER_BASIC;
 
-        // Stone variants, cobble
-        if (path.contains("cobble") || path.contains("stone") || path.contains("deepslate"))
+        // Stone-type building blocks.
+        // Use specific patterns instead of path.contains("stone") to avoid false positives
+        // on modded items like "philosopher_stone", "limestone_gem", "moonstone_crystal", etc.
+        if (path.equals("stone") || path.contains("cobblestone") || path.contains("cobbled_")
+                || path.endsWith("_stone") || path.contains("deepslate")
+                || path.contains("netherrack") || path.contains("andesite")
+                || path.contains("diorite") || path.contains("granite") || path.contains("tuff")
+                || path.contains("calcite") || path.contains("blackstone")
+                // Mod stone variants that clearly ARE just stone
+                || (path.contains("stone") && (path.contains("brick") || path.contains("slab")
+                        || path.contains("stair") || path.contains("wall") || path.contains("tile")
+                        || path.contains("path") || path.contains("pillar"))))
             return TIER_JUNK;
 
         // Dyes
@@ -745,9 +822,9 @@ public class PriceCalculator {
     private static ValueTier rarityFallback(ItemStack stack) {
         Rarity rarity = stack.getRarity();
         return switch (rarity) {
-            case EPIC     -> new ValueTier(81, 270);
-            case RARE     -> new ValueTier(27, 90);
-            case UNCOMMON -> new ValueTier(9, 30);
+            case EPIC     -> new ValueTier(520, 1800);
+            case RARE     -> new ValueTier(180, 620);
+            case UNCOMMON -> new ValueTier(40, 140);
             default       -> TIER_COMMON; // COMMON
         };
     }
@@ -756,53 +833,76 @@ public class PriceCalculator {
 
     /**
      * Get the full value tier for an item, resolving through the classification pipeline.
+     * <p>
+     * Results are cached per {@link Item} type (enchant bonus is applied on top, since it
+     * varies by enchantment count and is not cacheable without NBT as the key).
      */
     public static ValueTier getValueTier(ItemStack stack) {
         if (stack.isEmpty()) return TIER_JUNK;
+        // Potions store their effect type, amplifier, and duration in NBT — not in the Item
+        // instance. The per-Item cache would lock in a bare no-NBT water-bottle result for the
+        // shared PotionItem / SplashPotionItem / LingeringPotionItem singletons, making every
+        // potion (including Potion of Regeneration) appear as ~5 CP. Compute fresh every call.
+        if (stack.getItem() instanceof PotionItem
+                || stack.getItem() instanceof SplashPotionItem
+                || stack.getItem() instanceof LingeringPotionItem) {
+            ValueTier ptier = computePotionPrice(stack);
+            return stack.isEnchanted() ? applyEnchantBonus(ptier, stack) : ptier;
+        }
+        // Look up (or compute) the base tier for this item type.
+        ValueTier base = BASE_TIER_CACHE.computeIfAbsent(stack.getItem(),
+                k -> computeBaseTier(new ItemStack(k)));
+        return stack.isEnchanted() ? applyEnchantBonus(base, stack) : base;
+    }
 
+    /**
+     * Compute the base (non-enchanted) value tier for an item, resolving the full
+     * classification pipeline.  Called exactly once per distinct {@link Item} type;
+     * the result is cached in {@link #BASE_TIER_CACHE}.
+     */
+    private static ValueTier computeBaseTier(ItemStack stack) {
         // 0. Ingredient-based pricing for tools & armor (handles vanilla + modded)
         ValueTier tier = computeIngredientPrice(stack);
-        if (tier != null) {
-            if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 1. Exact item override
         tier = ITEM_OVERRIDES.get(stack.getItem());
-        if (tier != null) {
-            // Apply enchantment bonus
-            if (stack.isEnchanted()) {
-                tier = applyEnchantBonus(tier, stack);
-            }
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 2. Tag-based rules
         for (CategoryRule rule : TAG_RULES) {
-            if (rule.test().test(stack)) {
-                tier = rule.tier();
-                if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-                return tier;
-            }
+            if (rule.test().test(stack)) return rule.tier();
         }
 
         // 3. Class-based heuristics
         tier = classifyByClass(stack);
-        if (tier != null) {
-            if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 4. Path-based heuristics
         tier = classifyByPath(stack);
-        if (tier != null) {
-            if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
-            return tier;
-        }
+        if (tier != null) return tier;
 
         // 5. Rarity fallback
         tier = rarityFallback(stack);
-        if (stack.isEnchanted()) tier = applyEnchantBonus(tier, stack);
+
+        // Guarantee a sane minimum floor for rare/epic and hard-to-acquire items
+        // so they don't collapse to junk-tier prices from weak path heuristics.
+        String path = "";
+        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        if (rl != null) path = rl.getPath().toLowerCase();
+
+        if (stack.getRarity() == Rarity.RARE || stack.getRarity() == Rarity.EPIC
+                || path.contains("ancient_debris")
+                || path.contains("crying_obsidian")
+                || path.contains("echo_shard")
+                || path.contains("recovery_compass")
+                || path.contains("nether_star")
+                || path.contains("elytra")) {
+            if (tier.basePrice() < TIER_RARE_DROP.basePrice()) {
+                tier = new ValueTier(TIER_RARE_DROP.basePrice(), Math.max(TIER_RARE_DROP.maxPrice(), tier.maxPrice()));
+            }
+        }
+
         return tier;
     }
 
@@ -821,7 +921,26 @@ public class PriceCalculator {
      * Get the base value of an item in copper pieces.
      */
     public static int getBaseValue(ItemStack stack) {
-        return getValueTier(stack).basePrice();
+        // Animal trade slips: use per-animal value stored in NBT (filled) or raw slot value (empty)
+        if (stack.getItem() instanceof AnimalTradeSlipItem) {
+            CompoundTag tag = stack.getTag();
+            if (tag != null && tag.contains(AnimalTradeSlipItem.TAG_ANIMAL_TYPE)) {
+                int v = AnimalTradeSlipItem.getBaseValue(tag.getString(AnimalTradeSlipItem.TAG_ANIMAL_TYPE));
+                ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+                DebugConfig.WATCH_LAST_PRICE_ITEM = rl != null ? rl.toString() : "animal_trade_slip";
+                DebugConfig.WATCH_LAST_PRICE_VALUE = v;
+                return v;
+            }
+            // Unfilled slip - modest base value
+            DebugConfig.WATCH_LAST_PRICE_ITEM = "animal_trade_slip (unfilled)";
+            DebugConfig.WATCH_LAST_PRICE_VALUE = 40;
+            return 40;
+        }
+        int v = getValueTier(stack).basePrice();
+        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        DebugConfig.WATCH_LAST_PRICE_ITEM = rl != null ? rl.toString() : stack.getItem().getClass().getSimpleName();
+        DebugConfig.WATCH_LAST_PRICE_VALUE = v;
+        return v;
     }
 
     /**

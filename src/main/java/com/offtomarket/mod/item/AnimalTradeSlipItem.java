@@ -173,7 +173,9 @@ public class AnimalTradeSlipItem extends Item {
         if (entityKey == null) return InteractionResult.FAIL;
 
         String animalType = entityKey.toString();
-        CompoundTag tag = stack.getOrCreateTag();
+
+        ItemStack filledSlip = new ItemStack(ModItems.ANIMAL_TRADE_SLIP.get());
+        CompoundTag tag = filledSlip.getOrCreateTag();
         
         tag.putBoolean(TAG_IS_FILLED, true);
         tag.putString(TAG_ANIMAL_TYPE, animalType);
@@ -195,6 +197,15 @@ public class AnimalTradeSlipItem extends Item {
         
         // Remove the entity from the world
         target.discard();
+
+        // Consume exactly one empty slip and replace/give one filled slip.
+        // This avoids mutating the NBT of the whole stack in-hand.
+        if (!player.getAbilities().instabuild) {
+            stack.shrink(1);
+            if (!player.getInventory().add(filledSlip)) {
+                player.drop(filledSlip, false);
+            }
+        }
         
         player.displayClientMessage(
                 Component.literal("Captured " + getAnimalDisplayName(animalType) + "!")
@@ -269,7 +280,7 @@ public class AnimalTradeSlipItem extends Item {
                         .withStyle(ChatFormatting.GREEN),
                 true);
 
-        // Clear the slip (make it empty again)
+        // Consume exactly one filled slip
         if (!player.getAbilities().instabuild) {
             stack.shrink(1);
         }

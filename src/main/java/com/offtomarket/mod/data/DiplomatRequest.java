@@ -37,7 +37,9 @@ public class DiplomatRequest {
         /** Items have arrived and are waiting for collection. */
         ARRIVED,
         /** Request was declined or failed. */
-        FAILED
+        FAILED,
+        /** Request was explicitly declined by the player or auto-declined after timeout. */
+        DECLINED
     }
 
     private final UUID id;
@@ -57,6 +59,7 @@ public class DiplomatRequest {
     private int proposedPrice;       // Price proposed by the town (player must accept/decline)
     private int diplomatPremium;     // Premium portion of the cost
     private int finalCost;           // Actual cost if accepted
+    private int supplyScore;         // How easily the town can supply this (0-95, affects fulfillment chance)
     
     private Status status;
 
@@ -92,6 +95,7 @@ public class DiplomatRequest {
     public int getProposedPrice() { return proposedPrice; }
     public int getDiplomatPremium() { return diplomatPremium; }
     public int getFinalCost() { return finalCost; }
+    public int getSupplyScore() { return supplyScore; }
 
     // ==================== Setters ====================
 
@@ -109,6 +113,8 @@ public class DiplomatRequest {
         this.diplomatPremium = diplomatPremium;
         this.finalCost = proposedPrice;
     }
+
+    public void setSupplyScore(int score) { this.supplyScore = score; }
 
     /**
      * Get remaining ticks until the current stage ends.
@@ -179,9 +185,60 @@ public class DiplomatRequest {
 
     /**
      * Check if a town can supply the requested item (must be in surplus or specialty).
+     * Kept for backward compatibility - uses supply score internally.
      */
     public static boolean canTownSupply(TownData town, ResourceLocation itemId) {
-        return town.getSurplus().contains(itemId) || town.getSpecialtyItems().contains(itemId);
+        return getSupplyScore(town, itemId) > 0;
+    }
+
+    /**
+     * Get a supply score for how easily a town can fulfill a request for the given item.
+     * Higher score = easier/cheaper for the town.
+     * 
+     * @return 25-95 based on town's relationship with the item
+     */
+    public static int getSupplyScore(TownData town, ResourceLocation itemId) {
+        // Surplus items — town has excess, easy to supply
+        if (town.getSurplus().contains(itemId)) return 95;
+        // Specialty items — town produces this, can supply readily
+        if (town.getSpecialtyItems().contains(itemId)) return 80;
+        // Items the town needs itself — hard to get, town wants them too
+        if (town.getNeeds().contains(itemId)) return 25;
+        // Everything else — neutral, town may source from its trade network
+        return 45;
+    }
+
+    /**
+     * Get the price premium multiplier based on supply score.
+     * Lower score = higher premium (harder to source = more expensive).
+     */
+    public static double getScoreBasedPremium(int supplyScore, TownData town) {
+        // Town type base premium still applies
+        double typeMult = getDiplomatPremiumMultiplier(town);
+        // Additional difficulty multiplier based on supply score
+        double difficultyMult;
+        if (supplyScore >= 90) {
+            difficultyMult = 1.0;  // Surplus — no extra markup
+        } else if (supplyScore >= 70) {
+            difficultyMult = 1.1;  // Specialty — small markup
+        } else if (supplyScore >= 40) {
+            difficultyMult = 1.4;  // Neutral — moderate markup
+        } else {
+            difficultyMult = 1.8;  // Town needs it — heavy markup
+        }
+        return typeMult * difficultyMult;
+    }
+
+    /**
+     * Get the fulfillment probability as a fraction (0.0 to 1.0).
+     * Used during DISCUSSING phase to determine if town accepts or rejects.
+     */
+    public static double getFulfillmentChance(int supplyScore) {
+        // Score maps roughly to acceptance probability
+        if (supplyScore >= 90) return 0.95;
+        if (supplyScore >= 70) return 0.85;
+        if (supplyScore >= 40) return 0.60;
+        return 0.35;
     }
 
     /**
@@ -189,7 +246,7 @@ public class DiplomatRequest {
      */
     public ItemStack createStack() {
         Item item = ForgeRegistries.ITEMS.getValue(requestedItemId);
-        if (item == null) return ItemStack.EMPTY;
+        if (item == null || item == net.minecraft.world.item.Items.AIR) return ItemStack.EMPTY;
         return new ItemStack(item, requestedCount);
     }
 
@@ -210,6 +267,7 @@ public class DiplomatRequest {
         tag.putInt("ProposedPrice", proposedPrice);
         tag.putInt("Premium", diplomatPremium);
         tag.putInt("FinalCost", finalCost);
+        tag.putInt("SupplyScore", supplyScore);
         tag.putString("Status", status.name());
         return tag;
     }
@@ -230,6 +288,7 @@ public class DiplomatRequest {
         req.proposedPrice = tag.getInt("ProposedPrice");
         req.diplomatPremium = tag.getInt("Premium");
         req.finalCost = tag.getInt("FinalCost");
+        req.supplyScore = tag.contains("SupplyScore") ? tag.getInt("SupplyScore") : 80;
         req.status = Status.valueOf(tag.getString("Status"));
         return req;
     }

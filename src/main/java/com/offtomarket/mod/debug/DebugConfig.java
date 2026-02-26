@@ -25,6 +25,9 @@ public class DebugConfig {
     /** Show the debug HUD overlay on screen */
     public static boolean SHOW_DEBUG_HUD = false;
 
+    /** Draw menu layout guides / bounds for UI alignment debugging */
+    public static boolean SHOW_UI_BOUNDS = false;
+
     /** Enable verbose console logging for trade events */
     public static boolean VERBOSE_LOGGING = false;
 
@@ -101,6 +104,9 @@ public class DebugConfig {
     /** When set true, skip pickup delay (items ship immediately) */
     public static boolean SKIP_PICKUP_DELAY = false;
 
+    /** When set true, allows unlimited market board refreshes (no cooldown) */
+    public static boolean UNLIMITED_REFRESHES = false;
+
     // ===================== State Inspection =====================
     /** Read-only: last tick's active shipment count (updated by DebugHooks) */
     public static int WATCH_ACTIVE_SHIPMENTS = 0;
@@ -125,6 +131,25 @@ public class DebugConfig {
 
     /** Read-only: last error/event message */
     public static String WATCH_LAST_EVENT = "none";
+
+    /** Read-only: number of active quests on the nearest Trading Post */
+    public static int WATCH_ACTIVE_QUEST_COUNT = 0;
+    /** Read-only: last day quests were refreshed on the nearest Trading Post */
+    public static long WATCH_LAST_QUEST_REFRESH_DAY = -1;
+    /** Read-only: selected town ID on the nearest Trading Post */
+    public static String WATCH_SELECTED_TOWN_ID = "none";
+    /** Read-only: balance of the nearest Finance Table (copper pieces) */
+    public static int WATCH_FINANCE_TABLE_BALANCE = 0;
+    /** Read-only: registry name of the last item evaluated by PriceCalculator */
+    public static String WATCH_LAST_PRICE_ITEM = "none";
+    /** Read-only: base CP value returned by PriceCalculator for the last item */
+    public static int WATCH_LAST_PRICE_VALUE = 0;
+    /** Read-only: town ID used in the most recent Quest.generateQuests() call */
+    public static String WATCH_QUEST_GEN_TOWN = "none";
+    /** Read-only: number of needs found in the most recent Quest.generateQuests() call */
+    public static int WATCH_QUEST_GEN_NEEDS = 0;
+    /** Read-only: number of surplus items found in the most recent Quest.generateQuests() call */
+    public static int WATCH_QUEST_GEN_SURPLUS = 0;
 
     // ===================== Config Apply =====================
 

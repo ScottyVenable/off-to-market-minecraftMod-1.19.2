@@ -1,0 +1,15 @@
+{
+  "_comment": "Lists every town JSON file to load at startup. Add new filenames here when you create new towns. Files starting with _ are skipped automatically.",
+  "towns": [
+    "greenhollow.json",
+    "irondeep.json",
+    "saltmere.json",
+    "timberwatch.json",
+    "crossroads.json",
+    "peenam.json",
+    "basaltkeep.json",
+    "arcaneveil.json",
+    "goldspire.json",
+    "beaus_botany_shop.json"
+  ]
+}

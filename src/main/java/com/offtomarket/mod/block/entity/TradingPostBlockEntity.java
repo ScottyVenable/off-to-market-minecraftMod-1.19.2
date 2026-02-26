@@ -1,10 +1,10 @@
 package com.offtomarket.mod.block.entity;
 
+import com.offtomarket.mod.block.MailboxBlock;
 import com.offtomarket.mod.data.*;
 import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.item.CoinType;
-import com.offtomarket.mod.item.ShipmentNoteItem;
 import com.offtomarket.mod.menu.TradingPostMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import com.offtomarket.mod.registry.ModItems;
@@ -29,6 +29,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.server.level.ServerLevel;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -65,8 +66,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // Sale check timer
     private int saleCheckTimer = 0;
 
-    // Market listings refresh timer
-    private int marketRefreshTimer = 0;
+    // Market listings
     private final List<MarketListing> marketListings = new ArrayList<>();
 
     // Completed shipment history (newest first, capped)
@@ -95,12 +95,16 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // Workers (hired helpers that provide passive bonuses)
     private Worker negotiator = new Worker(Worker.WorkerType.NEGOTIATOR);
     private Worker tradingCart = new Worker(Worker.WorkerType.TRADING_CART);
+    private Worker bookkeeper = new Worker(Worker.WorkerType.BOOKKEEPER);
 
     // Diplomat requests (player requests specific items from towns)
     private final List<DiplomatRequest> activeDiplomatRequests = new ArrayList<>();
 
     // Dawn-based market refresh tracking
     private long lastRefreshDay = -1;
+
+    // Prevents recursive propagation when syncing linked posts
+    private boolean isSyncing = false;
 
     public TradingPostBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.TRADING_POST.get(), pos, state);
@@ -125,8 +129,22 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public Map<String, Long> getEarningsByItem() { return Collections.unmodifiableMap(earningsByItem); }
     public List<BuyOrder> getActiveBuyOrders() { return activeBuyOrders; }
     public List<Quest> getActiveQuests() { return activeQuests; }
+    public long getLastQuestRefreshDay() { return lastQuestRefreshDay; }
     public Worker getNegotiator() { return negotiator; }
     public Worker getTradingCart() { return tradingCart; }
+    public Worker getBookkeeper() { return bookkeeper; }
+
+    /**
+     * Get a worker by type.
+     */
+    public Worker getWorker(Worker.WorkerType type) {
+        return switch (type) {
+            case NEGOTIATOR -> negotiator;
+            case TRADING_CART -> tradingCart;
+            case BOOKKEEPER -> bookkeeper;
+        };
+    }
+
     public List<DiplomatRequest> getActiveDiplomatRequests() { return activeDiplomatRequests; }
     public long getLastRefreshDay() { return lastRefreshDay; }
     public Map<String, Integer> getTownReputation() { return Collections.unmodifiableMap(townReputation); }
@@ -139,36 +157,41 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
     
     /**
-     * Add reputation with a town.
+     * Add reputation with a town. Range is clamped to [-1000, 1000].
+     * Pass a negative amount to decrease reputation.
      */
     public void addReputation(String townId, int amount) {
         int current = townReputation.getOrDefault(townId, 0);
-        townReputation.put(townId, Math.max(0, current + amount));
-        setChanged();
+        townReputation.put(townId, Math.max(-1000, Math.min(1000, current + amount)));
+        syncToClient();
     }
     
     /**
      * Get reputation level name based on value.
+     * Values range from -1000 (Hostile) to +1000 (Exalted).
      */
     public static String getReputationLevel(int rep) {
-        if (rep >= 200) return "Exalted";
-        if (rep >= 150) return "Revered";
-        if (rep >= 100) return "Honored";
-        if (rep >= 50) return "Friendly";
-        if (rep >= 20) return "Neutral";
-        return "Stranger";
+        if (rep >= 600) return "Exalted";
+        if (rep >= 300) return "Honored";
+        if (rep >= 100) return "Friendly";
+        if (rep >= -99) return "Neutral";
+        if (rep >= -299) return "Distrusted";
+        if (rep >= -599) return "Unfriendly";
+        return "Hostile";
     }
-    
+
     /**
      * Get reputation color based on value.
+     * Colors map to 7 relationship tiers from dark red (Hostile) to dark green (Exalted).
      */
     public static int getReputationColor(int rep) {
-        if (rep >= 200) return 0xFFD700; // Gold
-        if (rep >= 150) return 0xDD88FF; // Purple
-        if (rep >= 100) return 0x55FF55; // Green
-        if (rep >= 50) return 0x88BBFF; // Blue
-        if (rep >= 20) return 0xCCCCCC; // Gray
-        return 0x888888; // Dark gray
+        if (rep >= 600) return 0x00AA00;   // Dark Green  — Exalted
+        if (rep >= 300) return 0x55FF55;   // Light Green — Honored
+        if (rep >= 100) return 0x5599FF;   // Blue        — Friendly
+        if (rep >= -99) return 0xAAAAAA;   // Gray        — Neutral
+        if (rep >= -299) return 0xFFFF55;  // Yellow      — Distrusted
+        if (rep >= -599) return 0xFF5555;  // Light Red   — Unfriendly
+        return 0xAA0000;                   // Dark Red    — Hostile
     }
 
     public void setSelectedTownId(String id) {
@@ -199,6 +222,235 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         return DebugConfig.getBaseXpToLevel() * traderLevel;
     }
 
+    // ==================== Linked Post Sync ====================
+
+    /**
+     * Save all shared (global) trader state to a CompoundTag.
+     * This is pushed to TradingData so all posts stay in sync.
+     */
+    public CompoundTag saveSharedState() {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("TraderLevel", traderLevel);
+        tag.putInt("TraderXp", traderXp);
+        tag.putInt("PendingCoins", pendingCoins);
+        tag.putInt("SaleTimer", saleCheckTimer);
+        tag.putLong("LastRefreshDay", lastRefreshDay);
+
+        ListTag shipmentList = new ListTag();
+        for (Shipment s : activeShipments) shipmentList.add(s.save());
+        tag.put("Shipments", shipmentList);
+
+        ListTag listingsList = new ListTag();
+        for (MarketListing ml : marketListings) listingsList.add(ml.save());
+        tag.put("Listings", listingsList);
+
+        ListTag historyList = new ListTag();
+        for (CompoundTag h : shipmentHistory) historyList.add(h.copy());
+        tag.put("History", historyList);
+
+        tag.put("Demand", demandTracker.save());
+
+        ListTag buyOrderList = new ListTag();
+        for (BuyOrder bo : activeBuyOrders) buyOrderList.add(bo.save());
+        tag.put("BuyOrders", buyOrderList);
+
+        ListTag questList = new ListTag();
+        for (Quest q : activeQuests) questList.add(q.save());
+        tag.put("Quests", questList);
+        tag.putLong("LastQuestRefresh", lastQuestRefreshDay);
+
+        tag.put("Negotiator", negotiator.save());
+        tag.put("TradingCart", tradingCart.save());
+        tag.put("Bookkeeper", bookkeeper.save());
+
+        ListTag diplomatList = new ListTag();
+        for (DiplomatRequest dr : activeDiplomatRequests) diplomatList.add(dr.save());
+        tag.put("Diplomats", diplomatList);
+
+        tag.putLong("LifetimeEarnings", lifetimeEarnings);
+        tag.putInt("TotalShipments", totalShipmentsSent);
+        CompoundTag townEarningsTag = new CompoundTag();
+        for (Map.Entry<String, Long> e : earningsByTown.entrySet()) {
+            townEarningsTag.putLong(e.getKey(), e.getValue());
+        }
+        tag.put("EarningsByTown", townEarningsTag);
+        CompoundTag itemEarningsTag = new CompoundTag();
+        for (Map.Entry<String, Long> e : earningsByItem.entrySet()) {
+            itemEarningsTag.putLong(e.getKey(), e.getValue());
+        }
+        tag.put("EarningsByItem", itemEarningsTag);
+
+        CompoundTag repTag = new CompoundTag();
+        for (Map.Entry<String, Integer> e : townReputation.entrySet()) {
+            repTag.putInt(e.getKey(), e.getValue());
+        }
+        tag.put("TownReputation", repTag);
+
+        return tag;
+    }
+
+    /**
+     * Load shared (global) trader state from a CompoundTag.
+     * Called when pulling state from TradingData into this block entity.
+     */
+    public void loadSharedState(CompoundTag tag) {
+        traderLevel = tag.getInt("TraderLevel");
+        if (traderLevel < 1) traderLevel = 1;
+        traderXp = tag.getInt("TraderXp");
+        pendingCoins = tag.getInt("PendingCoins");
+        saleCheckTimer = tag.getInt("SaleTimer");
+        lastRefreshDay = tag.getLong("LastRefreshDay");
+
+        activeShipments.clear();
+        ListTag shipmentList = tag.getList("Shipments", Tag.TAG_COMPOUND);
+        for (int i = 0; i < shipmentList.size(); i++) {
+            activeShipments.add(Shipment.load(shipmentList.getCompound(i)));
+        }
+
+        marketListings.clear();
+        ListTag listingsList = tag.getList("Listings", Tag.TAG_COMPOUND);
+        for (int i = 0; i < listingsList.size(); i++) {
+            marketListings.add(MarketListing.load(listingsList.getCompound(i)));
+        }
+
+        shipmentHistory.clear();
+        if (tag.contains("History")) {
+            ListTag historyList = tag.getList("History", Tag.TAG_COMPOUND);
+            for (int i = 0; i < historyList.size(); i++) {
+                shipmentHistory.add(historyList.getCompound(i));
+            }
+        }
+
+        if (tag.contains("Demand")) {
+            demandTracker.load(tag.getCompound("Demand"));
+        }
+
+        activeBuyOrders.clear();
+        if (tag.contains("BuyOrders")) {
+            ListTag buyOrderList = tag.getList("BuyOrders", Tag.TAG_COMPOUND);
+            for (int i = 0; i < buyOrderList.size(); i++) {
+                activeBuyOrders.add(BuyOrder.load(buyOrderList.getCompound(i)));
+            }
+        }
+
+        activeQuests.clear();
+        if (tag.contains("Quests")) {
+            ListTag questList = tag.getList("Quests", Tag.TAG_COMPOUND);
+            for (int i = 0; i < questList.size(); i++) {
+                activeQuests.add(Quest.load(questList.getCompound(i)));
+            }
+        }
+        lastQuestRefreshDay = tag.getLong("LastQuestRefresh");
+
+        if (tag.contains("Negotiator")) {
+            negotiator = Worker.load(tag.getCompound("Negotiator"));
+        }
+        if (tag.contains("TradingCart")) {
+            tradingCart = Worker.load(tag.getCompound("TradingCart"));
+        }
+        if (tag.contains("Bookkeeper")) {
+            bookkeeper = Worker.load(tag.getCompound("Bookkeeper"));
+        }
+
+        activeDiplomatRequests.clear();
+        if (tag.contains("Diplomats")) {
+            ListTag diplomatList = tag.getList("Diplomats", Tag.TAG_COMPOUND);
+            for (int i = 0; i < diplomatList.size(); i++) {
+                activeDiplomatRequests.add(DiplomatRequest.load(diplomatList.getCompound(i)));
+            }
+        }
+
+        lifetimeEarnings = tag.getLong("LifetimeEarnings");
+        totalShipmentsSent = tag.getInt("TotalShipments");
+        earningsByTown.clear();
+        if (tag.contains("EarningsByTown")) {
+            CompoundTag townEarnings = tag.getCompound("EarningsByTown");
+            for (String key : townEarnings.getAllKeys()) {
+                earningsByTown.put(key, townEarnings.getLong(key));
+            }
+        }
+        earningsByItem.clear();
+        if (tag.contains("EarningsByItem")) {
+            CompoundTag itemEarnings = tag.getCompound("EarningsByItem");
+            for (String key : itemEarnings.getAllKeys()) {
+                earningsByItem.put(key, itemEarnings.getLong(key));
+            }
+        }
+
+        townReputation.clear();
+        if (tag.contains("TownReputation")) {
+            CompoundTag repTag = tag.getCompound("TownReputation");
+            for (String key : repTag.getAllKeys()) {
+                townReputation.put(key, repTag.getInt(key));
+            }
+        }
+    }
+
+    /**
+     * Called when this block entity's chunk is loaded.
+     * Registers with TradingData and pulls shared state to stay in sync
+     * with other Trading Posts. If TradingData is empty (existing world
+     * upgrading to linked posts), pushes our local data as the initial state.
+     */
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && !level.isClientSide() && level instanceof ServerLevel serverLevel) {
+            TradingData data = TradingData.get(serverLevel);
+            data.register(worldPosition);
+            if (data.isEmpty()) {
+                // First post to load — push our state as the canonical shared state (migration)
+                data.setSharedState(saveSharedState());
+            } else {
+                // Pull shared state from TradingData to sync with other posts
+                loadSharedState(data.getSharedState());
+            }
+        }
+    }
+
+    /**
+     * Called when this block entity is removed (block broken or chunk unloaded).
+     * Pushes final state and unregisters from TradingData.
+     */
+    @Override
+    public void setRemoved() {
+        if (level != null && !level.isClientSide() && level instanceof ServerLevel serverLevel) {
+            TradingData data = TradingData.get(serverLevel);
+            // Push our current state so it persists even after this post is gone
+            data.setSharedState(saveSharedState());
+            data.unregister(worldPosition);
+        }
+        super.setRemoved();
+    }
+
+    /**
+     * Push shared state to TradingData and sync all other loaded Trading Posts.
+     * Called after any shared state mutation to keep all posts consistent.
+     */
+    private void propagateToOtherPosts() {
+        if (level == null || level.isClientSide()) return;
+        if (!(level instanceof ServerLevel serverLevel)) return;
+
+        TradingData data = TradingData.get(serverLevel);
+        CompoundTag sharedTag = saveSharedState();
+        data.setSharedState(sharedTag);
+
+        isSyncing = true;
+        try {
+            for (BlockPos pos : data.getRegisteredPositions()) {
+                if (pos.equals(worldPosition)) continue;
+                BlockEntity be = level.getBlockEntity(pos);
+                if (be instanceof TradingPostBlockEntity other) {
+                    other.loadSharedState(sharedTag);
+                    other.setChanged();
+                    level.sendBlockUpdated(pos, other.getBlockState(), other.getBlockState(), 3);
+                }
+            }
+        } finally {
+            isSyncing = false;
+        }
+    }
+
     // ==================== Trading Logic ====================
 
     /**
@@ -210,25 +462,25 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (town == null || town.getMinTraderLevel() > traderLevel) return false;
 
         // Find a nearby Trading Bin
-        TradingBinBlockEntity bin = findNearbyBin(level, postPos);
+        TradingLedgerBlockEntity bin = findNearbyBin(level, postPos);
         if (bin == null || bin.isEmpty()) return false;
 
         // Collect items from the bin
         List<ItemStack> itemsToShip = new ArrayList<>();
         List<Shipment.ShipmentItem> shipmentItems = new ArrayList<>();
 
-        for (int i = 0; i < TradingBinBlockEntity.BIN_SIZE; i++) {
+        for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
             ItemStack stack = bin.getItem(i);
-            if (!stack.isEmpty()) {
-                int basePrice = PriceCalculator.getBaseValue(stack);
-                int price = bin.getSetPrice(i);
-                if (price <= 0) price = basePrice; // default to base price
+            if (!stack.isEmpty() && stack.getItem() != net.minecraft.world.item.Items.AIR) {
+                int price = bin.getEffectivePriceForSlot(i);
+                if (price <= 0) price = PriceCalculator.getBaseValue(stack);
 
                 shipmentItems.add(new Shipment.ShipmentItem(
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem()),
                         stack.getCount(),
                         price,
-                        stack.getHoverName().getString()
+                        stack.getHoverName().getString(),
+                        stack.getTag() // preserve NBT (e.g. potion type) so returned items are identical
                 ));
                 itemsToShip.add(stack.copy());
             }
@@ -240,6 +492,11 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         long gameTime = level.getGameTime();
         int baseTravelTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
         int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier());
+        // Track trading cart lifetime time saved (in ticks)
+        if (tradingCart.isHired()) {
+            int ticksSaved = baseTravelTicks - travelTicks;
+            if (ticksSaved > 0) tradingCart.addLifetimeBonusValue(ticksSaved);
+        }
         int pickupDelay = DebugConfig.SKIP_PICKUP_DELAY ? 0 : DebugConfig.getPickupDelay();
         long arrivalTime = gameTime + pickupDelay + travelTicks;
 
@@ -255,11 +512,32 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             demandTracker.recordSupply(town.getId(), si.getItemId().toString(), si.getCount());
         }
 
-        // Create note and clear bin
-        int maxMarketTicks = DebugConfig.getMaxMarketTime();
-        ItemStack note = ShipmentNoteItem.createNote(
-                town.getDisplayName(), itemsToShip, gameTime, travelTicks + pickupDelay, maxMarketTicks);
-        bin.clearAndLeaveNote(note);
+        // For virtual (read-only) slots: remove the actual items from their source containers now
+        for (int i = 0; i < TradingLedgerBlockEntity.BIN_SIZE; i++) {
+            if (!bin.isVirtualSlot(i)) continue;
+            TradingLedgerBlockEntity.VirtualSource vs = bin.getVirtualSource(i);
+            if (vs == null) continue;
+            ItemStack snapshot = bin.getItem(i);
+            if (snapshot.isEmpty()) continue;
+
+            BlockEntity srcBe = level.getBlockEntity(vs.sourcePos);
+            if (srcBe instanceof net.minecraft.world.Container srcCont) {
+                ItemStack srcStack = srcCont.getItem(vs.sourceSlot);
+                int takeCount = Math.min(snapshot.getCount(), srcStack.getCount());
+                srcStack.shrink(takeCount);
+                srcCont.setItem(vs.sourceSlot, srcStack.isEmpty() ? ItemStack.EMPTY : srcStack);
+                srcCont.setChanged();
+            }
+        }
+
+        // Record this shipment in the ledger history (Past Orders tab)
+        int totalShipCount = itemsToShip.stream().mapToInt(ItemStack::getCount).sum();
+        int totalShipValue = shipmentItems.stream()
+                .mapToInt(si -> si.getPricePerItem() * si.getCount()).sum();
+        bin.recordShipment(gameTime, town.getDisplayName(), totalShipCount, totalShipValue);
+
+        // Clear bin after dispatch (shipment notices are now handled by mailbox notes)
+        bin.clearAndLeaveNote(ItemStack.EMPTY);
 
         syncToClient();
         return true;
@@ -361,10 +639,11 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
      */
     public boolean buyFromMarket(Player player, MarketListing listing) {
         int totalCost = listing.getTotalPrice();
-        if (!hasEnoughCoins(player, totalCost)) return false;
+        FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+        if (!hasEnoughCoins(player, totalCost, ft)) return false;
 
-        // Deduct coins
-        deductCoins(player, totalCost);
+        // Deduct coins (draws from Finance Table if player inventory runs short)
+        deductCoins(player, totalCost, ft);
 
         // Give item to player
         net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(listing.getItemId());
@@ -377,7 +656,17 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
 
         marketListings.remove(listing);
-        setChanged();
+        syncToClient();
+        // Always issue purchase receipts to mailbox
+        if (level != null && !level.isClientSide()) {
+            TownData purchaseTown = TownRegistry.getTown(listing.getTownId());
+            String purchaseTownName = purchaseTown != null ? purchaseTown.getDisplayName() : listing.getTownId();
+            deliverNoteToNearbyMailboxes(level, worldPosition,
+                    NoteTemplates.createNote(MailNote.NoteType.PURCHASE_MADE,
+                            purchaseTownName, listing.getItemDisplayName(), listing.getCount(),
+                            formatCoins(totalCost), "", player.getName().getString(),
+                            level.getGameTime()));
+        }
         return true;
     }
 
@@ -498,6 +787,69 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (copperAmount > 0) player.getInventory().add(new ItemStack(ModItems.COPPER_COIN.get(), copperAmount));
     }
 
+    /**
+     * Check if the player (plus an optional connected Finance Table) has enough copper.
+     * Pass null for financeTable to check only player inventory.
+     */
+    public static boolean hasEnoughCoins(Player player, int copperAmount,
+            @Nullable FinanceTableBlockEntity financeTable) {
+        int total = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.getItem() instanceof CoinItem coin) {
+                total += coin.getValue() * stack.getCount();
+            }
+        }
+        total += getCoinBagValue(player);
+        if (financeTable != null) total += financeTable.getBalance();
+        return total >= copperAmount;
+    }
+
+    /**
+     * Deduct copper from the player, drawing from a connected Finance Table if the
+     * player's own coins are insufficient. Pass null for financeTable to deduct from
+     * player only (same as the single-arg overload).
+     */
+    public static void deductCoins(Player player, int copperAmount,
+            @Nullable FinanceTableBlockEntity financeTable) {
+        if (financeTable == null) {
+            deductCoins(player, copperAmount);
+            return;
+        }
+        // Determine how much the player can cover from inventory + coin bag
+        int playerTotal = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.getItem() instanceof CoinItem coin) {
+                playerTotal += coin.getValue() * stack.getCount();
+            }
+        }
+        playerTotal += getCoinBagValue(player);
+
+        int fromPlayer = Math.min(playerTotal, copperAmount);
+        int fromBank   = copperAmount - fromPlayer;
+
+        if (fromPlayer > 0) deductCoins(player, fromPlayer);
+        if (fromBank   > 0) financeTable.setBalance(Math.max(0, financeTable.getBalance() - fromBank));
+    }
+
+    /**
+     * Find a Finance Table block entity within 8 blocks of pos.
+     * Used to check for a connected Finance Table when processing purchases.
+     */
+    @Nullable
+    public static FinanceTableBlockEntity findNearbyFinanceTable(Level level, BlockPos pos) {
+        if (level == null) return null;
+        int radius = 8;
+        for (BlockPos candidate : BlockPos.betweenClosed(
+                pos.offset(-radius, -radius, -radius),
+                pos.offset(radius, radius, radius))) {
+            BlockEntity be = level.getBlockEntity(candidate);
+            if (be instanceof FinanceTableBlockEntity ftbe) return ftbe;
+        }
+        return null;
+    }
+
     // ==================== Buy Order Methods ====================
 
     /**
@@ -561,6 +913,26 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
+     * Adjust the price of a specific item in an AT_MARKET shipment.
+     * Allows the player to change listing prices to improve sale chances.
+     */
+    public void adjustShipmentPrice(UUID shipmentId, int itemIndex, int newPrice) {
+        for (Shipment shipment : activeShipments) {
+            if (shipment.getId().equals(shipmentId) && shipment.getStatus() == Shipment.Status.AT_MARKET) {
+                List<Shipment.ShipmentItem> items = shipment.getItems();
+                if (itemIndex >= 0 && itemIndex < items.size()) {
+                    Shipment.ShipmentItem item = items.get(itemIndex);
+                    if (!item.isSold()) { // Can only adjust unsold items
+                        item.setPricePerItem(newPrice);
+                        syncToClient();
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /**
      * Cancel a shipment, setting it to return. Only works for IN_TRANSIT or AT_MARKET.
      */
     public void cancelShipment(UUID shipmentId) {
@@ -581,12 +953,14 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
-     * Collect returned items from a cancelled shipment.
+     * Collect returned items from a cancelled/auto-returned shipment.
+     * Also gives coins for any items that sold before the return.
      */
     public void collectReturnedItems(UUID shipmentId, Player player) {
         Shipment toRemove = null;
         for (Shipment shipment : activeShipments) {
             if (shipment.getId().equals(shipmentId) && shipment.getStatus() == Shipment.Status.RETURNED) {
+                // Give back unsold items
                 for (Shipment.ShipmentItem si : shipment.getItems()) {
                     if (!si.isSold()) {
                         ItemStack returnStack = si.createStack();
@@ -594,6 +968,18 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                             player.drop(returnStack, false);
                         }
                     }
+                }
+                // Give coins for any items that sold before the return (partial sales)
+                int earnings = shipment.getTotalEarnings();
+                if (earnings > 0) {
+                    List<ItemStack> coins = convertToCoins(earnings);
+                    for (ItemStack stack : coins) {
+                        if (!player.getInventory().add(stack)) {
+                            player.drop(stack, false);
+                        }
+                    }
+                    int xpToAward = Math.max(1, earnings / 10);
+                    awardMinecraftXp(player, xpToAward);
                 }
                 toRemove = shipment;
                 break;
@@ -684,21 +1070,19 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 if (delivered > 0) {
                     boolean completed = quest.deliver(delivered);
                     if (completed) {
-                        // Award rewards
-                        pendingCoins += quest.getRewardCoins();
-                        addTraderXp(quest.getRewardXp());
-                        // Award reputation with the town
-                        addReputation(quest.getTownId(), quest.getRewardReputation());
-                        // Award Minecraft XP for quest completion
-                        int xpToAward = Math.max(5, quest.getRewardXp() * 2);
-                        awardMinecraftXp(player, xpToAward);
-                        // Build notification message
-                        String repText = " +" + quest.getRewardReputation() + " Rep";
+                        // Set travel time for rewards — items were delivered, rewards travel back
+                        TownData town = TownRegistry.getTown(quest.getTownId());
+                        int baseTravelTicks = town != null
+                                ? town.getTravelTimeTicks(DebugConfig.getTicksPerDistance())
+                                : 1200; // fallback ~1 minute
+                        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier());
+                        long currentTime = level != null ? level.getGameTime() : 0;
+                        quest.setRewardArrivalTime(currentTime + travelTicks);
+                        
                         notifyNearbyPlayers(level, worldPosition,
-                                Component.literal("\u2714 Quest completed! Earned " +
-                                        formatCoins(quest.getRewardCoins()) + " bonus + " +
-                                        quest.getRewardXp() + " XP" + repText + "!")
-                                        .withStyle(ChatFormatting.GREEN));
+                                Component.literal("\u2714 All items delivered! Rewards arriving in " +
+                                        formatTravelTime(travelTicks) + "...")
+                                        .withStyle(ChatFormatting.YELLOW));
                     }
                     syncToClient();
                 }
@@ -716,9 +1100,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         activeQuests.removeIf(q -> q.getStatus() == Quest.Status.COMPLETED
                 || q.getStatus() == Quest.Status.EXPIRED);
 
-        // Mark expired quests
+        // Mark expired quests (but never expire DELIVERING quests — their rewards are in transit)
         for (Quest quest : activeQuests) {
-            if (quest.isExpired(gameTime) && quest.getStatus() != Quest.Status.EXPIRED) {
+            if (quest.isExpired(gameTime)
+                    && quest.getStatus() != Quest.Status.EXPIRED
+                    && quest.getStatus() != Quest.Status.DELIVERING
+                    && quest.getStatus() != Quest.Status.COMPLETED) {
                 quest.setStatus(Quest.Status.EXPIRED);
             }
         }
@@ -728,7 +1115,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         int maxTotal = 5;
         if (activeQuests.size() >= maxTotal) return;
 
-        List<TownData> towns = TownRegistry.getAvailableTowns(traderLevel);
+        List<TownData> towns = new java.util.ArrayList<>(TownRegistry.getAvailableTowns(traderLevel));
         java.util.Random rand = new java.util.Random();
         java.util.Collections.shuffle(towns, rand);
 
@@ -752,14 +1139,31 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
      * Hire a worker by paying the hire cost.
      */
     public boolean hireWorker(Worker.WorkerType type, Player player) {
-        Worker worker = type == Worker.WorkerType.NEGOTIATOR ? negotiator : tradingCart;
+        Worker worker = getWorker(type);
         if (worker.isHired()) return false;
 
         int cost = worker.getHireCost();
-        if (!hasEnoughCoins(player, cost)) return false;
+        FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+        if (!hasEnoughCoins(player, cost, ft)) return false;
 
-        deductCoins(player, cost);
+        deductCoins(player, cost, ft);
         worker.setHired(true);
+        syncToClient();
+        return true;
+    }
+
+    /**
+     * Fire (dismiss) a worker, giving back a partial refund (50% of hire cost).
+     */
+    public boolean fireWorker(Worker.WorkerType type, Player player) {
+        Worker worker = getWorker(type);
+        if (!worker.isHired()) return false;
+
+        int refund = worker.getFireRefund();
+        if (refund > 0) {
+            giveChange(player, refund);
+        }
+        worker.setHired(false);
         syncToClient();
         return true;
     }
@@ -785,19 +1189,56 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
+     * Get the bookkeeper cost reduction factor (0.0 to ~0.95).
+     * Returns 0.0 if bookkeeper is not hired.
+     */
+    public double getBookkeeperCostReduction() {
+        if (bookkeeper.isHired()) {
+            return bookkeeper.getCostReductionBonus();
+        }
+        return 0.0;
+    }
+
+    /**
      * Deduct worker per-trip costs from shipment earnings. Returns adjusted earnings.
+     * Bookkeeper reduces the per-trip cost of all workers (including itself if perk unlocked).
      */
     public int applyWorkerCosts(int earnings) {
-        int costs = 0;
+        double costReduction = getBookkeeperCostReduction();
+        int totalCosts = 0;
+        int costsBeforeReduction = 0;
+
         if (negotiator.isHired()) {
-            costs += negotiator.getPerTripCost();
+            int rawCost = negotiator.getPerTripCost();
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - costReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
             negotiator.completedTrip();
         }
         if (tradingCart.isHired()) {
-            costs += tradingCart.getPerTripCost();
+            int rawCost = tradingCart.getPerTripCost();
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - costReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
             tradingCart.completedTrip();
         }
-        return Math.max(1, earnings - costs);
+        if (bookkeeper.isHired()) {
+            int rawCost = bookkeeper.getPerTripCost();
+            // Bookkeeper's own cost is only reduced if "Penny Pincher" perk (level 3+)
+            double selfReduction = bookkeeper.hasPerk(3) ? costReduction : 0.0;
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - selfReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
+            bookkeeper.completedTrip();
+            // Track lifetime savings from bookkeeper cost reduction
+            int saved = costsBeforeReduction - totalCosts;
+            if (saved > 0) bookkeeper.addLifetimeBonusValue(saved);
+        }
+
+        // Track negotiator lifetime bonus (extra earnings from negotiation)
+        // This is tracked at the call site where negotiation bonus is applied
+
+        return Math.max(1, earnings - totalCosts);
     }
 
     // ==================== Diplomat Methods ====================
@@ -818,26 +1259,81 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (town == null || town.getMinTraderLevel() > traderLevel) return false;
         if (!DiplomatRequest.canTownSupply(town, itemId)) return false;
 
+        return sendDiplomatWithScore(player, townId, itemId, count);
+    }
+
+    /**
+     * Create an item request from the Requests tab — auto-selects the best town.
+     * Any item can be requested; the town's supply score affects price and fulfillment chance.
+     */
+    public boolean createRequest(Player player, net.minecraft.resources.ResourceLocation itemId, int count) {
+        net.minecraft.world.item.Item item =
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
+        if (item == null) return false;
+        if (count < 1 || count > 64) return false;
+
+        // Find the best unlocked town to fulfill this request
+        TownData bestTown = findBestTownForItem(itemId);
+        if (bestTown == null) {
+            // No available town — notify player
+            if (player instanceof net.minecraft.server.level.ServerPlayer sp) {
+                sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "\u00A7cNo town available to fulfill this request."));
+            }
+            return false;
+        }
+
+        // Delegate to sendDiplomat with the auto-selected town
+        return sendDiplomatWithScore(player, bestTown.getId(), itemId, count);
+    }
+
+    /**
+     * Find the best unlocked town to supply the given item.
+     * Returns null if no town is available.
+     */
+    private TownData findBestTownForItem(net.minecraft.resources.ResourceLocation itemId) {
+        TownData bestTown = null;
+        int bestScore = -1;
+
+        for (TownData town : TownRegistry.getAllTowns()) {
+            if (town.getMinTraderLevel() > traderLevel) continue; // locked
+            int score = DiplomatRequest.getSupplyScore(town, itemId);
+            // Tiebreak: prefer closer towns (within same score tier)
+            if (score > bestScore || (score == bestScore && bestTown != null
+                    && town.getDistance() < bestTown.getDistance())) {
+                bestScore = score;
+                bestTown = town;
+            }
+        }
+        return bestTown;
+    }
+
+    /**
+     * Internal: sends a diplomat request with supply score tracking.
+     * Used by both sendDiplomat (legacy) and createRequest (new).
+     */
+    private boolean sendDiplomatWithScore(Player player, String townId,
+                                           net.minecraft.resources.ResourceLocation itemId, int count) {
+        TownData town = TownRegistry.getTown(townId);
+        if (town == null || town.getMinTraderLevel() > traderLevel) return false;
+
         net.minecraft.world.item.Item item =
                 net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
         if (item == null) return false;
 
-        // Calculate base price for validation (we'll finalize price during DISCUSSING)
+        int supplyScore = DiplomatRequest.getSupplyScore(town, itemId);
+
+        // Calculate base price
         int basePrice = PriceCalculator.getBaseValue(new ItemStack(item)) * count;
-        
+
         // Calculate timing milestones
         long gameTime = level.getGameTime();
-        int baseTravelTicks = (int) (town.getTravelTimeTicks(DebugConfig.getTicksPerDistance()) 
+        int baseTravelTicks = (int) (town.getTravelTimeTicks(DebugConfig.getTicksPerDistance())
                 * getTravelTimeMultiplier());
-        
-        // Stage durations:
-        // - TRAVELING_TO: full one-way trip
-        // - DISCUSSING: 30 seconds (600 ticks) to accept/decline
-        // - WAITING_FOR_GOODS: 15 seconds (300 ticks)
-        // - TRAVELING_BACK: full one-way trip
+
         long travelToEnd = gameTime + baseTravelTicks;
-        long discussingEnd = travelToEnd + 600;  // 30 seconds to decide
-        long waitingEnd = discussingEnd + 300;   // 15 seconds to prepare
+        long discussingEnd = travelToEnd + 12000;
+        long waitingEnd = discussingEnd + 300;
         long returnEnd = waitingEnd + baseTravelTicks;
 
         String displayName = new ItemStack(item).getHoverName().getString();
@@ -845,12 +1341,16 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 UUID.randomUUID(), townId, itemId, displayName, count, gameTime
         );
         request.setTimings(travelToEnd, discussingEnd, waitingEnd, returnEnd);
-        
-        // Calculate proposed price with random variance
-        int proposedPrice = DiplomatRequest.calculateNegotiatedPrice(basePrice, town, negotiationRandom);
-        int premium = proposedPrice - basePrice;
-        request.setPricing(proposedPrice, premium);
-        
+        request.setSupplyScore(supplyScore);
+
+        // Calculate proposed price using score-based premium
+        double premium = DiplomatRequest.getScoreBasedPremium(supplyScore, town);
+        double variance = 0.8 + negotiationRandom.nextDouble() * 0.4;
+        double finalMult = 1.0 + (premium - 1.0) * variance;
+        int proposedPrice = (int) (basePrice * finalMult);
+        int premiumAmount = proposedPrice - basePrice;
+        request.setPricing(proposedPrice, premiumAmount);
+
         activeDiplomatRequests.add(request);
         syncToClient();
         return true;
@@ -864,14 +1364,24 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         for (DiplomatRequest req : activeDiplomatRequests) {
             if (req.getId().equals(requestId) && req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
                 int cost = req.getProposedPrice();
-                if (!hasEnoughCoins(player, cost)) {
+                FinanceTableBlockEntity ft = findNearbyFinanceTable(level, worldPosition);
+                if (!hasEnoughCoins(player, cost, ft)) {
                     // Not enough coins - decline automatically
-                    req.setStatus(DiplomatRequest.Status.FAILED);
+                    req.setStatus(DiplomatRequest.Status.DECLINED);
+                    TownData costTown = TownRegistry.getTown(req.getTownId());
+                    String costTownName = costTown != null ? costTown.getDisplayName() : req.getTownId();
+                    if (level != null && !level.isClientSide()) {
+                        deliverNoteToNearbyMailboxes(level, worldPosition,
+                                NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                        costTownName, req.getItemDisplayName(), req.getRequestedCount(),
+                                        formatCoins(cost), "", player.getName().getString(),
+                                        level.getGameTime()));
+                    }
                     syncToClient();
                     return false;
                 }
                 
-                deductCoins(player, cost);
+                deductCoins(player, cost, ft);
                 req.setStatus(DiplomatRequest.Status.WAITING_FOR_GOODS);
                 syncToClient();
                 return true;
@@ -882,12 +1392,21 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
     /**
      * Decline a diplomat's proposed price.
-     * No coins are deducted, request is marked FAILED and eventually removed.
+     * No coins are deducted, request is marked DECLINED and eventually removed.
      */
     public boolean declineDiplomatProposal(UUID requestId) {
         for (DiplomatRequest req : activeDiplomatRequests) {
             if (req.getId().equals(requestId) && req.getStatus() == DiplomatRequest.Status.DISCUSSING) {
-                req.setStatus(DiplomatRequest.Status.FAILED);
+                req.setStatus(DiplomatRequest.Status.DECLINED);
+                TownData decTown = TownRegistry.getTown(req.getTownId());
+                String decTownName = decTown != null ? decTown.getDisplayName() : req.getTownId();
+                if (level != null && !level.isClientSide()) {
+                    deliverNoteToNearbyMailboxes(level, worldPosition,
+                            NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                    decTownName, req.getItemDisplayName(), req.getRequestedCount(),
+                                    formatCoins(req.getProposedPrice()), "", "",
+                                    level.getGameTime()));
+                }
                 syncToClient();
                 return true;
             }
@@ -921,17 +1440,27 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     // ==================== Helper Methods ====================
 
     @Nullable
-    private TradingBinBlockEntity findNearbyBin(Level level, BlockPos center) {
+    private TradingLedgerBlockEntity findNearbyBin(Level level, BlockPos center) {
         int radius = DebugConfig.getBinSearchRadius();
         for (BlockPos pos : BlockPos.betweenClosed(
                 center.offset(-radius, -radius, -radius),
                 center.offset(radius, radius, radius))) {
             BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof TradingBinBlockEntity bin) {
+            if (be instanceof TradingLedgerBlockEntity bin) {
                 return bin;
             }
         }
         return null;
+    }
+
+    /**
+     * Returns true when there is no nearby Trading Ledger, or the ledger is empty.
+     * Used by the ContainerData to gray-out the "Send to Market" button client-side.
+     */
+    public boolean isBinEmpty() {
+        if (level == null || level.isClientSide()) return true;
+        TradingLedgerBlockEntity bin = findNearbyBin(level, worldPosition);
+        return bin == null || bin.isEmpty();
     }
 
     public void dropContents(Level level, BlockPos pos) {
@@ -946,10 +1475,19 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public static void serverTick(Level level, BlockPos pos, BlockState state,
                                    TradingPostBlockEntity be) {
         long gameTime = level.getGameTime();
+
+        // Only one trading post processes the global tick logic per game tick.
+        // All posts share state via TradingData; the first to tick each game tick wins.
+        if (level instanceof ServerLevel serverLevel) {
+            TradingData tradingData = TradingData.get(serverLevel);
+            if (!tradingData.tryClaimTick(gameTime)) {
+                return; // Another post already processed this tick
+            }
+        }
+
         boolean changed = false;
 
         // Process shipments
-        List<Shipment> toRemove = new ArrayList<>();
 
         // Check for sales periodically (outside the shipment loop)
         boolean checkSales = false;
@@ -973,6 +1511,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                                         .withStyle(ChatFormatting.AQUA));
                         SoundHelper.playShipmentArrive(level, pos);
                         ToastHelper.notifyShipmentArrived(level, pos, arrName);
+                        // Shipment notices removed in v0.3.0 (mailbox focuses on actionable receipts/updates).
                         changed = true;
                     }
                     break;
@@ -987,15 +1526,27 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     break;
 
                 case SOLD:
-                    be.archiveShipment(shipment);
                     // Apply negotiator bonus and deduct worker costs
                     int rawEarnings = shipment.getTotalEarnings();
                     int negotiatedEarnings = (int) (rawEarnings * be.getNegotiationBonus());
+                    // Track negotiator lifetime bonus
+                    int negotiationBonus = negotiatedEarnings - rawEarnings;
+                    if (negotiationBonus > 0 && be.negotiator.isHired()) {
+                        be.negotiator.addLifetimeBonusValue(negotiationBonus);
+                    }
                     int finalEarnings = be.applyWorkerCosts(negotiatedEarnings);
                     // Store final earnings in shipment for collection, instead of pendingCoins
                     shipment.setTotalEarnings(finalEarnings);
                     shipment.setStatus(Shipment.Status.COMPLETED);
+                    // Archive AFTER adjusting earnings so history tracks final amounts
+                    be.archiveShipment(shipment);
                     be.addTraderXp(DebugConfig.getXpPerSale());
+                    // Award reputation for regular sales (count of sold item types)
+                    int soldCount = (int) shipment.getItems().stream()
+                            .filter(Shipment.ShipmentItem::isSold).count();
+                    if (soldCount > 0) {
+                        be.addReputation(shipment.getTownId(), soldCount * 5);
+                    }
                     TownData soldTown = TownRegistry.getTown(shipment.getTownId());
                     String soldName = soldTown != null ? soldTown.getDisplayName() : shipment.getTownId();
                     notifyNearbyPlayers(level, pos,
@@ -1030,16 +1581,17 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             }
         }
 
-        be.activeShipments.removeAll(toRemove);
-
         // Tick demand decay
         if (be.demandTracker.tick()) {
             changed = true;
         }
 
-        // Dawn-based market refresh (once per Minecraft day at sunrise)
+        // Dawn-based market refresh (once per Minecraft day at sunrise).
+        // Use getDayTime() (not getGameTime()) so that sleeping — which advances
+        // the day/night cycle without a matching increase in raw game ticks — still
+        // triggers the daily refresh correctly.
         long dayTime = level.getDayTime() % 24000;
-        long dayNumber = level.getGameTime() / 24000;
+        long dayNumber = level.getDayTime() / 24000;
         if (be.lastRefreshDay < 0 || be.marketListings.isEmpty()) {
             // First time or empty: do initial refresh
             be.lastRefreshDay = dayNumber;
@@ -1076,26 +1628,32 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 case TRAVELING_TO -> {
                     // Diplomat traveling to town
                     if (gameTime >= req.getTravelToEndTime()) {
-                        req.setStatus(DiplomatRequest.Status.DISCUSSING);
                         TownData reqTown = TownRegistry.getTown(req.getTownId());
                         String townName = reqTown != null ? reqTown.getDisplayName() : req.getTownId();
+
+                        // Requests now always reach proposal phase; difficult items cost more via premium.
+                        req.setStatus(DiplomatRequest.Status.DISCUSSING);
                         notifyNearbyPlayers(level, pos,
-                                Component.literal("\u2709 Diplomat arrived at " + townName + "! Accept or decline the proposal.")
-                                        .withStyle(ChatFormatting.YELLOW));
+                            Component.literal("\u2709 Diplomat arrived at " + townName + "! Accept or decline the proposal.")
+                                .withStyle(ChatFormatting.YELLOW));
                         SoundHelper.playDiplomatProposal(level, pos);
                         ToastHelper.notifyDiplomatProposal(level, pos, townName);
                         changed = true;
                     }
                 }
                 case DISCUSSING -> {
-                    // Waiting for player to accept/decline - auto-fail if time runs out
+                        // Waiting for player to accept/decline - auto-decline if time runs out
                     if (gameTime >= req.getDiscussingEndTime()) {
-                        req.setStatus(DiplomatRequest.Status.FAILED);
+                        req.setStatus(DiplomatRequest.Status.DECLINED);
                         TownData reqTown = TownRegistry.getTown(req.getTownId());
                         String townName = reqTown != null ? reqTown.getDisplayName() : req.getTownId();
                         notifyNearbyPlayers(level, pos,
-                                Component.literal("\u2718 Diplomat proposal from " + townName + " expired!")
+                            Component.literal("\u2718 Diplomat proposal from " + townName + " auto-declined.")
                                         .withStyle(ChatFormatting.RED));
+                        deliverNoteToNearbyMailboxes(level, pos,
+                                NoteTemplates.createNote(MailNote.NoteType.DIPLOMAT_FAILURE,
+                                        townName, req.getItemDisplayName(), req.getRequestedCount(),
+                                        formatCoins(req.getProposedPrice()), "", "", gameTime));
                         changed = true;
                     }
                 }
@@ -1120,7 +1678,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                         changed = true;
                     }
                 }
-                case FAILED -> {
+                case FAILED, DECLINED -> {
                     // Mark for removal after a short delay (give player time to see the status)
                     if (gameTime >= req.getDiscussingEndTime() + 200) { // 10 seconds after failure
                         failedRequests.add(req);
@@ -1131,6 +1689,33 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         be.activeDiplomatRequests.removeAll(failedRequests);
 
+        // Quest reward arrival check — DELIVERING quests whose rewards have arrived
+        for (Quest quest : be.activeQuests) {
+            if (quest.getStatus() == Quest.Status.DELIVERING
+                    && quest.getRewardArrivalTime() > 0
+                    && gameTime >= quest.getRewardArrivalTime()) {
+                quest.setStatus(Quest.Status.COMPLETED);
+                // Pay out quest rewards
+                be.pendingCoins += quest.getRewardCoins();
+                be.addTraderXp(quest.getRewardXp());
+                be.addReputation(quest.getTownId(), quest.getRewardReputation());
+                TownData questTown = TownRegistry.getTown(quest.getTownId());
+                String questTownName = questTown != null ? questTown.getDisplayName() : quest.getTownId();
+                notifyNearbyPlayers(level, pos,
+                        Component.literal("\u2714 Quest complete! +" + formatCoins(quest.getRewardCoins())
+                                + " bonus, +" + quest.getRewardXp() + " XP, +"
+                                + quest.getRewardReputation() + " rep")
+                                .withStyle(ChatFormatting.GREEN));
+                deliverNoteToNearbyMailboxes(level, pos,
+                        NoteTemplates.createNote(MailNote.NoteType.QUEST_COMPLETED,
+                                questTownName, quest.getItemDisplayName(), quest.getRequiredCount(),
+                                formatCoins(quest.getRewardCoins()),
+                                quest.getRewardXp() + " XP, " + quest.getRewardReputation() + " rep",
+                                "", gameTime));
+                changed = true;
+            }
+        }
+
         // Quest expiry check (every ~200 ticks)
         if (gameTime % 200 == 0) {
             for (Quest quest : be.activeQuests) {
@@ -1139,9 +1724,15 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     changed = true;
                 } else if (quest.isExpired(gameTime) && quest.getStatus() == Quest.Status.ACCEPTED) {
                     quest.setStatus(Quest.Status.EXPIRED);
+                    TownData expTown = TownRegistry.getTown(quest.getTownId());
+                    String expTownName = expTown != null ? expTown.getDisplayName() : quest.getTownId();
                     notifyNearbyPlayers(level, pos,
                             Component.literal("\u2718 Quest expired: " + quest.getItemDisplayName())
                                     .withStyle(ChatFormatting.RED));
+                    deliverNoteToNearbyMailboxes(level, pos,
+                            NoteTemplates.createNote(MailNote.NoteType.QUEST_EXPIRED,
+                                    expTownName, quest.getItemDisplayName(), quest.getRequiredCount(),
+                                    formatCoins(quest.getRewardCoins()), "", "", gameTime));
                     changed = true;
                 }
             }
@@ -1149,12 +1740,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     || q.getStatus() == Quest.Status.COMPLETED);
         }
 
-        // Dawn-based quest refresh (same as market refresh, once per day)
+        // Dawn-based quest refresh (same as market refresh, once per day).
+        // Also uses getDayTime() / 24000 so sleeping properly triggers a refresh.
         if (be.lastQuestRefreshDay < 0 || be.activeQuests.isEmpty()) {
             be.lastQuestRefreshDay = dayNumber;
             be.refreshQuests(gameTime);
             changed = true;
-        } else if (dayTime >= 0 && dayTime < 200 && dayNumber > be.lastQuestRefreshDay) {
+        } else if (dayTime >= 0 && dayTime < 500 && dayNumber > be.lastQuestRefreshDay) {
             be.lastQuestRefreshDay = dayNumber;
             be.refreshQuests(gameTime);
             changed = true;
@@ -1178,6 +1770,33 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Escalation: sale chance increases as items approach max market time
         double escalation = 1.0 + (DebugConfig.getSaleChanceEscalation() - 1.0) * timeRatio;
 
+        // Auto-return: when max market time expires, return unsold items instead of force-selling
+        if (forceAutoSell) {
+            boolean anyUnsold = false;
+            for (Shipment.ShipmentItem item : shipment.getItems()) {
+                if (!item.isSold()) {
+                    anyUnsold = true;
+                }
+            }
+            if (anyUnsold) {
+                // Initiate return — unsold items travel back, sold items' earnings are preserved
+                long travelTime = shipment.getArrivalTime() - shipment.getDepartureTime();
+                long currentTime = level != null ? level.getGameTime() : 0;
+                shipment.setReturnArrivalTime(currentTime + travelTime);
+                shipment.setStatus(Shipment.Status.RETURNING);
+                notifyNearbyPlayers(level, worldPosition, Component.literal(
+                        "\u00A7e[Market] \u00A77Shipment to " + shipment.getTownId()
+                        + " auto-returning after " + (maxMarketTime / 20 / 60) + " minutes"));
+                syncToClient();
+            } else {
+                // All items were already sold naturally
+                shipment.setSoldTime(gameTime);
+                shipment.setStatus(Shipment.Status.SOLD);
+                syncToClient();
+            }
+            return;
+        }
+
         for (Shipment.ShipmentItem item : shipment.getItems()) {
             if (item.isSold()) continue;
 
@@ -1192,23 +1811,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     DebugConfig.getOverpriceThreshold());
 
             if (saleSpeed <= 0.0) {
-                // Price exceeds max ceiling - this item WILL NOT sell, even at auto-sell time
+                // Price exceeds max ceiling - this item will not sell
                 allSold = false;
                 continue;
             }
 
             double demandMult = demandTracker.getDemandMultiplier(
                     shipment.getTownId(), item.getItemId().toString());
-
-            if (forceAutoSell) {
-                // Auto-sell at 75% of set price when max market time is reached
-                item.setSold(true);
-                int discountedPrice = Math.max(1, (int) (item.getTotalPrice() * 0.75 * demandMult));
-                earnings += discountedPrice;
-                // Record the auto-sale in global supply/demand tracking
-                SupplyDemandManager.recordSale(town, item.getItemId().toString(), item.getCount());
-                continue;
-            }
 
             double saleChance = DebugConfig.getBaseSaleChance() * saleSpeed * escalation * demandMult;
             saleChance = Math.min(saleChance, 0.95); // cap at 95%
@@ -1255,6 +1864,26 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
     }
 
+    /**
+     * Deliver a mail note to all Mailbox block entities within a 32-block radius.
+     */
+    private static void deliverNoteToNearbyMailboxes(Level level, BlockPos pos, MailNote note) {
+        int radius = 32;
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    BlockPos check = pos.offset(x, y, z);
+                    if (level.getBlockState(check).getBlock() instanceof MailboxBlock) {
+                        BlockEntity be = level.getBlockEntity(check);
+                        if (be instanceof MailboxBlockEntity mailbox) {
+                            mailbox.addNote(note);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private static String formatCoins(int copperPieces) {
         int gp = copperPieces / 100;
         int sp = (copperPieces % 100) / 10;
@@ -1266,15 +1895,31 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         return sb.toString();
     }
 
+    /**
+     * Format ticks as a human-readable travel time string (e.g., "2m 30s").
+     */
+    private static String formatTravelTime(int ticks) {
+        int totalSeconds = ticks / 20;
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        if (minutes > 0 && seconds > 0) return minutes + "m " + seconds + "s";
+        if (minutes > 0) return minutes + "m";
+        return seconds + "s";
+    }
+
     // ==================== Client Sync ====================
 
     /**
      * Marks dirty and sends block entity data to all tracking clients.
+     * Also propagates shared state to all other linked Trading Posts.
      */
     public void syncToClient() {
         setChanged();
         if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            if (!isSyncing) {
+                propagateToOtherPosts();
+            }
         }
     }
 
@@ -1315,7 +1960,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         tag.putInt("MaxDist", maxDistance);
         tag.putInt("PendingCoins", pendingCoins);
         tag.putInt("SaleTimer", saleCheckTimer);
-        tag.putInt("MarketTimer", marketRefreshTimer);
         tag.putLong("LastRefreshDay", lastRefreshDay);
 
         if (!ledgerSlot.isEmpty()) {
@@ -1359,6 +2003,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Workers
         tag.put("Negotiator", negotiator.save());
         tag.put("TradingCart", tradingCart.save());
+        tag.put("Bookkeeper", bookkeeper.save());
 
         // Diplomat requests
         ListTag diplomatList = new ListTag();
@@ -1402,7 +2047,6 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (maxDistance < 1) maxDistance = 10;
         pendingCoins = tag.getInt("PendingCoins");
         saleCheckTimer = tag.getInt("SaleTimer");
-        marketRefreshTimer = tag.getInt("MarketTimer");
         lastRefreshDay = tag.getLong("LastRefreshDay");
 
         if (tag.contains("Ledger")) {
@@ -1457,6 +2101,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("TradingCart")) {
             tradingCart = Worker.load(tag.getCompound("TradingCart"));
+        }
+        if (tag.contains("Bookkeeper")) {
+            bookkeeper = Worker.load(tag.getCompound("Bookkeeper"));
         }
 
         // Diplomat requests

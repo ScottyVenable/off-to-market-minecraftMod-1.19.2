@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import com.offtomarket.mod.debug.DebugConfig;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.*;
@@ -26,6 +27,8 @@ public class Quest {
         AVAILABLE,
         /** Player has accepted this quest. */
         ACCEPTED,
+        /** Items fully delivered, rewards traveling back from town. */
+        DELIVERING,
         /** Quest has been fulfilled and rewards collected. */
         COMPLETED,
         /** Quest expired before completion. */
@@ -65,6 +68,7 @@ public class Quest {
     private final String questDescription; // flavor text for the quest
     private Status status;
     private int deliveredCount;        // how many items delivered so far
+    private long rewardArrivalTime;    // game tick when rewards arrive (DELIVERING→COMPLETED)
 
     public Quest(UUID id, String townId, ResourceLocation requiredItemId,
                  String itemDisplayName, int requiredCount, int rewardCoins,
@@ -113,6 +117,16 @@ public class Quest {
 
     public void setStatus(Status status) { this.status = status; }
     public void setDeliveredCount(int count) { this.deliveredCount = count; }
+    public long getRewardArrivalTime() { return rewardArrivalTime; }
+    public void setRewardArrivalTime(long time) { this.rewardArrivalTime = time; }
+
+    /**
+     * Get ticks remaining until reward arrives (when in DELIVERING status).
+     */
+    public long getRewardTicksRemaining(long currentTime) {
+        if (status != Status.DELIVERING) return 0;
+        return Math.max(0, rewardArrivalTime - currentTime);
+    }
 
     /**
      * Get remaining items needed to complete this quest.
@@ -137,12 +151,14 @@ public class Quest {
 
     /**
      * Record delivered items. Returns true if quest is now fully delivered.
+     * Only valid when quest is ACCEPTED.
      */
     public boolean deliver(int count) {
+        if (status != Status.ACCEPTED || count <= 0) return false;
         deliveredCount += count;
         if (deliveredCount >= requiredCount) {
             deliveredCount = requiredCount;
-            status = Status.COMPLETED;
+            status = Status.DELIVERING; // rewards travel back from town
             return true;
         }
         return false;
@@ -203,8 +219,31 @@ public class Quest {
         List<Quest> quests = new ArrayList<>();
         List<ResourceLocation> needs = new ArrayList<>(town.getNeeds());
         List<ResourceLocation> surplus = new ArrayList<>(town.getSurplus());
-        
+
+        // Fallback: JSON towns use needLevels map rather than the legacy needs/surplus sets.
+        // Build needs/surplus lists from needLevels entries so JSON-only towns get quests.
+        if (needs.isEmpty()) {
+            for (Map.Entry<String, NeedLevel> entry : town.getNeedLevels().entrySet()) {
+                if (entry.getValue().isInDemand()) {
+                    ResourceLocation rl = ResourceLocation.tryParse(entry.getKey());
+                    if (rl != null) needs.add(rl);
+                }
+            }
+        }
+        if (surplus.isEmpty()) {
+            for (Map.Entry<String, NeedLevel> entry : town.getNeedLevels().entrySet()) {
+                if (entry.getValue().isOversupplied()) {
+                    ResourceLocation rl = ResourceLocation.tryParse(entry.getKey());
+                    if (rl != null) surplus.add(rl);
+                }
+            }
+        }
+
         if (needs.isEmpty() && surplus.isEmpty()) return quests;
+
+        DebugConfig.WATCH_QUEST_GEN_TOWN    = town.getId();
+        DebugConfig.WATCH_QUEST_GEN_NEEDS   = needs.size();
+        DebugConfig.WATCH_QUEST_GEN_SURPLUS = surplus.size();
 
         // Determine quest type distribution
         // Villages: more charity/bulk, Towns: balanced, Cities: more specialty/rush
@@ -305,13 +344,13 @@ public class Quest {
             int xpReward = Math.max(5, Math.min(50, totalItemCost / 15));
             xpReward = (int) (xpReward * typeMult);
             
-            // Reputation reward - varies by quest type
+            // Reputation reward - varies by quest type (higher scale: max 1000, not 200)
             int repReward = switch (questType) {
-                case CHARITY -> 15 + rand.nextInt(11); // 15-25 for charity
-                case SPECIALTY -> 8 + rand.nextInt(8); // 8-15 for specialty
-                case RUSH -> 5 + rand.nextInt(6); // 5-10 for rush
-                case BULK -> 4 + rand.nextInt(4); // 4-7 for bulk
-                default -> 3 + rand.nextInt(5); // 3-7 for standard
+                case CHARITY -> 75 + rand.nextInt(51);    // 75-125 for charity
+                case SPECIALTY -> 40 + rand.nextInt(36);  // 40-75 for specialty
+                case RUSH -> 25 + rand.nextInt(26);       // 25-50 for rush
+                case BULK -> 20 + rand.nextInt(21);       // 20-40 for bulk
+                default -> 15 + rand.nextInt(21);         // 15-35 for standard
             };
 
             // Quest duration based on type
@@ -332,15 +371,15 @@ public class Quest {
     }
     
     private static int calculateBaseQuantity(int itemBaseValue, Random rand) {
-        if (itemBaseValue <= 3) {
+        if (itemBaseValue <= 8) {
             return 16 + rand.nextInt(33);      // 16-48 for junk/basic
-        } else if (itemBaseValue <= 8) {
+        } else if (itemBaseValue <= 20) {
             return 8 + rand.nextInt(17);       // 8-24 for common items
-        } else if (itemBaseValue <= 25) {
+        } else if (itemBaseValue <= 65) {
             return 4 + rand.nextInt(9);        // 4-12 for useful items
-        } else if (itemBaseValue <= 80) {
+        } else if (itemBaseValue <= 210) {
             return 2 + rand.nextInt(5);        // 2-6 for valuable items
-        } else if (itemBaseValue <= 250) {
+        } else if (itemBaseValue <= 650) {
             return 1 + rand.nextInt(3);        // 1-3 for expensive items
         } else {
             return 1;                          // 1 for treasure-tier
@@ -363,6 +402,7 @@ public class Quest {
         tag.putLong("Expiry", expiryTime);
         tag.putString("Status", status.name());
         tag.putInt("Delivered", deliveredCount);
+        tag.putLong("RewardArrival", rewardArrivalTime);
         tag.putString("QuestType", questType.name());
         tag.putString("Desc", questDescription);
         return tag;
@@ -396,6 +436,11 @@ public class Quest {
         );
         quest.status = Status.valueOf(tag.getString("Status"));
         quest.deliveredCount = tag.getInt("Delivered");
+        quest.rewardArrivalTime = tag.contains("RewardArrival") ? tag.getLong("RewardArrival") : 0;
+        // Backward compat: legacy DELIVERING quests without arrival time complete instantly
+        if (quest.status == Status.DELIVERING && quest.rewardArrivalTime == 0) {
+            quest.status = Status.COMPLETED;
+        }
         return quest;
     }
 }
