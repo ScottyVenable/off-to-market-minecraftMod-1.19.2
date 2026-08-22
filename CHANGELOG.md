@@ -1,5 +1,12 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.6.2 — Legacy Shipment Note Cleanup
+
+### Removed
+- **Removed the unused `ShipmentNoteItem`** (`shipment_note`) and its registration, lang entries, and item model. This was a leftover from the old Trading Bin flow where a physical "receipt" item was dropped back into the bin after a shipment — that flow was already replaced by the mailbox notification system in v0.6 (`bin.clearAndLeaveNote(ItemStack.EMPTY)`), but the dead item class and its Creative-tab registration were never deleted.
+- This closes out the duplication exploit reported on CurseForge (re-inserting the receipt item into the Trading Ledger to resend it for infinite coins) for anyone still on the old flow — the current shipment pipeline never creates or hands back a sellable item, so the loop can't happen. Confirmed no other code path still constructs or grants `ShipmentNoteItem`.
+- The `animal_trade_slip` item model still shares the `shipment_note` texture asset as a placeholder — that texture file was kept in place; only the now-unused item class, its registration, and its own item model were removed.
+
 ## Version 0.6.1 — Stock Scout Worker & Quality of Life
 
 ### New Feature: Stock Scout Worker

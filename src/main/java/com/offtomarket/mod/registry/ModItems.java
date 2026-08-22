@@ -7,7 +7,6 @@ import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.item.CoinType;
 import com.offtomarket.mod.item.GuideBookItem;
 import com.offtomarket.mod.item.LedgerItem;
-import com.offtomarket.mod.item.ShipmentNoteItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;
@@ -49,10 +48,6 @@ public class ModItems {
     public static final RegistryObject<Item> LEDGER = ITEMS.register("ledger",
             () -> new LedgerItem(new Item.Properties().tab(ModCreativeTab.TAB)
                     .stacksTo(1).rarity(Rarity.UNCOMMON)));
-
-    public static final RegistryObject<Item> SHIPMENT_NOTE = ITEMS.register("shipment_note",
-            () -> new ShipmentNoteItem(new Item.Properties().tab(ModCreativeTab.TAB)
-                    .stacksTo(16)));
 
     // Guide
     public static final RegistryObject<Item> GUIDE_BOOK = ITEMS.register("guide_book",

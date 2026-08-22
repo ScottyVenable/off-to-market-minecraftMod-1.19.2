@@ -11,7 +11,6 @@
   "item.offtomarket.silver_coin": "Silver Coin",
   "item.offtomarket.copper_coin": "Copper Coin",
   "item.offtomarket.ledger": "Master Ledger",
-  "item.offtomarket.shipment_note": "Shipment Note",
   "item.offtomarket.guide_book": "Off to the Market Guide",
   "item.offtomarket.coin_bag": "Coin Bag",
 
@@ -20,9 +19,6 @@
   "tooltip.offtomarket.copper_coin": "Worth 1 Copper Piece",
   "tooltip.offtomarket.ledger.synced": "Synced to Trading Post at [%d, %d, %d]",
   "tooltip.offtomarket.ledger.not_synced": "Right-click a Trading Post to sync",
-  "tooltip.offtomarket.shipment_note.town": "Destination: %s",
-  "tooltip.offtomarket.shipment_note.items": "Items: %d types",
-  "tooltip.offtomarket.shipment_note.right_click": "Right-click for details",
 
   "gui.offtomarket.trading_post": "Trading Post",
   "gui.offtomarket.trading_post.town": "Town: %s",
@@ -90,9 +86,5 @@
   "tooltip.offtomarket.animal_trade_slip.empty": "Empty - Right-click an animal to capture",
   "tooltip.offtomarket.animal_trade_slip.contains": "Contains: %s",
   "tooltip.offtomarket.animal_trade_slip.value": "Base Value: %s",
-  "tooltip.offtomarket.animal_trade_slip.release": "Right-click ground to release",
-
-  "message.offtomarket.shipment_details": "=== Shipment Note ===",
-  "message.offtomarket.shipment_dest": "Destination: %s",
-  "message.offtomarket.shipment_item": "  - %s x%d @ %d CP each"
+  "tooltip.offtomarket.animal_trade_slip.release": "Right-click ground to release"
 }
