@@ -108,8 +108,8 @@ public class ModCompatibility {
     static {
         // Farmer's Delight - Food & Cooking
         MOD_THEMES.add(new ModTheme(
-            "farmersdelight", "farmersdelight_market", "Gourmet Market",
-            "A bustling market specializing in fine cuisine and cooking supplies from across the land.",
+            "farmersdelight", "farmersdelight_market", "Harvest Valley Market",
+            "A bustling market specializing in fine cuisine and fresh produce from across the land.",
             TownData.TownType.MARKET, 2, 1,
             List.of("farmersdelight:"),
             List.of(ItemCategory.RAW_FOOD, ItemCategory.CROPS),
@@ -118,7 +118,7 @@ public class ModCompatibility {
 
         // Alex's Mobs - Exotic Animals
         MOD_THEMES.add(new ModTheme(
-            "alexsmobs", "alexsmobs_menagerie", "Exotic Menagerie",
+            "alexsmobs", "alexsmobs_menagerie", "Wanderer's Outpost",
             "A collection of rare creatures and animal products from distant lands.",
             TownData.TownType.MARKET, 3, 2,
             List.of("alexsmobs:"),
@@ -128,8 +128,8 @@ public class ModCompatibility {
 
         // Iron's Spellbooks - Magic
         MOD_THEMES.add(new ModTheme(
-            "irons_spellbooks", "irons_arcane", "Arcane Emporium",
-            "A mysterious shop dealing in magical artifacts and spell components.",
+            "irons_spellbooks", "irons_arcane", "Spellforge Market",
+            "A mysterious shop dealing in magical artifacts, arcane cloth, and spell components.",
             TownData.TownType.MARKET, 4, 3,
             List.of("irons_spellbooks:"),
             List.of(ItemCategory.GEMS, ItemCategory.MOB_DROPS),
@@ -138,8 +138,8 @@ public class ModCompatibility {
 
         // Twilight Forest
         MOD_THEMES.add(new ModTheme(
-            "twilightforest", "twilight_outpost", "Twilight Outpost",
-            "A trading post on the edge of the mysterious Twilight Forest.",
+            "twilightforest", "twilight_outpost", "Twilight Market",
+            "A trading post dealing in enchanted goods from the mysterious Twilight Forest.",
             TownData.TownType.OUTPOST, 5, 2,
             List.of("twilightforest:"),
             List.of(ItemCategory.INGOTS, ItemCategory.COOKED_FOOD),
@@ -148,8 +148,8 @@ public class ModCompatibility {
 
         // Blue Skies
         MOD_THEMES.add(new ModTheme(
-            "blue_skies", "skylands_trading", "Skylands Trading Co.",
-            "Merchants from the floating islands above, dealing in rare sky materials.",
+            "blue_skies", "skylands_trading", "Sky Haven Trading Post",
+            "Merchants from the celestial skies dealing in rare and exotic sky materials.",
             TownData.TownType.MARKET, 5, 3,
             List.of("blue_skies:"),
             List.of(ItemCategory.INGOTS, ItemCategory.CROPS),
@@ -158,8 +158,8 @@ public class ModCompatibility {
 
         // Aether
         MOD_THEMES.add(new ModTheme(
-            "aether", "aether_haven", "Aether Haven",
-            "A celestial trading post dealing in heavenly goods from the Aether.",
+            "aether", "aether_haven", "Aether Outpost",
+            "A celestial trading post dealing in heavenly goods and rare minerals from the Aether.",
             TownData.TownType.CITY, 6, 3,
             List.of("aether:"),
             List.of(ItemCategory.INGOTS, ItemCategory.RAW_FOOD),
@@ -168,8 +168,8 @@ public class ModCompatibility {
 
         // Ars Nouveau - Magic
         MOD_THEMES.add(new ModTheme(
-            "ars_nouveau", "ars_academy", "Arcane Academy",
-            "A prestigious academy of magic, trading in mystical reagents and artifacts.",
+            "ars_nouveau", "ars_academy", "Arcane Emporium",
+            "A prestigious trading sanctuary dealing in mystical reagents, source gems, and glyphs.",
             TownData.TownType.CITY, 4, 2,
             List.of("ars_nouveau:", "ars_elemental:"),
             List.of(ItemCategory.GEMS, ItemCategory.CROPS),
@@ -178,8 +178,8 @@ public class ModCompatibility {
 
         // Apotheosis - Enchanting
         MOD_THEMES.add(new ModTheme(
-            "apotheosis", "apotheosis_sanctum", "Enchanter's Sanctum",
-            "A haven for enchanters, dealing in rare gems and magical components.",
+            "apotheosis", "apotheosis_sanctum", "Enchanter's Bazaar",
+            "A haven for enchanters dealing in rare gems, affixes, and magical components.",
             TownData.TownType.MARKET, 3, 2,
             List.of("apotheosis:"),
             List.of(ItemCategory.GEMS, ItemCategory.ENCHANTED_BOOKS),
@@ -188,8 +188,8 @@ public class ModCompatibility {
 
         // Aquaculture - Fishing
         MOD_THEMES.add(new ModTheme(
-            "aquaculture", "aquaculture_docks", "Fisher's Docks",
-            "A seaside market specializing in exotic fish and fishing equipment.",
+            "aquaculture", "aquaculture_docks", "Fisherman's Wharf",
+            "A seaside market specializing in exotic fish, tackle, and coastal equipment.",
             TownData.TownType.TOWN, 2, 1,
             List.of("aquaculture:"),
             List.of(ItemCategory.INGOTS, ItemCategory.CROPS),
@@ -198,8 +198,8 @@ public class ModCompatibility {
 
         // Minecolonies
         MOD_THEMES.add(new ModTheme(
-            "minecolonies", "colony_exchange", "Colony Exchange",
-            "A trade hub connecting various colonies and settlements.",
+            "minecolonies", "colony_exchange", "Colonial Trading Co.",
+            "A trade hub connecting burgeoning colonies, builders, and settlements.",
             TownData.TownType.CITY, 3, 2,
             List.of("minecolonies:"),
             List.of(ItemCategory.RAW_FOOD, ItemCategory.BUILDING_BLOCKS),
@@ -208,8 +208,8 @@ public class ModCompatibility {
 
         // Let's Do series (Vinery, Bakery)
         MOD_THEMES.add(new ModTheme(
-            "vinery", "vinery_vineyard", "Vineyard Estate",
-            "A refined establishment dealing in fine wines and gourmet produce.",
+            "vinery", "vinery_vineyard", "Vineyard Market",
+            "A refined establishment dealing in vintage wines, orchard grapes, and gourmet produce.",
             TownData.TownType.VILLAGE, 3, 2,
             List.of("vinery:", "bakery:"),
             List.of(ItemCategory.CROPS, ItemCategory.RAW_FOOD),
@@ -218,8 +218,8 @@ public class ModCompatibility {
 
         // Cataclysm
         MOD_THEMES.add(new ModTheme(
-            "cataclysm", "cataclysm_armory", "Cataclysm Armory",
-            "A dangerous outpost trading in powerful weapons and rare boss drops.",
+            "cataclysm", "cataclysm_armory", "Dungeon Outpost",
+            "A dangerous outpost trading in perilous boss relics, ignitium, and cataclysmic weapons.",
             TownData.TownType.OUTPOST, 6, 4,
             List.of("cataclysm:"),
             List.of(ItemCategory.INGOTS, ItemCategory.GEMS),
@@ -228,8 +228,8 @@ public class ModCompatibility {
 
         // Simply Swords
         MOD_THEMES.add(new ModTheme(
-            "simplyswords", "simplyswords_forge", "Blademaster's Forge",
-            "A renowned forge specializing in exotic and magical weaponry.",
+            "simplyswords", "simplyswords_forge", "Bladeworks Market",
+            "A renowned forge specializing in exotic blades, runic weaponry, and combat gear.",
             TownData.TownType.MARKET, 4, 3,
             List.of("simplyswords:"),
             List.of(ItemCategory.INGOTS, ItemCategory.GEMS),
@@ -238,8 +238,8 @@ public class ModCompatibility {
 
         // Supplementaries
         MOD_THEMES.add(new ModTheme(
-            "supplementaries", "supplementaries_bazaar", "Curiosity Bazaar",
-            "A quirky shop full of useful gadgets and decorative oddities.",
+            "supplementaries", "supplementaries_bazaar", "Artisan's Market",
+            "A quirky bazaar full of useful gadgets, signs, lanterns, and decorative oddities.",
             TownData.TownType.MARKET, 2, 1,
             List.of("supplementaries:"),
             List.of(ItemCategory.INGOTS, ItemCategory.CROPS),
@@ -248,8 +248,8 @@ public class ModCompatibility {
 
         // Quark
         MOD_THEMES.add(new ModTheme(
-            "quark", "quark_emporium", "Quality Emporium",
-            "A well-stocked shop with quality goods for the discerning buyer.",
+            "quark", "quark_emporium", "Oddities Emporium",
+            "A well-stocked shop with quality goods, runes, and curious items for the discerning buyer.",
             TownData.TownType.MARKET, 2, 1,
             List.of("quark:"),
             List.of(ItemCategory.INGOTS, ItemCategory.CROPS),
@@ -288,8 +288,8 @@ public class ModCompatibility {
 
         // Oh The Biomes You'll Go
         MOD_THEMES.add(new ModTheme(
-            "byg", "byg_explorers", "Explorer's Guild",
-            "A guild of explorers trading in exotic woods and rare biome materials.",
+            "byg", "byg_explorers", "Explorer's Trading Post",
+            "A frontier trading outpost dealing in exotic woods, rare biome flora, and expedition materials.",
             TownData.TownType.TOWN, 4, 2,
             List.of("byg:"),
             List.of(ItemCategory.INGOTS, ItemCategory.COOKED_FOOD),
@@ -334,6 +334,10 @@ public class ModCompatibility {
             
             // Skip minecraft items (already handled)
             if (modId.equals("minecraft")) continue;
+
+            // Skip blacklisted mods or items
+            ItemStack testStack = new ItemStack(item);
+            if (ModConfig.isItemBlacklisted(testStack)) continue;
 
             // Add to mod map
             itemsByMod.computeIfAbsent(modId, k -> new HashSet<>()).add(item);

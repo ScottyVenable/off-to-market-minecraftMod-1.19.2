@@ -219,6 +219,28 @@ public class ModConfig {
             .comment("Maximum items to add per category to dynamic towns")
             .defineInRange("maxItemsPerCategory", 50, 10, 500);
 
+    private static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> BLACKLISTED_MODS = BUILDER
+            .comment("List of mod IDs to completely ignore and exclude from trading (e.g. [\"avaritia\", \"projecte\"])")
+            .defineListAllowEmpty(java.util.List.of("blacklistedMods"), () -> java.util.List.of("projecte", "avaritia"), o -> o instanceof String);
+
+    private static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> BLACKLISTED_ITEMS = BUILDER
+            .comment("List of specific item registry IDs that cannot be bought, sold, or shipped (e.g. [\"minecraft:bedrock\"])")
+            .defineListAllowEmpty(java.util.List.of("blacklistedItems"), () -> java.util.List.of(
+                    "minecraft:bedrock",
+                    "minecraft:barrier",
+                    "minecraft:command_block",
+                    "minecraft:chain_command_block",
+                    "minecraft:repeating_command_block",
+                    "minecraft:structure_block",
+                    "minecraft:jigsaw",
+                    "minecraft:structure_void",
+                    "minecraft:light"
+            ), o -> o instanceof String);
+
+    private static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> BLACKLISTED_TAGS = BUILDER
+            .comment("Items matching these tags cannot be bought, sold, or shipped (e.g. [\"forge:creative_items\"])")
+            .defineListAllowEmpty(java.util.List.of("blacklistedTags"), () -> java.util.List.of("forge:creative_items"), o -> o instanceof String);
+
     static { BUILDER.pop(); }
 
     // ==================== SUPPLY & DEMAND ====================
@@ -331,6 +353,36 @@ public class ModConfig {
     public static boolean enableDynamicTowns = true;
     public static boolean logDiscoveredItems = false;
     public static int maxItemsPerCategory = 50;
+    public static java.util.List<String> blacklistedMods = new java.util.ArrayList<>();
+    public static java.util.Set<String> blacklistedItems = new java.util.HashSet<>();
+    public static java.util.Set<String> blacklistedTags = new java.util.HashSet<>();
+
+    /**
+     * Check if an item or stack is banned from all buying, selling, and shipping.
+     */
+    public static boolean isItemBlacklisted(net.minecraft.world.item.ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        net.minecraft.resources.ResourceLocation rl = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem());
+        if (rl == null) return false;
+
+        String modId = rl.getNamespace().toLowerCase();
+        if (blacklistedMods.contains(modId)) return true;
+
+        String fullId = rl.toString().toLowerCase();
+        if (blacklistedItems.contains(fullId)) return true;
+
+        if (!blacklistedTags.isEmpty()) {
+            for (String tagStr : blacklistedTags) {
+                net.minecraft.resources.ResourceLocation tagRl = net.minecraft.resources.ResourceLocation.tryParse(tagStr);
+                if (tagRl != null) {
+                    net.minecraft.tags.TagKey<net.minecraft.world.item.Item> tagKey =
+                            net.minecraft.tags.TagKey.create(net.minecraft.core.Registry.ITEM_REGISTRY, tagRl);
+                    if (stack.is(tagKey)) return true;
+                }
+            }
+        }
+        return false;
+    }
 
     // Supply & Demand
     public static double dailyRefreshChance = 0.30;
@@ -402,6 +454,21 @@ public class ModConfig {
         enableDynamicTowns = ENABLE_DYNAMIC_TOWNS.get();
         logDiscoveredItems = LOG_DISCOVERED_ITEMS.get();
         maxItemsPerCategory = MAX_ITEMS_PER_CATEGORY.get();
+
+        blacklistedMods = new java.util.ArrayList<>();
+        for (String m : BLACKLISTED_MODS.get()) {
+            if (m != null && !m.isBlank()) blacklistedMods.add(m.trim().toLowerCase());
+        }
+
+        blacklistedItems = new java.util.HashSet<>();
+        for (String item : BLACKLISTED_ITEMS.get()) {
+            if (item != null && !item.isBlank()) blacklistedItems.add(item.trim().toLowerCase());
+        }
+
+        blacklistedTags = new java.util.HashSet<>();
+        for (String tag : BLACKLISTED_TAGS.get()) {
+            if (tag != null && !tag.isBlank()) blacklistedTags.add(tag.trim().toLowerCase());
+        }
 
         // Supply & Demand
         dailyRefreshChance = DAILY_REFRESH_CHANCE.get();

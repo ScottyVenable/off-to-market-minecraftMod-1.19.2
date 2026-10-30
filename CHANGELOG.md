@@ -1,11 +1,40 @@
 # Off to Market (Trading Deluxe) - Changelog
 
-## Version 0.6.2 — Legacy Shipment Note Cleanup
+## Version 0.6.2 — Blacklist System, Mod Pricing Overhaul & Exploit Fixes
 
-### Removed
-- **Removed the unused `ShipmentNoteItem`** (`shipment_note`) and its registration, lang entries, and item model. This was a leftover from the old Trading Bin flow where a physical "receipt" item was dropped back into the bin after a shipment — that flow was already replaced by the mailbox notification system in v0.6 (`bin.clearAndLeaveNote(ItemStack.EMPTY)`), but the dead item class and its Creative-tab registration were never deleted.
-- This closes out the duplication exploit reported on CurseForge (re-inserting the receipt item into the Trading Ledger to resend it for infinite coins) for anyone still on the old flow — the current shipment pipeline never creates or hands back a sellable item, so the loop can't happen. Confirmed no other code path still constructs or grants `ShipmentNoteItem`.
-- The `animal_trade_slip` item model still shares the `shipment_note` texture asset as a placeholder — that texture file was kept in place; only the now-unused item class, its registration, and its own item model were removed.
+### Added
+- **Trading Blacklist System**: Added configurable blacklists in `config/offtomarket-common.toml` (`[modCompat]`):
+  - `blacklistedMods`: Entire mod namespaces to completely ban from trading (default: `projecte`, `avaritia`).
+  - `blacklistedItems`: Specific item registry IDs barred from trading (default: bedrock, barriers, command blocks, structure blocks).
+  - `blacklistedTags`: Any items tagged with matching tags (default: `forge:creative_items`).
+  - Enforced across GUI insertion, hopper automation, adjacent container virtual scanning, and dynamic town shop generation.
+- **Modded Item Pricing Overhaul**:
+  - Rebalanced fallback pricing so unknown mod items no longer collapse into 8 CP dirt-cheap value (`TIER_COMMON`).
+  - Added specialized valuation heuristics for major compatible mods:
+    - *Cataclysm*: Boss drops, ignitium, and void cores scaled to `TIER_TREASURE` (4,000 CP) / `TIER_LEGENDARY` (2,000 CP).
+    - *Iron's Spellbooks* & *Ars Nouveau*: Grimoires, spellbooks, scrolls, and glyphs correctly valued up to `TIER_LEGENDARY` / `TIER_ENCHANTED`.
+    - *Simply Swords*: Unique, awakened, and runic blades scaled to `TIER_LEGENDARY` / `TIER_TOOL_DIAMOND`.
+    - *Twilight Forest*, *The Aether*, *Blue Skies*, and *Apotheosis*: Mythic relics, gravitite, fiery ingots, and gem dust properly tiered.
+- **Harmonized Compatible Town Names**: Updated in-game dynamic town names to match official documentation:
+  - Harvest Valley Market (*Farmer's Delight*)
+  - Wanderer's Outpost (*Alex's Mobs*)
+  - Spellforge Market (*Iron's Spellbooks*)
+  - Twilight Market (*Twilight Forest*)
+  - Sky Haven Trading Post (*Blue Skies*)
+  - Aether Outpost (*The Aether*)
+  - Arcane Emporium (*Ars Nouveau*)
+  - Enchanter's Bazaar (*Apotheosis*)
+  - Fisherman's Wharf (*Aquaculture 2*)
+  - Colonial Trading Co. (*MineColonies*)
+  - Vineyard Market (*Vinery*)
+  - Dungeon Outpost (*Cataclysm*)
+  - Bladeworks Market (*Simply Swords*)
+  - Artisan's Market (*Supplementaries*)
+  - Oddities Emporium (*Quark*)
+  - Explorer's Trading Post (*Oh The Biomes You'll Go*)
+
+### Removed / Fixed
+- **Removed the unused `ShipmentNoteItem`** (`shipment_note`) and its registration, lang entries, and item model. This closes the infinite money reselling exploit reported on CurseForge.
 
 ## Version 0.6.1 — Stock Scout Worker & Quality of Life
 

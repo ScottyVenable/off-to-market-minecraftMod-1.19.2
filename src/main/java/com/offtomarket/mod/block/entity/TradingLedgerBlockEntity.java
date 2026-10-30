@@ -533,6 +533,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
      */
     public int addItemAmount(ItemStack stack) {
         if (stack.isEmpty() || stack.getItem() == net.minecraft.world.item.Items.AIR) return 0;
+        if (com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack)) return 0;
 
         int weightPerUnit = getItemWeightPerUnit(stack);
         int maxByWeight = getRemainingCaravanWeight() / weightPerUnit;
@@ -668,6 +669,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             for (int cSlot = 0; cSlot < container.getContainerSize(); cSlot++) {
                 ItemStack stack = container.getItem(cSlot);
                 if (stack.isEmpty()) continue;
+                if (com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack)) continue;
 
                 // Find existing virtual ledger slot for this (sourcePos, sourceSlot) pair
                 Integer existingLedgerSlot = findVirtualLedgerSlot(adjPos, cSlot);
@@ -898,6 +900,12 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     @Override
     public int getMaxStackSize() {
         return MAX_STACK_PER_SLOT;
+    }
+
+    @Override
+    public boolean canPlaceItem(int slot, ItemStack stack) {
+        if (stack.isEmpty()) return true;
+        return !com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack);
     }
 
     /**

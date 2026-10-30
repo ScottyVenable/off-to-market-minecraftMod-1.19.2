@@ -713,7 +713,63 @@ public class PriceCalculator {
     private static ValueTier classifyByPath(ItemStack stack) {
         ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
         if (rl == null) return null;
+        String namespace = rl.getNamespace().toLowerCase();
         String path = rl.getPath().toLowerCase();
+
+        // ---- Compatible Mod Specific High-Value Heuristics ----
+        if (namespace.equals("cataclysm")) {
+            if (path.contains("void_core") || path.contains("witherite") || path.contains("ignitium")
+                    || path.contains("cursed_eye") || path.contains("abyssal") || path.contains("monstrous")
+                    || path.contains("incinerator") || path.contains("flame_strike") || path.contains("wrath")) {
+                return TIER_TREASURE; // 4000 CP
+            }
+            if (path.contains("ingot") || path.contains("plate") || path.contains("blade")) {
+                return TIER_LEGENDARY; // 2000 CP
+            }
+        }
+        if (namespace.equals("simplyswords")) {
+            if (path.contains("unique") || path.contains("runic") || path.contains("awakened")) {
+                return TIER_LEGENDARY; // 2000 CP
+            }
+            return TIER_TOOL_DIAMOND; // 220 CP
+        }
+        if (namespace.equals("irons_spellbooks") || namespace.equals("ars_nouveau") || namespace.equals("ars_elemental")) {
+            if (path.contains("spellbook") || path.contains("grimoire") || path.contains("archmage") || path.contains("netherite")) {
+                return TIER_LEGENDARY; // 2000 CP
+            }
+            if (path.contains("scroll") || path.contains("glyph") || path.contains("source_gem") || path.contains("magebloom") || path.contains("arcane_cloth")) {
+                return TIER_ENCHANTED; // 500 CP
+            }
+        }
+        if (namespace.equals("twilightforest")) {
+            if (path.contains("fiery_") || path.contains("knightmetal") || path.contains("steeleaf") || path.contains("ironwood")) {
+                return TIER_PRECIOUS; // 650 CP
+            }
+            if (path.contains("trophy") || path.contains("lamp") || path.contains("scepter")) {
+                return TIER_TREASURE; // 4000 CP
+            }
+        }
+        if (namespace.equals("aether")) {
+            if (path.contains("gravitite") || path.contains("valkyrie") || path.contains("phoenix")) {
+                return TIER_LEGENDARY; // 2000 CP
+            }
+            if (path.contains("zanite") || path.contains("ambrosium")) {
+                return TIER_GEM; // 280 CP
+            }
+        }
+        if (namespace.equals("blue_skies")) {
+            if (path.contains("charoite") || path.contains("horizonite") || path.contains("aquite") || path.contains("pyrope") || path.contains("diopside")) {
+                return TIER_GEM; // 280 CP
+            }
+        }
+        if (namespace.equals("apotheosis")) {
+            if (path.contains("godforged") || path.contains("mythic") || path.contains("ancient")) {
+                return TIER_TREASURE; // 4000 CP
+            }
+            if (path.contains("gem") || path.contains("dust") || path.contains("scrap")) {
+                return TIER_PRECIOUS; // 650 CP
+            }
+        }
 
         // Ingots & metals
         if (path.contains("netherite") && path.contains("ingot")) return TIER_LEGENDARY;
@@ -829,11 +885,14 @@ public class PriceCalculator {
 
     private static ValueTier rarityFallback(ItemStack stack) {
         Rarity rarity = stack.getRarity();
+        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        boolean isModded = rl != null && !rl.getNamespace().equals("minecraft");
+
         return switch (rarity) {
-            case EPIC     -> new ValueTier(520, 1800);
-            case RARE     -> new ValueTier(180, 620);
-            case UNCOMMON -> new ValueTier(40, 140);
-            default       -> TIER_COMMON; // COMMON
+            case EPIC     -> isModded ? new ValueTier(1500, 5000) : new ValueTier(520, 1800);
+            case RARE     -> isModded ? new ValueTier(450, 1500) : new ValueTier(180, 620);
+            case UNCOMMON -> isModded ? new ValueTier(120, 400) : new ValueTier(40, 140);
+            default       -> isModded ? TIER_USEFUL : TIER_COMMON; // Modded items get 15-50 CP floor instead of 8 CP dirt price!
         };
     }
 
@@ -847,6 +906,9 @@ public class PriceCalculator {
      */
     public static ValueTier getValueTier(ItemStack stack) {
         if (stack.isEmpty()) return TIER_JUNK;
+        if (com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack)) {
+            return new ValueTier(0, 0); // Blacklisted: 0 value, will not sell
+        }
         // Potions store their effect type, amplifier, and duration in NBT — not in the Item
         // instance. The per-Item cache would lock in a bare no-NBT water-bottle result for the
         // shared PotionItem / SplashPotionItem / LingeringPotionItem singletons, making every
