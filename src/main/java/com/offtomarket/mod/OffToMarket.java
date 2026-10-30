@@ -59,6 +59,7 @@ public class OffToMarket {
         event.enqueueWork(() -> {
             ModNetwork.register();
             ModdedItemConfig.loadAllConfigs();
+            com.offtomarket.mod.config.CustomPriceConfig.loadAll();
 
             // Load towns from JSON definitions (overrides any hardcoded fallbacks)
             TownLoader.loadAll();

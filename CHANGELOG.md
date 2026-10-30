@@ -8,6 +8,7 @@
   - `blacklistedItems`: Specific item registry IDs barred from trading (default: bedrock, barriers, command blocks, structure blocks).
   - `blacklistedTags`: Any items tagged with matching tags (default: `forge:creative_items`).
   - Enforced across GUI insertion, hopper automation, adjacent container virtual scanning, and dynamic town shop generation.
+- **Custom Price Overrides (`custom_prices.json`)**: Added support for custom item price configuration in `config/offtomarket/custom_prices.json`. Modpack authors can now assign exact custom prices in Copper Pieces (CP) to any item in the game without editing code.
 - **Modded Item Pricing Overhaul**:
   - Rebalanced fallback pricing so unknown mod items no longer collapse into 8 CP dirt-cheap value (`TIER_COMMON`).
   - Added specialized valuation heuristics for major compatible mods:

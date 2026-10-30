@@ -931,6 +931,10 @@ public class PriceCalculator {
      * the result is cached in {@link #BASE_TIER_CACHE}.
      */
     private static ValueTier computeBaseTier(ItemStack stack) {
+        // 0a. Custom JSON price override from config/offtomarket/custom_prices.json
+        ValueTier customTier = com.offtomarket.mod.config.CustomPriceConfig.getPriceOverride(stack.getItem());
+        if (customTier != null) return customTier;
+
         // 0. Ingredient-based pricing for tools & armor (handles vanilla + modded)
         ValueTier tier = computeIngredientPrice(stack);
         if (tier != null) return tier;
