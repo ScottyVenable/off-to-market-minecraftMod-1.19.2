@@ -2,6 +2,7 @@ package com.offtomarket.mod.client.screen;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.offtomarket.mod.block.entity.FinanceTableBlockEntity;
+import com.offtomarket.mod.block.entity.FinanceTableBlockEntity.TransactionRecord;
 import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.menu.FinanceTableMenu;
 import com.offtomarket.mod.network.DepositAmountPacket;
@@ -15,16 +16,33 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
+import java.util.List;
+
 /**
  * Screen for the Finance Table. Shows the deposited coin balance and provides
  * gold/silver/copper input fields for precise withdraw/deposit operations,
- * plus Deposit All and Withdraw All convenience buttons.
+ * plus Deposit All and Withdraw All convenience buttons, and a Transactions Ledger tab.
  */
 public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu> {
+
+    public enum Tab {
+        ACCOUNT,
+        TRANSACTIONS
+    }
+
+    private Tab activeTab = Tab.ACCOUNT;
+    private int transactionScrollOffset = 0;
 
     private EditBox goldInput;
     private EditBox silverInput;
     private EditBox copperInput;
+
+    private Button accountTabBtn;
+    private Button transactionsTabBtn;
+    private Button withdrawBtn;
+    private Button depositBtn;
+    private Button withdrawAllBtn;
+    private Button depositAllBtn;
 
     public FinanceTableScreen(FinanceTableMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -42,8 +60,18 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
         int x = this.leftPos;
         int y = this.topPos;
 
-        // ---- Coin amount input fields (y+38 row) ----
+        // ---- Tab toggle buttons (y+3) ----
+        accountTabBtn = this.addRenderableWidget(new Button(
+                x + 90, y + 3, 38, 14,
+                Component.literal("Bank"),
+                btn -> switchTab(Tab.ACCOUNT)));
 
+        transactionsTabBtn = this.addRenderableWidget(new Button(
+                x + 130, y + 3, 40, 14,
+                Component.literal("Ledger"),
+                btn -> switchTab(Tab.TRANSACTIONS)));
+
+        // ---- Coin amount input fields (y+39 row) ----
         goldInput = new EditBox(this.font, x + 18, y + 39, 32, 12,
                 Component.literal("Gold"));
         goldInput.setMaxLength(4);
@@ -66,8 +94,7 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
         this.addWidget(copperInput);
 
         // ---- Withdraw / Deposit amount buttons (y+55) ----
-
-        this.addRenderableWidget(new Button(
+        withdrawBtn = this.addRenderableWidget(new Button(
                 x + 8, y + 55, 78, 16,
                 Component.literal("Withdraw"),
                 btn -> {
@@ -83,7 +110,7 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
                     }
                 }));
 
-        this.addRenderableWidget(new Button(
+        depositBtn = this.addRenderableWidget(new Button(
                 x + 90, y + 55, 78, 16,
                 Component.literal("Deposit"),
                 btn -> {
@@ -100,8 +127,7 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
                 }));
 
         // ---- Withdraw All / Deposit All convenience buttons (y+73) ----
-
-        this.addRenderableWidget(new Button(
+        withdrawAllBtn = this.addRenderableWidget(new Button(
                 x + 8, y + 73, 78, 16,
                 Component.literal("Withdraw All"),
                 btn -> {
@@ -111,7 +137,7 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
                     }
                 }));
 
-        this.addRenderableWidget(new Button(
+        depositAllBtn = this.addRenderableWidget(new Button(
                 x + 90, y + 73, 78, 16,
                 Component.literal("Deposit All"),
                 btn -> {
@@ -120,6 +146,25 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
                         ModNetwork.CHANNEL.sendToServer(new DepositCoinsPacket(be.getBlockPos()));
                     }
                 }));
+
+        updateWidgetVisibility();
+    }
+
+    private void switchTab(Tab tab) {
+        this.activeTab = tab;
+        this.transactionScrollOffset = 0;
+        updateWidgetVisibility();
+    }
+
+    private void updateWidgetVisibility() {
+        boolean isAccount = (activeTab == Tab.ACCOUNT);
+        if (goldInput != null) goldInput.setVisible(isAccount);
+        if (silverInput != null) silverInput.setVisible(isAccount);
+        if (copperInput != null) copperInput.setVisible(isAccount);
+        if (withdrawBtn != null) withdrawBtn.visible = isAccount;
+        if (depositBtn != null) depositBtn.visible = isAccount;
+        if (withdrawAllBtn != null) withdrawAllBtn.visible = isAccount;
+        if (depositAllBtn != null) depositAllBtn.visible = isAccount;
     }
 
     /** Parses an EditBox value to an int, returning 0 for empty/invalid. */
@@ -134,6 +179,22 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
     }
 
     @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (activeTab == Tab.TRANSACTIONS) {
+            FinanceTableBlockEntity be = menu.getBlockEntity();
+            int total = (be != null) ? be.getTransactions().size() : 0;
+            int maxScroll = Math.max(0, total - 5);
+            if (delta > 0) {
+                transactionScrollOffset = Math.max(0, transactionScrollOffset - 1);
+            } else if (delta < 0) {
+                transactionScrollOffset = Math.min(maxScroll, transactionScrollOffset + 1);
+            }
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
     protected void renderBg(PoseStack poseStack, float partialTick, int mouseX, int mouseY) {
         int x = this.leftPos;
         int y = this.topPos;
@@ -142,13 +203,28 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
         OtmGuiTheme.drawPanel(poseStack, x, y, this.imageWidth, this.imageHeight);
 
         // Title inset
-        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 3, this.imageWidth - 8, 14);
+        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 3, 84, 14);
 
         // Balance display inset
         OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 19, this.imageWidth - 8, 16);
 
-        // Coin input row inset
-        OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 37, this.imageWidth - 8, 16);
+        if (activeTab == Tab.ACCOUNT) {
+            // Coin input row inset
+            OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 37, this.imageWidth - 8, 16);
+
+            // Coin denomination labels next to input fields
+            this.font.draw(poseStack, "\u00A7eG:", x + 8, y + 41, OtmGuiTheme.TEXT_VALUE);
+            this.font.draw(poseStack, "\u00A77S:", x + 62, y + 41, OtmGuiTheme.TEXT_VALUE);
+            this.font.draw(poseStack, "\u00A76C:", x + 116, y + 41, OtmGuiTheme.TEXT_VALUE);
+
+            // Render the EditBox widgets
+            goldInput.render(poseStack, mouseX, mouseY, partialTick);
+            silverInput.render(poseStack, mouseX, mouseY, partialTick);
+            copperInput.render(poseStack, mouseX, mouseY, partialTick);
+        } else {
+            // Transaction history panel
+            OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 37, this.imageWidth - 8, 52);
+        }
 
         // Player inventory inset (3 rows)
         OtmGuiTheme.drawInsetPanel(poseStack, x + 4, y + 92, this.imageWidth - 8, 58);
@@ -166,16 +242,6 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
         for (int col = 0; col < 9; col++) {
             OtmGuiTheme.drawSlot(poseStack, x + 8 + col * 18, y + FinanceTableMenu.HOTBAR_Y);
         }
-
-        // Coin denomination labels next to input fields
-        this.font.draw(poseStack, "\u00A7eG:", x + 8, y + 41, OtmGuiTheme.TEXT_VALUE);
-        this.font.draw(poseStack, "\u00A77S:", x + 62, y + 41, OtmGuiTheme.TEXT_VALUE);
-        this.font.draw(poseStack, "\u00A76C:", x + 116, y + 41, OtmGuiTheme.TEXT_VALUE);
-
-        // Render the EditBox widgets
-        goldInput.render(poseStack, mouseX, mouseY, partialTick);
-        silverInput.render(poseStack, mouseX, mouseY, partialTick);
-        copperInput.render(poseStack, mouseX, mouseY, partialTick);
     }
 
     @Override
@@ -206,73 +272,113 @@ public class FinanceTableScreen extends AbstractContainerScreen<FinanceTableMenu
             balanceText = sb.toString().trim();
         }
         this.font.draw(poseStack, balanceText, 8, 23, OtmGuiTheme.TEXT_TITLE);
+
+        // Transactions content
+        if (activeTab == Tab.TRANSACTIONS) {
+            List<TransactionRecord> list = (be != null) ? be.getTransactions() : List.of();
+            if (list.isEmpty()) {
+                this.font.draw(poseStack, "\u00A77No transaction history.", 10, 42, OtmGuiTheme.TEXT_MUTED);
+            } else {
+                int maxScroll = Math.max(0, list.size() - 5);
+                for (int i = 0; i < 5; i++) {
+                    int idx = transactionScrollOffset + i;
+                    if (idx >= list.size()) break;
+                    TransactionRecord tr = list.get(idx);
+                    int rowY = 40 + i * 10;
+                    String sign = tr.amount >= 0 ? "\u00A7a+" : "\u00A7c-";
+                    int absAmt = Math.abs(tr.amount);
+                    String amtStr = sign + (absAmt / 100 > 0 ? (absAmt / 100) + "g " : "")
+                            + ((absAmt % 100) / 10 > 0 ? ((absAmt % 100) / 10) + "s " : "")
+                            + (absAmt % 10) + "c\u00A7r";
+                    String desc = tr.type + " " + tr.details;
+                    if (desc.length() > 18) desc = desc.substring(0, 16) + "..";
+
+                    this.font.draw(poseStack, amtStr, 8, rowY, OtmGuiTheme.TEXT_VALUE);
+                    this.font.draw(poseStack, "\u00A77" + desc, 76, rowY, OtmGuiTheme.TEXT_MUTED);
+                }
+                if (maxScroll > 0) {
+                    if (transactionScrollOffset > 0) {
+                        this.font.draw(poseStack, "\u00A78\u25B2", 162, 38, OtmGuiTheme.TEXT_MUTED);
+                    }
+                    if (transactionScrollOffset < maxScroll) {
+                        this.font.draw(poseStack, "\u00A78\u25BC", 162, 79, OtmGuiTheme.TEXT_MUTED);
+                    }
+                }
+            }
+        }
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Prevent inventory close while typing in any EditBox
-        if (goldInput.isFocused() || silverInput.isFocused() || copperInput.isFocused()) {
-            if (keyCode == 256) { // Escape: unfocus all inputs
-                goldInput.setFocus(false);
-                silverInput.setFocus(false);
-                copperInput.setFocus(false);
-                return true;
-            }
-            // Tab to cycle between inputs
-            if (keyCode == 258) {
-                if (goldInput.isFocused()) {
+        if (activeTab == Tab.ACCOUNT) {
+            // Prevent inventory close while typing in any EditBox
+            if (goldInput.isFocused() || silverInput.isFocused() || copperInput.isFocused()) {
+                if (keyCode == 256) { // Escape: unfocus all inputs
                     goldInput.setFocus(false);
-                    silverInput.setFocus(true);
-                } else if (silverInput.isFocused()) {
                     silverInput.setFocus(false);
-                    copperInput.setFocus(true);
-                } else {
                     copperInput.setFocus(false);
-                    goldInput.setFocus(true);
+                    return true;
                 }
-                return true;
+                // Tab to cycle between inputs
+                if (keyCode == 258) {
+                    if (goldInput.isFocused()) {
+                        goldInput.setFocus(false);
+                        silverInput.setFocus(true);
+                    } else if (silverInput.isFocused()) {
+                        silverInput.setFocus(false);
+                        copperInput.setFocus(true);
+                    } else {
+                        copperInput.setFocus(false);
+                        goldInput.setFocus(true);
+                    }
+                    return true;
+                }
+                // Delegate to focused widget and consume the event
+                if (goldInput.isFocused())   return goldInput.keyPressed(keyCode, scanCode, modifiers) || true;
+                if (silverInput.isFocused()) return silverInput.keyPressed(keyCode, scanCode, modifiers) || true;
+                if (copperInput.isFocused()) return copperInput.keyPressed(keyCode, scanCode, modifiers) || true;
             }
-            // Delegate to focused widget and consume the event
-            if (goldInput.isFocused())   return goldInput.keyPressed(keyCode, scanCode, modifiers) || true;
-            if (silverInput.isFocused()) return silverInput.keyPressed(keyCode, scanCode, modifiers) || true;
-            if (copperInput.isFocused()) return copperInput.keyPressed(keyCode, scanCode, modifiers) || true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
-        if (goldInput.isFocused())   return goldInput.charTyped(codePoint, modifiers);
-        if (silverInput.isFocused()) return silverInput.charTyped(codePoint, modifiers);
-        if (copperInput.isFocused()) return copperInput.charTyped(codePoint, modifiers);
+        if (activeTab == Tab.ACCOUNT) {
+            if (goldInput.isFocused())   return goldInput.charTyped(codePoint, modifiers);
+            if (silverInput.isFocused()) return silverInput.charTyped(codePoint, modifiers);
+            if (copperInput.isFocused()) return copperInput.charTyped(codePoint, modifiers);
+        }
         return super.charTyped(codePoint, modifiers);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Let EditBoxes handle their own clicks
-        if (goldInput.mouseClicked(mouseX, mouseY, button)) {
-            goldInput.setFocus(true);
+        if (activeTab == Tab.ACCOUNT) {
+            // Let EditBoxes handle their own clicks
+            if (goldInput.mouseClicked(mouseX, mouseY, button)) {
+                goldInput.setFocus(true);
+                silverInput.setFocus(false);
+                copperInput.setFocus(false);
+                return true;
+            }
+            if (silverInput.mouseClicked(mouseX, mouseY, button)) {
+                goldInput.setFocus(false);
+                silverInput.setFocus(true);
+                copperInput.setFocus(false);
+                return true;
+            }
+            if (copperInput.mouseClicked(mouseX, mouseY, button)) {
+                goldInput.setFocus(false);
+                silverInput.setFocus(false);
+                copperInput.setFocus(true);
+                return true;
+            }
+            // Unfocus all when clicking elsewhere
+            goldInput.setFocus(false);
             silverInput.setFocus(false);
             copperInput.setFocus(false);
-            return true;
         }
-        if (silverInput.mouseClicked(mouseX, mouseY, button)) {
-            goldInput.setFocus(false);
-            silverInput.setFocus(true);
-            copperInput.setFocus(false);
-            return true;
-        }
-        if (copperInput.mouseClicked(mouseX, mouseY, button)) {
-            goldInput.setFocus(false);
-            silverInput.setFocus(false);
-            copperInput.setFocus(true);
-            return true;
-        }
-        // Unfocus all when clicking elsewhere
-        goldInput.setFocus(false);
-        silverInput.setFocus(false);
-        copperInput.setFocus(false);
         return super.mouseClicked(mouseX, mouseY, button);
     }
 

@@ -886,18 +886,19 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (fromPlayer > 0) deductCoins(player, fromPlayer);
         if (fromBank   > 0) {
             financeTable.setBalance(Math.max(0, financeTable.getBalance() - fromBank));
+            financeTable.recordTransaction("Payment", -fromBank, "Market / Service Payment");
             financeTable.syncToClient(); // push updated balance to the client immediately
         }
     }
 
     /**
-     * Find a Finance Table block entity within 8 blocks of pos.
+     * Find a Finance Table block entity within 16 blocks of pos.
      * Used to check for a connected Finance Table when processing purchases.
      */
     @Nullable
     public static FinanceTableBlockEntity findNearbyFinanceTable(Level level, BlockPos pos) {
         if (level == null) return null;
-        int radius = 8;
+        int radius = 16;
         for (BlockPos candidate : BlockPos.betweenClosed(
                 pos.offset(-radius, -radius, -radius),
                 pos.offset(radius, radius, radius))) {
@@ -1472,6 +1473,11 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
      * Any item can be requested; the town's supply score affects price and fulfillment chance.
      */
     public boolean createRequest(Player player, net.minecraft.resources.ResourceLocation itemId, int count) {
+        return createRequest(player, itemId, count, null);
+    }
+
+    public boolean createRequest(Player player, net.minecraft.resources.ResourceLocation itemId, int count,
+                                 @javax.annotation.Nullable net.minecraft.nbt.CompoundTag itemNbt) {
         net.minecraft.world.item.Item item =
                 net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
         if (item == null) return false;
@@ -1489,7 +1495,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
 
         // Delegate to sendDiplomat with the auto-selected town
-        return sendDiplomatWithScore(player, bestTown.getId(), itemId, count);
+        return sendDiplomatWithScore(player, bestTown.getId(), itemId, count, itemNbt);
     }
 
     /**
@@ -1519,6 +1525,12 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
      */
     private boolean sendDiplomatWithScore(Player player, String townId,
                                            net.minecraft.resources.ResourceLocation itemId, int count) {
+        return sendDiplomatWithScore(player, townId, itemId, count, null);
+    }
+
+    private boolean sendDiplomatWithScore(Player player, String townId,
+                                           net.minecraft.resources.ResourceLocation itemId, int count,
+                                           @javax.annotation.Nullable net.minecraft.nbt.CompoundTag itemNbt) {
         TownData town = TownRegistry.getTown(townId);
         if (town == null || town.getMinTraderLevel() > traderLevel) return false;
 
@@ -1529,7 +1541,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         int supplyScore = DiplomatRequest.getSupplyScore(town, itemId);
 
         // Calculate base price
-        int basePrice = PriceCalculator.getBaseValue(new ItemStack(item)) * count;
+        ItemStack sample = new ItemStack(item, 1);
+        if (itemNbt != null) sample.setTag(itemNbt.copy());
+        int basePrice = PriceCalculator.getBaseValue(sample) * count;
 
         // Calculate timing milestones
         long gameTime = level.getGameTime();
@@ -1541,9 +1555,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         long waitingEnd = discussingEnd + 300;
         long returnEnd = waitingEnd + baseTravelTicks;
 
-        String displayName = new ItemStack(item).getHoverName().getString();
+        String displayName = sample.getHoverName().getString();
         DiplomatRequest request = new DiplomatRequest(
-                UUID.randomUUID(), townId, itemId, displayName, count, gameTime
+                UUID.randomUUID(), townId, itemId, displayName, count, gameTime, itemNbt
         );
         request.setTimings(travelToEnd, discussingEnd, waitingEnd, returnEnd);
         request.setSupplyScore(supplyScore);

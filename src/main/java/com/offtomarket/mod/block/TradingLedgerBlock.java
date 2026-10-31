@@ -86,7 +86,9 @@ public class TradingLedgerBlock extends BaseEntityBlock {
         if (!level.isClientSide()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TradingLedgerBlockEntity tbbe) {
-                // Opening the GUI — auto-sync from adjacent containers is handled by serverTick.
+                // Perform an immediate container sync and client update so the player sees accurate items
+                tbbe.syncFromAdjacentContainers();
+                tbbe.syncToClient();
                 NetworkHooks.openScreen((ServerPlayer) player, tbbe, pos);
             }
         }

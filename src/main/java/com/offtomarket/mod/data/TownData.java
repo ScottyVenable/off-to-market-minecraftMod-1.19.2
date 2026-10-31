@@ -142,8 +142,7 @@ public class TownData {
      *   <li>Default: {@link NeedLevel#BALANCED}</li>
      * </ol>
      */
-    public NeedLevel getNeedLevel(Item item) {
-        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
+    public NeedLevel getNeedLevel(ResourceLocation rl) {
         if (rl == null) return NeedLevel.BALANCED;
         String key = rl.toString();
 
@@ -161,6 +160,17 @@ public class TownData {
 
         // 4. Default
         return NeedLevel.BALANCED;
+    }
+
+    public NeedLevel getNeedLevel(String key) {
+        if (key == null) return NeedLevel.BALANCED;
+        ResourceLocation rl = ResourceLocation.tryParse(key);
+        return getNeedLevel(rl);
+    }
+
+    public NeedLevel getNeedLevel(Item item) {
+        ResourceLocation rl = ForgeRegistries.ITEMS.getKey(item);
+        return getNeedLevel(rl);
     }
 
     /**

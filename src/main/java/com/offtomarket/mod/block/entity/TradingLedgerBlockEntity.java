@@ -2,6 +2,8 @@ package com.offtomarket.mod.block.entity;
 
 import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.data.PriceCalculator;
+import com.offtomarket.mod.item.CoinBagItem;
+import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.menu.TradingLedgerMenu;
 import com.offtomarket.mod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -21,8 +23,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
@@ -30,6 +34,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -533,6 +538,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
      */
     public int addItemAmount(ItemStack stack) {
         if (stack.isEmpty() || stack.getItem() == net.minecraft.world.item.Items.AIR) return 0;
+        if (stack.getItem() instanceof CoinItem || stack.getItem() instanceof CoinBagItem) return 0;
         if (com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack)) return 0;
 
         int weightPerUnit = getItemWeightPerUnit(stack);
@@ -623,13 +629,13 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     }
 
     /**
-     * Scan all six neighbouring positions and snapshot every item from any found
-     * Container block entity (excluding other Trading Ledgers) as virtual slots.
+     * Scan all neighbouring positions (including connected double chest halves) and snapshot every
+     * item from any found Container block entity (excluding other Trading Ledgers) as virtual slots.
      * Items are NOT physically moved — they stay in the source container and are
      * only removed when the shipment is sent or the player withdraws them.
      * Skips containers that were recently used as "To Container" withdrawal targets.
      */
-    private void syncFromAdjacentContainers() {
+    public void syncFromAdjacentContainers() {
         try {
             syncFromAdjacentContainersInternal();
         } catch (Exception e) {
@@ -655,8 +661,25 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         // VirtualSource mappings that were just restored from NBT.
         boolean seenAnyContainer = false;
 
+        Set<BlockPos> positionsToScan = new LinkedHashSet<>();
         for (Direction dir : Direction.values()) {
             BlockPos adjPos = pos.relative(dir);
+            positionsToScan.add(adjPos);
+
+            // Double chest support: if adjacent block is a chest connected to another half, scan the other half as well
+            BlockState adjState = level.getBlockState(adjPos);
+            if (adjState.getBlock() instanceof ChestBlock) {
+                if (adjState.hasProperty(ChestBlock.TYPE)) {
+                    ChestType chestType = adjState.getValue(ChestBlock.TYPE);
+                    if (chestType != ChestType.SINGLE) {
+                        Direction connectedDir = ChestBlock.getConnectedDirection(adjState);
+                        positionsToScan.add(adjPos.relative(connectedDir));
+                    }
+                }
+            }
+        }
+
+        for (BlockPos adjPos : positionsToScan) {
             BlockEntity adjBe = level.getBlockEntity(adjPos);
             if (!(adjBe instanceof Container container)) continue;
             if (adjBe instanceof TradingLedgerBlockEntity) continue;
@@ -669,6 +692,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             for (int cSlot = 0; cSlot < container.getContainerSize(); cSlot++) {
                 ItemStack stack = container.getItem(cSlot);
                 if (stack.isEmpty()) continue;
+                if (stack.getItem() instanceof CoinItem || stack.getItem() instanceof CoinBagItem) continue;
                 if (com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack)) continue;
 
                 // Find existing virtual ledger slot for this (sourcePos, sourceSlot) pair
@@ -905,6 +929,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
         if (stack.isEmpty()) return true;
+        if (stack.getItem() instanceof CoinItem || stack.getItem() instanceof CoinBagItem) return false;
         return !com.offtomarket.mod.config.ModConfig.isItemBlacklisted(stack);
     }
 
@@ -987,6 +1012,19 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public void onDataPacket(net.minecraft.network.Connection net, ClientboundBlockEntityDataPacket pkt) {
+        CompoundTag tag = pkt.getTag();
+        if (tag != null) {
+            handleUpdateTag(tag);
+        }
+    }
+
+    @Override
+    public void handleUpdateTag(CompoundTag tag) {
+        load(tag);
     }
 
     // ==================== Menu Provider ====================

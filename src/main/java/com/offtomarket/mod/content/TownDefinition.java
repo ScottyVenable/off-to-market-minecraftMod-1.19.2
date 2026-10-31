@@ -48,6 +48,16 @@ public class TownDefinition {
     public List<String> sells;
 
     /**
+     * Items this town needs (legacy or simplified definitions).
+     */
+    public List<String> needs;
+
+    /**
+     * Items this town produces in surplus (legacy or simplified definitions).
+     */
+    public List<String> surplus;
+
+    /**
      * Graduated demand level per item.
      * Key   - item registry name, e.g. {@code "minecraft:iron_ingot"}
      * Value - one of: {@code DESPERATE, HIGH_NEED, MODERATE_NEED, BALANCED, SURPLUS, OVERSATURATED}

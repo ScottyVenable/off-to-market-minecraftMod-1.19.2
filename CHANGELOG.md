@@ -1,5 +1,30 @@
 # Off to Market (Trading Deluxe) - Changelog
 
+## Version 0.6.3 — Double Chest Sync, Finance Ledger, Custom Towns & Test Suite
+
+### Fixed & Improved
+- **Trading Ledger Disappearing & Stale Items**:
+  - Implemented immediate container sync (`syncFromAdjacentContainers`) and client update on player right-click (`use`), eliminating blank/popping items when opening the GUI after world reload or chunk loads.
+  - Added connected double chest scanning support (`ChestBlock.getConnectedDirection`), resolving the bug where items placed in the other half of a double chest were invisible and falsely cleaned up as stale.
+  - Implemented `onDataPacket` and `handleUpdateTag` in `TradingLedgerBlockEntity` and `FinanceTableBlockEntity` for reliable client-side synchronization.
+- **Town Stock vs. Desperation Contradiction**:
+  - Towns now prune stock during dawn restocking when demand dynamically shifts to `DESPERATE` or `HIGH_NEED`.
+  - Filtered `TownInventory.toListings()` so goods that towns desperately need are never offered for sale to players on the market board.
+- **Finance Table Ledger Tab & Balance Range**:
+  - Expanded `TradingPostBlockEntity.findNearbyFinanceTable` search radius from 8 to 16 blocks to match the Market Board screen's 16-block detection distance.
+  - Added `TransactionRecord` system in `FinanceTableBlockEntity` logging the last 30 transactions (Deposits, Withdrawals, Payments) saved to NBT and synced to client.
+  - Added a 2-tab interface in `FinanceTableScreen` ("Bank" and "Ledger"), displaying transaction history with coin breakdowns and scroll support.
+- **Custom Towns Loading & Beau's Botany Shop**:
+  - Replaced immutable `Collections.emptySet()` in `TownLoader` with mutable `LinkedHashSet` collections, fixing the `UnsupportedOperationException` when mod compatibility or quests injected items into town needs/surplus.
+  - Added external custom town scanning in `config/offtomarket/towns/*.json`, allowing modpacks and players to drop in custom towns without recompiling the mod.
+  - Added `TownData.getNeedLevel(String)` and `TownData.getNeedLevel(ResourceLocation)` helper overloads.
+- **Enchanted Books & Item Requests**:
+  - Added `StoredEnchantments` handling in `PriceCalculator`, properly pricing enchanted books and enchanted gear according to enchant count and level sum.
+  - Prevented currency (`CoinItem`, `CoinBagItem`) from being inserted into the Trading Bin or sold for currency.
+  - Added `itemNbt` support to `DiplomatRequest` and `CreateRequestPacket` for custom enchanted items.
+- **Automated Testing Suite**:
+  - Integrated JUnit 5 into `build.gradle` and added unit test coverage (`TownDataTest`, `FinanceTableTransactionTest`, `DiplomatRequestTest`).
+
 ## Version 0.6.2 — Blacklist System, Mod Pricing Overhaul & Exploit Fixes
 
 ### Added

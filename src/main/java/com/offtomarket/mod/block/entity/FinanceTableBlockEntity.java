@@ -17,11 +17,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -34,11 +36,66 @@ public class FinanceTableBlockEntity extends BlockEntity implements MenuProvider
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    public static final class TransactionRecord {
+        public final long gameTime;
+        public final String type;
+        public final int amount;
+        public final int resultingBalance;
+        public final String details;
+
+        public TransactionRecord(long gameTime, String type, int amount, int resultingBalance, String details) {
+            this.gameTime = gameTime;
+            this.type = type;
+            this.amount = amount;
+            this.resultingBalance = resultingBalance;
+            this.details = details != null ? details : "";
+        }
+
+        public CompoundTag save() {
+            CompoundTag tag = new CompoundTag();
+            tag.putLong("Time", gameTime);
+            tag.putString("Type", type);
+            tag.putInt("Amount", amount);
+            tag.putInt("Bal", resultingBalance);
+            tag.putString("Details", details);
+            return tag;
+        }
+
+        public static TransactionRecord load(CompoundTag tag) {
+            return new TransactionRecord(
+                    tag.getLong("Time"),
+                    tag.getString("Type"),
+                    tag.getInt("Amount"),
+                    tag.getInt("Bal"),
+                    tag.getString("Details")
+            );
+        }
+    }
+
+    private static final int MAX_TRANSACTIONS = 30;
+    private final List<TransactionRecord> transactions = new ArrayList<>();
+
     /** Current balance stored in this Finance Table, in copper pieces. */
     private int balance = 0;
 
     public FinanceTableBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.FINANCE_TABLE.get(), pos, state);
+    }
+
+    // ==================== Transaction API ====================
+
+    public List<TransactionRecord> getTransactions() {
+        return Collections.unmodifiableList(transactions);
+    }
+
+    public void recordTransaction(String type, int amount, String details) {
+        long time = level != null ? level.getGameTime() : 0L;
+        transactions.add(0, new TransactionRecord(time, type, amount, balance, details));
+        if (transactions.size() > MAX_TRANSACTIONS) {
+            transactions.subList(MAX_TRANSACTIONS, transactions.size()).clear();
+        }
+        setChanged();
+        syncToClient();
     }
 
     // ==================== Balance API ====================
@@ -71,7 +128,10 @@ public class FinanceTableBlockEntity extends BlockEntity implements MenuProvider
                 inv.setItem(i, ItemStack.EMPTY);
             }
         }
-        balance += total;
+        if (total > 0) {
+            balance += total;
+            recordTransaction("Deposit", total, "Deposit All");
+        }
         setChanged();
         syncToClient();
     }
@@ -83,8 +143,10 @@ public class FinanceTableBlockEntity extends BlockEntity implements MenuProvider
      */
     public void withdraw(Player player) {
         if (balance <= 0) return;
+        int prevBalance = balance;
         List<ItemStack> coins = buildCoinStacks(balance);
         balance = 0;
+        recordTransaction("Withdrawal", -prevBalance, "Withdraw All");
         setChanged();
         syncToClient();
         for (ItemStack stack : coins) {
@@ -105,6 +167,7 @@ public class FinanceTableBlockEntity extends BlockEntity implements MenuProvider
         if (cpNeeded <= 0 || cpNeeded > balance) return;
 
         balance -= cpNeeded;
+        recordTransaction("Withdrawal", -cpNeeded, goldCount + "g " + silverCount + "s " + copperCount + "c");
         setChanged();
         syncToClient();
 
@@ -145,6 +208,7 @@ public class FinanceTableBlockEntity extends BlockEntity implements MenuProvider
 
         int total = goldCount * 100 + silverCount * 10 + copperCount;
         balance += total;
+        recordTransaction("Deposit", total, goldCount + "g " + silverCount + "s " + copperCount + "c");
         setChanged();
         syncToClient();
         return total;
@@ -235,17 +299,44 @@ public class FinanceTableBlockEntity extends BlockEntity implements MenuProvider
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
+    @Override
+    public void onDataPacket(net.minecraft.network.Connection net, ClientboundBlockEntityDataPacket pkt) {
+        CompoundTag tag = pkt.getTag();
+        if (tag != null) {
+            handleUpdateTag(tag);
+        }
+    }
+
+    @Override
+    public void handleUpdateTag(CompoundTag tag) {
+        load(tag);
+    }
+
     // ==================== NBT ====================
 
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putInt("Balance", balance);
+
+        ListTag list = new ListTag();
+        for (TransactionRecord tr : transactions) {
+            list.add(tr.save());
+        }
+        tag.put("Transactions", list);
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
         balance = tag.getInt("Balance");
+
+        transactions.clear();
+        if (tag.contains("Transactions")) {
+            ListTag list = tag.getList("Transactions", 10);
+            for (int i = 0; i < list.size(); i++) {
+                transactions.add(TransactionRecord.load(list.getCompound(i)));
+            }
+        }
     }
 }

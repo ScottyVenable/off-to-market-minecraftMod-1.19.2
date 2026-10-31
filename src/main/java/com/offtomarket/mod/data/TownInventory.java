@@ -80,6 +80,11 @@ public class TownInventory {
         for (StockSlot slot : slots) {
             if (slot.quantity <= 0) continue;
 
+            net.minecraft.world.item.ItemStack sample = slot.createSampleStack();
+            if (sample.isEmpty()) continue;
+            NeedLevel need = town.getNeedLevel(sample.getItem());
+            if (need == NeedLevel.DESPERATE || need == NeedLevel.HIGH_NEED) continue;
+
             int price = computeSlotPrice(town, slot);
 
             // Apply sale discount if on sale

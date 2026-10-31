@@ -8,11 +8,16 @@ import com.offtomarket.mod.data.TownData;
 import com.offtomarket.mod.data.TownLetter;
 import com.offtomarket.mod.data.TownRegistry;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Loads town definitions from JSON files at mod startup.
@@ -35,28 +40,54 @@ public class TownLoader {
     private static final String INDEX_PATH  = "/data/offtomarket/towns/_index.json";
     private static final String TOWNS_ROOT  = "/data/offtomarket/towns/";
 
-    /** Load every town listed in _index.json and register it with TownRegistry. */
+    /** Load every town listed in _index.json and any custom JSON towns in config/offtomarket/towns/. */
     public static void loadAll() {
         List<String> files = loadIndex();
-        if (files.isEmpty()) {
-            OffToMarket.LOGGER.warn("[TownLoader] _index.json is empty or not found — no JSON towns loaded!");
-            return;
-        }
-
         int loaded = 0;
-        for (String fileName : files) {
-            if (fileName.startsWith("_") || fileName.isBlank()) continue; // skip templates
-            try {
-                TownData town = loadTownFile(TOWNS_ROOT + fileName);
-                if (town != null) {
-                    TownRegistry.register(town);
-                    loaded++;
+        if (files.isEmpty()) {
+            OffToMarket.LOGGER.warn("[TownLoader] _index.json is empty or not found — no classpath towns loaded!");
+        } else {
+            for (String fileName : files) {
+                if (fileName.startsWith("_") || fileName.isBlank()) continue; // skip templates
+                try {
+                    TownData town = loadTownFile(TOWNS_ROOT + fileName);
+                    if (town != null) {
+                        TownRegistry.register(town);
+                        loaded++;
+                    }
+                } catch (Exception e) {
+                    OffToMarket.LOGGER.error("[TownLoader] Failed to load town file '{}': {}", fileName, e.getMessage());
                 }
-            } catch (Exception e) {
-                OffToMarket.LOGGER.error("[TownLoader] Failed to load town file '{}': {}", fileName, e.getMessage());
             }
         }
-        OffToMarket.LOGGER.info("[TownLoader] Loaded {} town(s) from JSON definitions.", loaded);
+
+        // Also load custom towns placed in config/offtomarket/towns/
+        try {
+            Path customTownsDir = FMLPaths.CONFIGDIR.get().resolve("offtomarket").resolve("towns");
+            if (Files.exists(customTownsDir) && Files.isDirectory(customTownsDir)) {
+                try (Stream<Path> stream = Files.list(customTownsDir)) {
+                    for (Path p : stream.filter(p -> p.getFileName().toString().endsWith(".json")).toList()) {
+                        String fileName = p.getFileName().toString();
+                        if (fileName.startsWith("_")) continue;
+                        try (Reader reader = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
+                            TownDefinition def = GSON.fromJson(reader, TownDefinition.class);
+                            TownData customTown = buildTownData(def, p.toString());
+                            if (customTown != null) {
+                                TownRegistry.register(customTown);
+                                loaded++;
+                                OffToMarket.LOGGER.info("[TownLoader] Loaded custom town '{}' from config: {}", customTown.getId(), fileName);
+                            }
+                        } catch (Exception ex) {
+                            OffToMarket.LOGGER.error("[TownLoader] Failed to load custom town file '{}': {}", fileName, ex.getMessage());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            OffToMarket.LOGGER.warn("[TownLoader] Could not scan config towns directory: {}", e.getMessage());
+        }
+
+        OffToMarket.LOGGER.info("[TownLoader] Loaded {} total town(s) from JSON definitions.", loaded);
     }
 
     // -----------------------------------------------------------------------
@@ -150,14 +181,40 @@ public class TownLoader {
             }
         }
 
+        // Build mutable needs and surplus sets (supports dynamic additions & modded compatibility)
+        Set<ResourceLocation> needsSet = new LinkedHashSet<>();
+        Set<ResourceLocation> surplusSet = new LinkedHashSet<>();
+
+        // Populate from explicit JSON needs / surplus arrays if defined
+        if (def.needs != null) {
+            for (String n : def.needs) {
+                if (n != null && !n.isBlank()) needsSet.add(new ResourceLocation(n.trim()));
+            }
+        }
+        if (def.surplus != null) {
+            for (String s : def.surplus) {
+                if (s != null && !s.isBlank()) surplusSet.add(new ResourceLocation(s.trim()));
+            }
+        }
+
+        // Also mirror graduated needLevels into needs/surplus sets
+        for (Map.Entry<String, NeedLevel> entry : needLevels.entrySet()) {
+            ResourceLocation rl = new ResourceLocation(entry.getKey());
+            if (entry.getValue() == NeedLevel.DESPERATE || entry.getValue() == NeedLevel.HIGH_NEED) {
+                needsSet.add(rl);
+            } else if (entry.getValue() == NeedLevel.SURPLUS || entry.getValue() == NeedLevel.OVERSATURATED) {
+                surplusSet.add(rl);
+            }
+        }
+
         return new TownData(
                 def.id.trim(),
                 def.displayName != null ? def.displayName : def.id,
                 def.description != null ? def.description : "",
                 Math.min(10, Math.max(1, def.distance)),
                 type,
-                Collections.emptySet(),   // legacy needs set — now expressed via needLevels
-                Collections.emptySet(),   // legacy surplus set — now expressed via needLevels
+                needsSet,
+                surplusSet,
                 specialtyItems,
                 Math.max(1, def.minTraderLevel),
                 needLevels,

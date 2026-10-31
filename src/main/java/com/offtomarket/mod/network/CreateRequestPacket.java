@@ -2,6 +2,7 @@ package com.offtomarket.mod.network;
 
 import com.offtomarket.mod.block.entity.TradingPostBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -9,6 +10,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import javax.annotation.Nullable;
 import java.util.function.Supplier;
 
 /**
@@ -20,24 +22,33 @@ public class CreateRequestPacket {
     private final BlockPos pos;
     private final ResourceLocation itemId;
     private final int count;
+    @Nullable
+    private final CompoundTag itemNbt;
 
-    public CreateRequestPacket(BlockPos pos, ResourceLocation itemId, int count) {
+    public CreateRequestPacket(BlockPos pos, ResourceLocation itemId, int count, @Nullable CompoundTag itemNbt) {
         this.pos = pos;
         this.itemId = itemId;
         this.count = count;
+        this.itemNbt = itemNbt;
+    }
+
+    public CreateRequestPacket(BlockPos pos, ResourceLocation itemId, int count) {
+        this(pos, itemId, count, null);
     }
 
     public static void encode(CreateRequestPacket msg, FriendlyByteBuf buf) {
         buf.writeBlockPos(msg.pos);
         buf.writeResourceLocation(msg.itemId);
         buf.writeInt(msg.count);
+        buf.writeNbt(msg.itemNbt);
     }
 
     public static CreateRequestPacket decode(FriendlyByteBuf buf) {
         return new CreateRequestPacket(
                 buf.readBlockPos(),
                 buf.readResourceLocation(),
-                buf.readInt()
+                buf.readInt(),
+                buf.readNbt()
         );
     }
 
@@ -59,7 +70,7 @@ public class CreateRequestPacket {
             if (ForgeRegistries.ITEMS.getValue(msg.itemId) == null
                     || ForgeRegistries.ITEMS.getValue(msg.itemId) == net.minecraft.world.item.Items.AIR) return;
 
-            tradingPost.createRequest(player, msg.itemId, msg.count);
+            tradingPost.createRequest(player, msg.itemId, msg.count, msg.itemNbt);
             player.inventoryMenu.broadcastChanges();
         });
         ctx.get().setPacketHandled(true);

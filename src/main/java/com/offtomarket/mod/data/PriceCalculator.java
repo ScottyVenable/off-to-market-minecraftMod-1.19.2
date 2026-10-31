@@ -3,6 +3,8 @@ package com.offtomarket.mod.data;
 import com.mojang.logging.LogUtils;
 import com.offtomarket.mod.debug.DebugConfig;
 import com.offtomarket.mod.item.AnimalTradeSlipItem;
+import com.offtomarket.mod.item.CoinBagItem;
+import com.offtomarket.mod.item.CoinItem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
@@ -913,16 +915,17 @@ public class PriceCalculator {
         // instance. The per-Item cache would lock in a bare no-NBT water-bottle result for the
         // shared PotionItem / SplashPotionItem / LingeringPotionItem singletons, making every
         // potion (including Potion of Regeneration) appear as ~5 CP. Compute fresh every call.
+        boolean hasEnchant = stack.isEnchanted() || (stack.getItem() instanceof EnchantedBookItem && !EnchantedBookItem.getEnchantments(stack).isEmpty());
         if (stack.getItem() instanceof PotionItem
                 || stack.getItem() instanceof SplashPotionItem
                 || stack.getItem() instanceof LingeringPotionItem) {
             ValueTier ptier = computePotionPrice(stack);
-            return stack.isEnchanted() ? applyEnchantBonus(ptier, stack) : ptier;
+            return hasEnchant ? applyEnchantBonus(ptier, stack) : ptier;
         }
         // Look up (or compute) the base tier for this item type.
         ValueTier base = BASE_TIER_CACHE.computeIfAbsent(stack.getItem(),
                 k -> computeBaseTier(new ItemStack(k)));
-        return stack.isEnchanted() ? applyEnchantBonus(base, stack) : base;
+        return hasEnchant ? applyEnchantBonus(base, stack) : base;
     }
 
     /**
@@ -980,14 +983,36 @@ public class PriceCalculator {
         return tier;
     }
 
-    /** Enchanted items get 3× base and 3× max ceiling. */
+    /** Enchanted items and enchanted books get enhanced base and max ceiling based on enchants and levels. */
     private static ValueTier applyEnchantBonus(ValueTier tier, ItemStack stack) {
-        if (!stack.isEnchanted()) return tier;
-        int enchantCount = stack.getEnchantmentTags().size();
-        double mult = 1.0 + enchantCount * 0.8; // each enchant adds 80% value
+        int enchantCount = 0;
+        int levelSum = 0;
+        if (stack.getItem() instanceof EnchantedBookItem) {
+            net.minecraft.nbt.ListTag list = EnchantedBookItem.getEnchantments(stack);
+            enchantCount = list.size();
+            for (int i = 0; i < list.size(); i++) {
+                levelSum += list.getCompound(i).getInt("lvl");
+            }
+        } else if (stack.isEnchanted()) {
+            net.minecraft.nbt.ListTag list = stack.getEnchantmentTags();
+            enchantCount = list.size();
+            for (int i = 0; i < list.size(); i++) {
+                levelSum += list.getCompound(i).getInt("lvl");
+            }
+        }
+        if (enchantCount == 0) return tier;
+
+        int base = tier.basePrice();
+        int max = tier.maxPrice();
+        if (stack.getItem() instanceof EnchantedBookItem && base < 80) {
+            base = 80;
+            max = 250;
+        }
+
+        double mult = 1.0 + enchantCount * 0.6 + levelSum * 0.3;
         return new ValueTier(
-                Math.max(tier.basePrice(), (int)(tier.basePrice() * mult)),
-                Math.max(tier.maxPrice(),  (int)(tier.maxPrice()  * mult))
+                Math.max(base, (int)(base * mult)),
+                Math.max(max,  (int)(max  * mult))
         );
     }
 
@@ -995,6 +1020,8 @@ public class PriceCalculator {
      * Get the base value of an item in copper pieces.
      */
     public static int getBaseValue(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 0;
+        if (stack.getItem() instanceof CoinItem || stack.getItem() instanceof CoinBagItem) return 0;
         // Animal trade slips: use per-animal value stored in NBT (filled) or raw slot value (empty)
         if (stack.getItem() instanceof AnimalTradeSlipItem) {
             CompoundTag tag = stack.getTag();

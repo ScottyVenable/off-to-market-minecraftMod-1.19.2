@@ -60,21 +60,30 @@ public class DiplomatRequest {
     private int diplomatPremium;     // Premium portion of the cost
     private int finalCost;           // Actual cost if accepted
     private int supplyScore;         // How easily the town can supply this (0-95, affects fulfillment chance)
+    @javax.annotation.Nullable
+    private CompoundTag itemNbt;
     
     private Status status;
 
     public DiplomatRequest(UUID id, String townId, ResourceLocation requestedItemId,
-                           String itemDisplayName, int requestedCount, long requestTime) {
+                           String itemDisplayName, int requestedCount, long requestTime,
+                           @javax.annotation.Nullable CompoundTag itemNbt) {
         this.id = id;
         this.townId = townId;
         this.requestedItemId = requestedItemId;
         this.itemDisplayName = itemDisplayName;
         this.requestedCount = requestedCount;
         this.requestTime = requestTime;
+        this.itemNbt = itemNbt;
         this.status = Status.TRAVELING_TO;
         this.proposedPrice = 0;
         this.diplomatPremium = 0;
         this.finalCost = 0;
+    }
+
+    public DiplomatRequest(UUID id, String townId, ResourceLocation requestedItemId,
+                           String itemDisplayName, int requestedCount, long requestTime) {
+        this(id, townId, requestedItemId, itemDisplayName, requestedCount, requestTime, null);
     }
 
     // ==================== Getters ====================
@@ -96,6 +105,8 @@ public class DiplomatRequest {
     public int getDiplomatPremium() { return diplomatPremium; }
     public int getFinalCost() { return finalCost; }
     public int getSupplyScore() { return supplyScore; }
+    @javax.annotation.Nullable
+    public CompoundTag getItemNbt() { return itemNbt; }
 
     // ==================== Setters ====================
 
@@ -247,7 +258,11 @@ public class DiplomatRequest {
     public ItemStack createStack() {
         Item item = ForgeRegistries.ITEMS.getValue(requestedItemId);
         if (item == null || item == net.minecraft.world.item.Items.AIR) return ItemStack.EMPTY;
-        return new ItemStack(item, requestedCount);
+        ItemStack stack = new ItemStack(item, requestedCount);
+        if (itemNbt != null) {
+            stack.setTag(itemNbt.copy());
+        }
+        return stack;
     }
 
     // ==================== NBT ====================
@@ -269,17 +284,22 @@ public class DiplomatRequest {
         tag.putInt("FinalCost", finalCost);
         tag.putInt("SupplyScore", supplyScore);
         tag.putString("Status", status.name());
+        if (itemNbt != null) {
+            tag.put("ItemNbt", itemNbt);
+        }
         return tag;
     }
 
     public static DiplomatRequest load(CompoundTag tag) {
+        CompoundTag nbt = tag.contains("ItemNbt") ? tag.getCompound("ItemNbt") : null;
         DiplomatRequest req = new DiplomatRequest(
                 tag.getUUID("Id"),
                 tag.getString("Town"),
                 new ResourceLocation(tag.getString("Item")),
                 tag.getString("Name"),
                 tag.getInt("Count"),
-                tag.getLong("RequestTime")
+                tag.getLong("RequestTime"),
+                nbt
         );
         req.travelToEndTime = tag.getLong("TravelToEnd");
         req.discussingEndTime = tag.getLong("DiscussingEnd");

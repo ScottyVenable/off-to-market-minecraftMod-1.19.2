@@ -124,6 +124,15 @@ public class TownInventoryManager {
      * Restock a single town's inventory.
      */
     private static void restockTown(TownInventory inv, TownData town) {
+        // Prune any stock slots for goods the town now desperately needs
+        inv.getSlots().removeIf(slot -> {
+            net.minecraft.world.item.Item item =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(slot.getItemId());
+            if (item == null) return false;
+            NeedLevel need = town.getNeedLevel(item);
+            return need == NeedLevel.DESPERATE || need == NeedLevel.HIGH_NEED;
+        });
+
         // Decay buy counts by 50% to gradually normalize prices
         for (StockSlot slot : inv.getSlots()) {
             slot.setBuyCount(slot.getBuyCount() / 2);
