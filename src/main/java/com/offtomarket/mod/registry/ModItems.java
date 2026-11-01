@@ -73,4 +73,9 @@ public class ModItems {
     public static final RegistryObject<Item> FINANCE_TABLE_ITEM = ITEMS.register("finance_table",
             () -> new BlockItem(ModBlocks.FINANCE_TABLE.get(),
                     new Item.Properties().tab(ModCreativeTab.TAB)));
+
+    // Route Marker Tool
+    public static final RegistryObject<Item> ROUTE_MARKER = ITEMS.register("route_marker",
+            () -> new com.offtomarket.mod.item.RouteMarkerItem(new Item.Properties().tab(ModCreativeTab.TAB)
+                    .stacksTo(1).rarity(Rarity.RARE)));
 }

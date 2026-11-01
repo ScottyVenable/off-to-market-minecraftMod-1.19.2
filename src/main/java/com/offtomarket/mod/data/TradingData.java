@@ -24,9 +24,14 @@ public class TradingData extends SavedData {
 
     private CompoundTag sharedState = new CompoundTag();
     private final Set<BlockPos> registeredPosts = new HashSet<>();
+    private final TownDepotManager depotManager = new TownDepotManager();
     private long lastTickedGameTime = -1;
 
     public TradingData() {
+    }
+
+    public TownDepotManager getDepotManager() {
+        return depotManager;
     }
 
     /**
@@ -100,6 +105,9 @@ public class TradingData extends SavedData {
         // Persist town inventories (global, shared across all trading posts)
         tag.put("TownInventories", TownInventoryManager.save());
 
+        // Persist container town assignments (depot loading docks)
+        tag.put("DepotManager", depotManager.save());
+
         return tag;
     }
 
@@ -119,6 +127,10 @@ public class TradingData extends SavedData {
         // Restore town inventories
         if (tag.contains("TownInventories")) {
             TownInventoryManager.load(tag.getCompound("TownInventories"));
+        }
+        // Restore depot manager
+        if (tag.contains("DepotManager")) {
+            data.depotManager.load(tag.getCompound("DepotManager"));
         }
         return data;
     }

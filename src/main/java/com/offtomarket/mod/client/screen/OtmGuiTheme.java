@@ -176,6 +176,18 @@ public final class OtmGuiTheme {
         GuiComponent.fill(ps, x, y1, x + 1, y2, SEPARATOR);
     }
 
+    /**
+     * Draws a horizontal progress / proportion bar with background.
+     */
+    public static void drawBar(PoseStack ps, int x, int y, int w, int h, float ratio, int fillColor, int bgColor) {
+        ratio = Math.max(0.0f, Math.min(1.0f, ratio));
+        GuiComponent.fill(ps, x, y, x + w, y + h, bgColor);
+        int fillW = (int) (w * ratio);
+        if (fillW > 0) {
+            GuiComponent.fill(ps, x, y, x + fillW, y + h, fillColor);
+        }
+    }
+
     // =========================================================================
     // Text helpers
     // =========================================================================

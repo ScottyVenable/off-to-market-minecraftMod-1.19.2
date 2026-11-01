@@ -720,16 +720,17 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void renderIncomeBg(PoseStack ps, int x, int y) {
         // Stats strip at top
         drawInsetPanel(ps, x + 6, y + 35, 372, 20);
-        // Full-height content panel
-        drawInsetPanel(ps, x + 6, y + 57, 372, 165);
-        // Best Towns section: header separator + column-header separator
-        fill(ps, x + 8, y + 68, x + 376, y + 69, OtmGuiTheme.SEPARATOR);
-        fill(ps, x + 8, y + 78, x + 376, y + 79, OtmGuiTheme.SEPARATOR);
-        // Divider between Best Towns rows and Top Items section
-        fill(ps, x + 8, y + 137, x + 376, y + 138, OtmGuiTheme.SEPARATOR);
-        // Top Items section: header separator + column-header separator
-        fill(ps, x + 8, y + 147, x + 376, y + 148, OtmGuiTheme.SEPARATOR);
-        fill(ps, x + 8, y + 157, x + 376, y + 158, OtmGuiTheme.SEPARATOR);
+        // 7-Day Revenue Trend Panel
+        drawInsetPanel(ps, x + 6, y + 57, 372, 60);
+        // Baseline separator for chart
+        fill(ps, x + 10, y + 104, x + 374, y + 105, OtmGuiTheme.SEPARATOR);
+
+        // Lower panels (Best Towns on left, Top Items on right)
+        drawInsetPanel(ps, x + 6, y + 119, 184, 103);
+        drawInsetPanel(ps, x + 194, y + 119, 184, 103);
+        // Column header separators
+        fill(ps, x + 8, y + 138, x + 188, y + 139, OtmGuiTheme.SEPARATOR);
+        fill(ps, x + 196, y + 138, x + 376, y + 139, OtmGuiTheme.SEPARATOR);
     }
 
     private void renderActivityBg(PoseStack ps, int x, int y, int mouseX, int mouseY) {
@@ -1371,92 +1372,145 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private void renderEconomyDashboard(PoseStack ps) {
         TradingPostBlockEntity be = menu.getBlockEntity();
 
-        // ── Stats strip (y=35–55) ────────────────────────────────────
         if (be == null) {
             this.font.draw(ps, "No data available.", 10, 39, OtmGuiTheme.TEXT_MUTED);
             return;
         }
 
+        // ── Stats strip (y=35–55) ────────────────────────────────────
         long lifetime   = be.getLifetimeEarnings();
         int  totalShips = be.getTotalShipmentsSent();
         long avgEarnings = totalShips > 0 ? lifetime / totalShips : 0;
 
         int statsY = 39;
-        this.font.draw(ps, "Earnings:", 8, statsY, OtmGuiTheme.TEXT_LABEL);
-        this.font.draw(ps, lifetime > 0 ? formatCoinText((int) Math.min(lifetime, Integer.MAX_VALUE)) : "\u00A78\u2014", 60, statsY, 0xFFFFFF);
-        this.font.draw(ps, "Ships:", 185, statsY, OtmGuiTheme.TEXT_LABEL);
-        this.font.draw(ps, String.valueOf(totalShips), 216, statsY, OtmGuiTheme.TEXT_VALUE);
-        this.font.draw(ps, "Avg/Ship:", 250, statsY, OtmGuiTheme.TEXT_LABEL);
-        this.font.draw(ps, avgEarnings > 0 ? formatCoinText((int) Math.min(avgEarnings, Integer.MAX_VALUE)) : "\u00A78\u2014", 305, statsY, 0xFFFFFF);
+        this.font.draw(ps, "Earnings:", 10, statsY, OtmGuiTheme.TEXT_LABEL);
+        this.font.draw(ps, lifetime > 0 ? formatCoinText((int) Math.min(lifetime, Integer.MAX_VALUE)) : "\u00A78\u2014", 58, statsY, 0xFFFFFF);
+        this.font.draw(ps, "Ships:", 140, statsY, OtmGuiTheme.TEXT_LABEL);
+        this.font.draw(ps, String.valueOf(totalShips), 170, statsY, OtmGuiTheme.TEXT_VALUE);
+        this.font.draw(ps, "Avg:", 200, statsY, OtmGuiTheme.TEXT_LABEL);
+        this.font.draw(ps, avgEarnings > 0 ? formatCoinText((int) Math.min(avgEarnings, Integer.MAX_VALUE)) : "\u00A78\u2014", 225, statsY, 0xFFFFFF);
 
-        if (lifetime == 0) {
-            this.font.draw(ps, "Send shipments to see stats here!", 10, 90, OtmGuiTheme.TEXT_MUTED);
-            return;
+        // Market Climate badge
+        MarketClimate climate = be.getMarketClimate();
+        String climateText = climate.getIcon() + " " + climate.getDisplayName()
+                + (climate.getPayoutMultiplier() != 1.0 ? " (" + (climate.getPayoutMultiplier() >= 1.0 ? "+" : "")
+                + Math.round((climate.getPayoutMultiplier() - 1.0) * 100) + "%)" : "");
+        int cw = this.font.width(climateText);
+        this.font.draw(ps, climateText, 372 - cw, statsY, 0xFF000000 | climate.getColor());
+
+        // ── 7-Day Revenue Trend (y=57–117) ───────────────────────────
+        this.font.draw(ps, "\u00A7l7-Day Revenue Trend", 10, 60, OtmGuiTheme.TEXT_TITLE);
+        long[] rev = be.getDailyRevenue();
+        long maxRev = 1;
+        for (long r : rev) if (r > maxRev) maxRev = r;
+
+        int chartBaseY = 104;
+        int maxBarH = 26;
+
+        for (int i = 0; i < 7; i++) {
+            long dayRev = rev[6 - i]; // 6 - i goes from 6 days ago (i=0) to today (i=6)
+            int barH = dayRev > 0 ? Math.max(3, (int) Math.round(((double) dayRev / maxRev) * maxBarH)) : 0;
+            int barX = 20 + i * 50;
+            int barW = 38;
+            int barY = chartBaseY - barH;
+
+            if (barH > 0) {
+                if (i == 6) { // Today
+                    fill(ps, barX, barY, barX + barW, chartBaseY, 0xFFFFD700);
+                    fill(ps, barX + 1, barY + 1, barX + barW - 1, chartBaseY, 0xFFCC9900);
+                } else {
+                    fill(ps, barX, barY, barX + barW, chartBaseY, 0xFF50B070);
+                    fill(ps, barX + 1, barY + 1, barX + barW - 1, chartBaseY, 0xFF358050);
+                }
+                CoinRenderer.renderCompactCoinValue(ps, this.font, barX + 2, barY - 9, (int) Math.min(dayRev, Integer.MAX_VALUE));
+            } else {
+                this.font.draw(ps, "\u2014", barX + 15, chartBaseY - 9, 0x555555);
+            }
+
+            String dayLabel = (i == 6) ? "Today" : ("-" + (6 - i) + "d");
+            int lw = this.font.width(dayLabel);
+            this.font.draw(ps, dayLabel, barX + (barW - lw) / 2, chartBaseY + 2, (i == 6) ? 0xFFFFD700 : 0x888888);
         }
 
-        // ── Best Towns (stacked, full width, y=57–137) ───────────────
-        // Section header at y=60, separator at y=68 (bg), col headers at y=70, rows from y=81
-        this.font.draw(ps, "\u00A7lBest Towns", 8, 60, OtmGuiTheme.TEXT_TITLE);
-        this.font.draw(ps, "Town",     8,   70, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Total",   220,  70, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Avg/Ship", 314, 70, OtmGuiTheme.TEXT_COL_HEADER);
+        // ── Best Towns (Left Column, x=8–188, y=119–220) ─────────────
+        this.font.draw(ps, "\u00A7lBest Towns", 10, 122, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Town", 10, 131, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Earnings", 140, 131, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> townEarnings = be.getEarningsByTown();
         List<Map.Entry<String, Long>> sortedTowns = townEarnings.entrySet().stream()
                 .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
                 .toList();
 
-        int maxTownScroll = Math.max(0, sortedTowns.size() - VISIBLE_INCOME_ROWS);
+        int maxTownScroll = Math.max(0, sortedTowns.size() - 5);
         incomeTownScroll = Math.min(incomeTownScroll, maxTownScroll);
 
-        int rowY = 81;
-        int displayed = 0;
-        for (int i = incomeTownScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedTowns.size(); i++, displayed++) {
+        int rowY = 141;
+        int displayedTowns = 0;
+        for (int i = incomeTownScroll; displayedTowns < 5 && i < sortedTowns.size(); i++, displayedTowns++) {
             Map.Entry<String, Long> entry = sortedTowns.get(i);
             TownData town = TownRegistry.getTown(entry.getKey());
-            String townName = OtmGuiTheme.truncate(this.font,
-                    town != null ? town.getDisplayName() : entry.getKey(), 200);
-            this.font.draw(ps, townName, 8, rowY, OtmGuiTheme.TEXT_NAME);
-            this.font.draw(ps, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 220, rowY, 0xFFFFFF);
-            long avg = entry.getValue() / Math.max(1, countShipmentsForTown(be, entry.getKey()));
-            this.font.draw(ps, formatCoinText((int) Math.min(avg, Integer.MAX_VALUE)), 314, rowY, 0xFFFFFF);
-            rowY += 9;
-        }
-        if (sortedTowns.size() > VISIBLE_INCOME_ROWS) {
-            String scrollInfo = (incomeTownScroll + 1) + "-"
-                    + Math.min(incomeTownScroll + VISIBLE_INCOME_ROWS, sortedTowns.size())
-                    + " / " + sortedTowns.size();
-            this.font.draw(ps, scrollInfo, 8, 129, OtmGuiTheme.TEXT_SCROLL);
+            String townName = OtmGuiTheme.truncate(this.font, town != null ? town.getDisplayName() : entry.getKey(), 105);
+            this.font.draw(ps, townName, 10, rowY, OtmGuiTheme.TEXT_NAME);
+            this.font.draw(ps, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 140, rowY, 0xFFFFFF);
+
+            float share = (float) entry.getValue() / Math.max(1L, lifetime);
+            OtmGuiTheme.drawBar(ps, 10, rowY + 9, 172, 2, share, 0xFFBBA878, 0xFF2A1F14);
+            rowY += 14;
         }
 
-        // ── Top Items (stacked, full width, y=138–222) ───────────────
-        // Section header at y=140, separator at y=147 (bg), col headers at y=150, rows from y=160
-        this.font.draw(ps, "\u00A7lTop Items", 8, 140, OtmGuiTheme.TEXT_TITLE);
-        this.font.draw(ps, "Item",  8,   150, OtmGuiTheme.TEXT_COL_HEADER);
-        this.font.draw(ps, "Total", 314, 150, OtmGuiTheme.TEXT_COL_HEADER);
+        // ── Top Items (Right Column, x=196–376, y=119–220) ───────────
+        this.font.draw(ps, "\u00A7lTop Items", 198, 122, OtmGuiTheme.TEXT_TITLE);
+        this.font.draw(ps, "Item", 198, 131, OtmGuiTheme.TEXT_COL_HEADER);
+        this.font.draw(ps, "Earnings", 328, 131, OtmGuiTheme.TEXT_COL_HEADER);
 
         Map<String, Long> itemEarnings = be.getEarningsByItem();
         List<Map.Entry<String, Long>> sortedItems = itemEarnings.entrySet().stream()
                 .sorted(Comparator.<Map.Entry<String, Long>, Long>comparing(Map.Entry::getValue).reversed())
                 .toList();
 
-        int maxItemScroll = Math.max(0, sortedItems.size() - VISIBLE_INCOME_ROWS);
+        int maxItemScroll = Math.max(0, sortedItems.size() - 5);
         incomeItemScroll = Math.min(incomeItemScroll, maxItemScroll);
 
-        rowY = 160;
-        displayed = 0;
-        for (int i = incomeItemScroll; displayed < VISIBLE_INCOME_ROWS && i < sortedItems.size(); i++, displayed++) {
+        rowY = 141;
+        int displayedItems = 0;
+        for (int i = incomeItemScroll; displayedItems < 5 && i < sortedItems.size(); i++, displayedItems++) {
             Map.Entry<String, Long> entry = sortedItems.get(i);
-            String name = OtmGuiTheme.truncate(this.font, entry.getKey(), 290);
-            this.font.draw(ps, name, 8, rowY, OtmGuiTheme.TEXT_NAME);
-            this.font.draw(ps, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 314, rowY, 0xFFFFFF);
-            rowY += 9;
+            String name = OtmGuiTheme.truncate(this.font, entry.getKey(), 105);
+            this.font.draw(ps, name, 198, rowY, OtmGuiTheme.TEXT_NAME);
+            this.font.draw(ps, formatCoinText((int) Math.min(entry.getValue(), Integer.MAX_VALUE)), 328, rowY, 0xFFFFFF);
+
+            float share = (float) entry.getValue() / Math.max(1L, lifetime);
+            OtmGuiTheme.drawBar(ps, 198, rowY + 9, 172, 2, share, 0xFFBBA878, 0xFF2A1F14);
+            rowY += 14;
         }
-        if (sortedItems.size() > VISIBLE_INCOME_ROWS) {
-            String scrollInfo = (incomeItemScroll + 1) + "-"
-                    + Math.min(incomeItemScroll + VISIBLE_INCOME_ROWS, sortedItems.size())
-                    + " / " + sortedItems.size();
-            this.font.draw(ps, scrollInfo, 8, 212, OtmGuiTheme.TEXT_SCROLL);
+    }
+
+    private String getTownSpecializationTag(TownData town) {
+        String id = town.getId().toLowerCase();
+        if (id.contains("peenam") || id.contains("ranch") || id.contains("pasture")) {
+            return "[Livestock & Ranching]";
+        } else if (id.contains("greenhollow") || id.contains("farm") || id.contains("harvest") || id.contains("valley")) {
+            return "[Agricultural Specialist]";
+        } else if (id.contains("frostpeak") || id.contains("mine") || id.contains("forge") || id.contains("iron")) {
+            return "[Mining & Metallurgy]";
+        } else if (id.contains("sunken") || id.contains("fisher") || id.contains("wharf") || id.contains("aqua")) {
+            return "[Maritime & Fishing]";
+        } else if (id.contains("arcane") || id.contains("spell") || id.contains("enchant") || id.contains("bazaar")) {
+            return "[Mystical & Alchemy]";
+        } else if (id.contains("twilight") || id.contains("aether") || id.contains("sky")) {
+            return "[Exotic Realm Imports]";
+        } else if (id.contains("dungeon") || id.contains("blade") || id.contains("cataclysm")) {
+            return "[Armament & Relics]";
+        } else if (id.contains("vinery") || id.contains("vineyard")) {
+            return "[Viticulture & Orchard]";
+        } else {
+            return switch (town.getType()) {
+                case CITY -> "[Regional Trade Capital]";
+                case OUTPOST -> "[Frontier Garrison]";
+                case MARKET -> "[Mercantile Hub]";
+                default -> "[Independent Settlement]";
+            };
         }
     }
 
@@ -1582,7 +1636,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
         // Type + distance right of name
         String meta = town.getType().getDisplayName() + " \u00B7 Dist " + town.getDistance();
-        this.font.draw(poseStack, meta, rightX, 48, 0x6B5A3E);
+        String specTag = getTownSpecializationTag(town);
+        this.font.draw(poseStack, meta + "  \u00A72" + specTag, rightX, 48, 0x6B5A3E);
 
         // --- Section below first divider (y=59–78): Level + Reputation ---
         // Level requirement
@@ -1604,6 +1659,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Collect all content into lines list for unified scrolling
         List<String> lines = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
+
+        // Active Partnership Perk indicator
+        if (be != null && unlocked) {
+            int rep = be.getReputation(town.getId());
+            String perk = TradingPostBlockEntity.getPartnershipPerkDescription(rep);
+            lines.add("\u2726 " + perk);
+            colors.add(rep >= 0 ? 0x2A7F2A : 0x8F2A2A);
+            lines.add("");
+            colors.add(0);
+        }
 
         // Description — word-wrap to fit available width
         String desc = town.getDescription();
@@ -1691,27 +1756,27 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         // Build needs/surplus section lines
         if (!desperateItems.isEmpty()) {
             lines.add(""); colors.add(0);
-            lines.add("\u2757 Desperate:"); colors.add(0xFF4444);
+            lines.add("\u2757 [||||||] Desperate (2.0x):"); colors.add(0xFF4444);
             for (String[] e : desperateItems) { lines.add("  " + e[0]); colors.add(0xFF8888); }
         }
         if (!highNeedItems.isEmpty()) {
             lines.add(""); colors.add(0);
-            lines.add("\u26A0 High Need:"); colors.add(0xFFAA00);
+            lines.add("\u26A0 [||||  ] High Need (1.5x):"); colors.add(0xFFAA00);
             for (String[] e : highNeedItems) { lines.add("  " + e[0]); colors.add(0xFFCC77); }
         }
         if (!moderateItems.isEmpty()) {
             lines.add(""); colors.add(0);
-            lines.add("Moderate:"); colors.add(0xCCAA44);
+            lines.add("  [|||   ] Moderate (1.2x):"); colors.add(0xCCAA44);
             for (String[] e : moderateItems) { lines.add("  " + e[0]); colors.add(0xBB9944); }
         }
         if (!surplusItems.isEmpty()) {
             lines.add(""); colors.add(0);
-            lines.add("\u25BC Surplus:"); colors.add(0x4488FF);
+            lines.add("\u25BC [||    ] Surplus (0.8x):"); colors.add(0x4488FF);
             for (String[] e : surplusItems) { lines.add("  " + e[0]); colors.add(0x88AAFF); }
         }
         if (!oversatItems.isEmpty()) {
             lines.add(""); colors.add(0);
-            lines.add("Oversaturated:"); colors.add(0x6699CC);
+            lines.add("  [|     ] Oversaturated (0.6x):"); colors.add(0x6699CC);
             for (String[] e : oversatItems) { lines.add("  " + e[0]); colors.add(0x99BBDD); }
         }
 

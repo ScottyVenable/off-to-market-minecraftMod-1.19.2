@@ -82,6 +82,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     private int totalShipmentsSent = 0;      // total shipments completed
     private final Map<String, Long> earningsByTown = new HashMap<>();    // townId → total earnings
     private final Map<String, Long> earningsByItem = new HashMap<>();    // item display name → total earnings
+    private final long[] dailyRevenue = new long[7];                     // index 0 = today, 1 = yesterday, ... 6 = 6 days ago
+    private long lastDayShift = -1;                                      // day index when dailyRevenue was last shifted
+    private MarketClimate clientMarketClimate = MarketClimate.STABLE;
 
     // Dynamic demand tracking
     private final DemandTracker demandTracker = new DemandTracker();
@@ -137,6 +140,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public int getTotalShipmentsSent() { return totalShipmentsSent; }
     public Map<String, Long> getEarningsByTown() { return Collections.unmodifiableMap(earningsByTown); }
     public Map<String, Long> getEarningsByItem() { return Collections.unmodifiableMap(earningsByItem); }
+    public long[] getDailyRevenue() { return dailyRevenue.clone(); }
+    public MarketClimate getMarketClimate() {
+        if (level != null && !level.isClientSide()) {
+            return SupplyDemandManager.getCurrentClimate();
+        }
+        return clientMarketClimate;
+    }
     public List<BuyOrder> getActiveBuyOrders() { return activeBuyOrders; }
     public List<Quest> getActiveQuests() { return activeQuests; }
     public long getLastQuestRefreshDay() { return lastQuestRefreshDay; }
@@ -211,6 +221,58 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         if (rep >= -299) return 0xFFFF55;  // Yellow      — Distrusted
         if (rep >= -599) return 0xFF5555;  // Light Red   — Unfriendly
         return 0xAA0000;                   // Dark Red    — Hostile
+    }
+
+    /**
+     * Payout multiplier for town reputation:
+     * Exalted (>=600): +20% (1.20)
+     * Honored (>=300): +15% (1.15)
+     * Friendly (>=100): +10% (1.10)
+     * Neutral (>= -99): 1.00
+     * Distrusted (>= -299): -10% (0.90)
+     * Unfriendly (>= -599): -20% (0.80)
+     * Hostile: -35% (0.65)
+     */
+    public double getReputationPayoutMultiplier(String townId) {
+        int rep = getReputation(townId);
+        if (rep >= 600) return 1.20;
+        if (rep >= 300) return 1.15;
+        if (rep >= 100) return 1.10;
+        if (rep >= -99) return 1.00;
+        if (rep >= -299) return 0.90;
+        if (rep >= -599) return 0.80;
+        return 0.65;
+    }
+
+    /**
+     * Travel time multiplier for town reputation:
+     * Exalted (>=600): -40% (0.60)
+     * Honored (>=300): -30% (0.70)
+     * Friendly (>=100): -20% (0.80)
+     * Neutral (>= -99): 1.00
+     * Distrusted (>= -299): +15% (1.15)
+     * Unfriendly (>= -599): +30% (1.30)
+     * Hostile: +50% (1.50)
+     */
+    public double getReputationTravelMultiplier(String townId) {
+        int rep = getReputation(townId);
+        if (rep >= 600) return 0.60;
+        if (rep >= 300) return 0.70;
+        if (rep >= 100) return 0.80;
+        if (rep >= -99) return 1.00;
+        if (rep >= -299) return 1.15;
+        if (rep >= -599) return 1.30;
+        return 1.50;
+    }
+
+    public static String getPartnershipPerkDescription(int rep) {
+        if (rep >= 600) return "+20% Payout, -40% Travel Time (Exalted Partner)";
+        if (rep >= 300) return "+15% Payout, -30% Travel Time (Honored Ally)";
+        if (rep >= 100) return "+10% Payout, -20% Travel Time (Favored Route)";
+        if (rep >= -99) return "Standard Trade Terms";
+        if (rep >= -299) return "-10% Payout, +15% Travel Time (Distrusted)";
+        if (rep >= -599) return "-20% Payout, +30% Travel Time (Suspicious Tariffs)";
+        return "-35% Payout, +50% Travel Time (Embargo Penalties)";
     }
 
     public void setSelectedTownId(String id) {
@@ -312,6 +374,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             repTag.putInt(e.getKey(), e.getValue());
         }
         tag.put("TownReputation", repTag);
+
+        tag.putLongArray("DailyRevenue", dailyRevenue);
+        tag.putLong("LastDayShift", lastDayShift);
+        tag.putString("MarketClimate", getMarketClimate().name());
 
         return tag;
     }
@@ -425,6 +491,17 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 townReputation.put(key, repTag.getInt(key));
             }
         }
+
+        if (tag.contains("DailyRevenue")) {
+            long[] arr = tag.getLongArray("DailyRevenue");
+            for (int i = 0; i < Math.min(arr.length, 7); i++) {
+                dailyRevenue[i] = arr[i];
+            }
+        }
+        lastDayShift = tag.getLong("LastDayShift");
+        if (tag.contains("MarketClimate")) {
+            clientMarketClimate = MarketClimate.fromName(tag.getString("MarketClimate"));
+        }
     }
 
     /**
@@ -529,10 +606,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         if (shipmentItems.isEmpty()) return false;
 
-        // Calculate travel time (apply trading cart bonus)
+        // Calculate travel time (apply trading cart and reputation bonuses)
         long gameTime = level.getGameTime();
         int baseTravelTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
-        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier());
+        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier(town.getId()));
         // Track trading cart lifetime time saved (in ticks)
         if (tradingCart.isHired()) {
             int ticksSaved = baseTravelTicks - travelTicks;
@@ -595,7 +672,8 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 TownData town = TownRegistry.getTown(shipment.getTownId());
                 if (town != null) {
                     long gameTime = level.getGameTime();
-                    int returnTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
+                    int baseReturnTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
+                    int returnTicks = (int) (baseReturnTicks * getTravelTimeMultiplier(town.getId()));
                     shipment.setReturnArrivalTime(gameTime + returnTicks);
                     shipment.setStatus(Shipment.Status.RETURNING);
                     syncToClient();
@@ -1133,7 +1211,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                         int baseTravelTicks = town != null
                                 ? town.getTravelTimeTicks(DebugConfig.getTicksPerDistance())
                                 : 1200; // fallback ~1 minute
-                        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier());
+                        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier(quest.getTownId()));
                         long currentTime = level != null ? level.getGameTime() : 0;
                         quest.setRewardArrivalTime(currentTime + travelTicks);
                         
@@ -1237,13 +1315,20 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /**
-     * Get the travel time reduction multiplier if trading cart is hired.
+     * Get the travel time reduction multiplier for a specific town,
+     * combining trading cart bonus and town reputation perks.
+     */
+    public double getTravelTimeMultiplier(String townId) {
+        double workerMod = tradingCart.isHired() ? (1.0 - tradingCart.getSpeedBonus()) : 1.0;
+        double repMod = getReputationTravelMultiplier(townId);
+        return Math.max(0.20, workerMod * repMod);
+    }
+
+    /**
+     * Get the travel time reduction multiplier for the currently selected town.
      */
     public double getTravelTimeMultiplier() {
-        if (tradingCart.isHired()) {
-            return 1.0 - tradingCart.getSpeedBonus();
-        }
-        return 1.0;
+        return getTravelTimeMultiplier(selectedTownId);
     }
 
     /**
@@ -1334,7 +1419,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Scout travels faster than shipments (no cargo). Use 60% of normal travel time.
         long gameTime = level.getGameTime();
         int baseTravelTicks = town.getTravelTimeTicks(DebugConfig.getTicksPerDistance());
-        int scoutTravelTicks = (int) (baseTravelTicks * 0.6 * getTravelTimeMultiplier());
+        int scoutTravelTicks = (int) (baseTravelTicks * 0.6 * getTravelTimeMultiplier(townId));
         // Round trip: there and back
         scoutReturnTime = gameTime + (scoutTravelTicks * 2L);
         scoutTargetTownId = townId;
@@ -1548,7 +1633,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Calculate timing milestones
         long gameTime = level.getGameTime();
         int baseTravelTicks = (int) (town.getTravelTimeTicks(DebugConfig.getTicksPerDistance())
-                * getTravelTimeMultiplier());
+                * getTravelTimeMultiplier(town.getId()));
 
         long travelToEnd = gameTime + baseTravelTicks;
         long discussingEnd = travelToEnd + 12000;
@@ -1715,6 +1800,23 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
 
         boolean changed = false;
 
+        // Shift daily revenue histogram when day rolls over
+        long currentDay = level.getDayTime() / 24000L;
+        if (be.lastDayShift == -1) {
+            be.lastDayShift = currentDay;
+        } else if (currentDay > be.lastDayShift) {
+            long daysPassed = currentDay - be.lastDayShift;
+            int shift = (int) Math.min(daysPassed, 7);
+            for (int i = 6; i >= shift; i--) {
+                be.dailyRevenue[i] = be.dailyRevenue[i - shift];
+            }
+            for (int i = 0; i < Math.min(shift, 7); i++) {
+                be.dailyRevenue[i] = 0;
+            }
+            be.lastDayShift = currentDay;
+            changed = true;
+        }
+
         // Process shipments
 
         // Check for sales periodically (outside the shipment loop)
@@ -1754,11 +1856,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                     break;
 
                 case SOLD:
-                    // Apply negotiator bonus and deduct worker costs
+                    // Apply negotiator bonus, reputation perk, market climate, and deduct worker costs
                     int rawEarnings = shipment.getTotalEarnings();
-                    int negotiatedEarnings = (int) (rawEarnings * be.getNegotiationBonus());
+                    double repPayoutMod = be.getReputationPayoutMultiplier(shipment.getTownId());
+                    double climateMod = be.getMarketClimate().getPayoutMultiplier();
+                    int negotiatedEarnings = (int) Math.round(rawEarnings * be.getNegotiationBonus() * repPayoutMod * climateMod);
                     // Track negotiator lifetime bonus
-                    int negotiationBonus = negotiatedEarnings - rawEarnings;
+                    int negotiationBonus = (int) Math.round(rawEarnings * (be.getNegotiationBonus() - 1.0));
                     if (negotiationBonus > 0 && be.negotiator.isHired()) {
                         be.negotiator.addLifetimeBonusValue(negotiationBonus);
                     }
@@ -2297,6 +2401,10 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             repTag.putInt(entry.getKey(), entry.getValue());
         }
         tag.put("TownReputation", repTag);
+
+        tag.putLongArray("DailyRevenue", dailyRevenue);
+        tag.putLong("LastDayShift", lastDayShift);
+        tag.putString("MarketClimate", getMarketClimate().name());
     }
 
     @Override
@@ -2430,6 +2538,17 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 townReputation.put(key, repTag.getInt(key));
             }
         }
+
+        if (tag.contains("DailyRevenue")) {
+            long[] arr = tag.getLongArray("DailyRevenue");
+            for (int i = 0; i < Math.min(arr.length, 7); i++) {
+                dailyRevenue[i] = arr[i];
+            }
+        }
+        lastDayShift = tag.getLong("LastDayShift");
+        if (tag.contains("MarketClimate")) {
+            clientMarketClimate = MarketClimate.fromName(tag.getString("MarketClimate"));
+        }
     }
 
     // ==================== Shipment History ====================
@@ -2449,6 +2568,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Economy dashboard tracking
         int earnings = shipment.getTotalEarnings();
         lifetimeEarnings += earnings;
+        dailyRevenue[0] += earnings;
         totalShipmentsSent++;
         earningsByTown.merge(shipment.getTownId(), (long) earnings, Long::sum);
 

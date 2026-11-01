@@ -41,6 +41,10 @@ public class SupplyDemandManager {
     /** Track the last day we refreshed to avoid double-processing. */
     private static long lastRefreshDay = -1;
 
+    /** Global macroeconomy climate state. */
+    private static MarketClimate currentClimate = MarketClimate.STABLE;
+    private static int climateDayCounter = 0;
+
     /**
      * Called every server tick. Checks if a new in-game day has started
      * and triggers supply drift if so.
@@ -54,7 +58,22 @@ public class SupplyDemandManager {
 
         if (currentDay > lastRefreshDay) {
             lastRefreshDay = currentDay;
+            updateClimateOnNewDay(overworld);
             refreshAllTowns();
+        }
+    }
+
+    private static void updateClimateOnNewDay(ServerLevel level) {
+        climateDayCounter++;
+        // Roll for potential climate shift every 2-4 in-game days
+        if (climateDayCounter >= 3 || (climateDayCounter >= 2 && RANDOM.nextFloat() < 0.40f)) {
+            climateDayCounter = 0;
+            MarketClimate[] climates = MarketClimate.values();
+            MarketClimate next = climates[RANDOM.nextInt(climates.length)];
+            if (next != currentClimate) {
+                currentClimate = next;
+                OffToMarket.LOGGER.info("[SupplyDemandManager] Market climate shifted to: {}", next.getDisplayName());
+            }
         }
     }
 
@@ -137,10 +156,22 @@ public class SupplyDemandManager {
         return driftAmount;
     }
 
+    public static MarketClimate getCurrentClimate() {
+        return currentClimate;
+    }
+
+    public static void setMarketClimate(MarketClimate climate) {
+        if (climate != null) {
+            currentClimate = climate;
+        }
+    }
+
     /**
      * Reset the refresh tracker (called when server starts/stops).
      */
     public static void reset() {
         lastRefreshDay = -1;
+        currentClimate = MarketClimate.STABLE;
+        climateDayCounter = 0;
     }
 }

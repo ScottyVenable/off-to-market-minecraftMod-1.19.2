@@ -209,5 +209,25 @@ public class ModNetwork {
                 DispatchScoutPacket::encode, DispatchScoutPacket::decode,
                 DispatchScoutPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, SyncDepotContainersPacket.class,
+                SyncDepotContainersPacket::encode, SyncDepotContainersPacket::decode,
+                SyncDepotContainersPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+
+        CHANNEL.registerMessage(id++, CreateCustomOrderPacket.class,
+                CreateCustomOrderPacket::encode, CreateCustomOrderPacket::decode,
+                CreateCustomOrderPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, CancelCustomOrderPacket.class,
+                CancelCustomOrderPacket::encode, CancelCustomOrderPacket::decode,
+                CancelCustomOrderPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, DispatchCustomOrderPacket.class,
+                DispatchCustomOrderPacket::encode, DispatchCustomOrderPacket::decode,
+                DispatchCustomOrderPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

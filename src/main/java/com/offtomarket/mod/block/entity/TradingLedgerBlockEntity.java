@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -132,6 +133,9 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
      * On the server, query slotToVirtualSource directly.
      */
     private final Set<Integer> clientVirtualSlots = new HashSet<>();
+
+    // Custom trade orders / manifests (player trade goals)
+    private final List<com.offtomarket.mod.data.CustomTradeOrder> customOrders = new ArrayList<>();
 
     // ==================== Shipment History ====================
 
@@ -340,6 +344,167 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         TradingPostBlockEntity.deductCoins(player, cost);
         caravanWeightUpgradeLevel++;
         syncToClient();
+        return true;
+    }
+
+    // ==================== Custom Trade Orders / Manifests ====================
+
+    @Nullable
+    public TradingPostBlockEntity findNearbyTradingPost() {
+        if (level == null) return null;
+        for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-16, -8, -16), worldPosition.offset(16, 8, 16))) {
+            BlockEntity be = level.getBlockEntity(p);
+            if (be instanceof TradingPostBlockEntity tp) return tp;
+        }
+        return null;
+    }
+
+    public List<com.offtomarket.mod.data.CustomTradeOrder> getCustomOrders() {
+        return Collections.unmodifiableList(customOrders);
+    }
+
+    public int getMaxCustomOrders() {
+        TradingPostBlockEntity post = findNearbyTradingPost();
+        int lvl = post != null ? post.getTraderLevel() : 1;
+        boolean bookkeeper = post != null && post.getBookkeeper().isHired();
+        int max = 2 + (lvl / 2);
+        if (bookkeeper) max += 1;
+        return Math.min(8, max);
+    }
+
+    public boolean addCustomOrder(com.offtomarket.mod.data.CustomTradeOrder order) {
+        if (customOrders.size() >= getMaxCustomOrders()) return false;
+        customOrders.add(order);
+        setChanged();
+        syncToClient();
+        return true;
+    }
+
+    public boolean removeCustomOrder(java.util.UUID orderId) {
+        boolean removed = customOrders.removeIf(o -> o.getId().equals(orderId));
+        if (removed) {
+            setChanged();
+            syncToClient();
+        }
+        return removed;
+    }
+
+    public int countItemAvailableForTown(String townId, net.minecraft.resources.ResourceLocation itemId,
+                                         @Nullable com.offtomarket.mod.data.TownDepotManager depot) {
+        int count = 0;
+        for (int i = 0; i < BIN_SIZE; i++) {
+            ItemStack st = items.get(i);
+            if (!st.isEmpty() && ForgeRegistries.ITEMS.getKey(st.getItem()).equals(itemId)) {
+                if (isVirtualSlot(i)) {
+                    VirtualSource vs = slotToVirtualSource.get(i);
+                    if (vs != null && depot != null) {
+                        String assignedTown = depot.getAssignedTown(vs.sourcePos);
+                        if (assignedTown != null && !assignedTown.equalsIgnoreCase(townId)) {
+                            continue; // bound to different town
+                        }
+                    }
+                }
+                count += st.getCount();
+            }
+        }
+        return count;
+    }
+
+    public boolean dispatchCustomOrder(java.util.UUID orderId) {
+        if (level == null || level.isClientSide()) return false;
+        com.offtomarket.mod.data.CustomTradeOrder order = null;
+        for (com.offtomarket.mod.data.CustomTradeOrder o : customOrders) {
+            if (o.getId().equals(orderId)) {
+                order = o;
+                break;
+            }
+        }
+        if (order == null || !order.isAllFulfilled()) return false;
+
+        TradingPostBlockEntity post = findNearbyTradingPost();
+        if (post == null) return false;
+
+        com.offtomarket.mod.data.TownData town = com.offtomarket.mod.data.TownRegistry.getTown(order.getTownId());
+        if (town == null) return false;
+
+        List<com.offtomarket.mod.data.Shipment.ShipmentItem> shipmentItems = new ArrayList<>();
+        com.offtomarket.mod.data.TownDepotManager depot = (level instanceof net.minecraft.server.level.ServerLevel sl)
+                ? com.offtomarket.mod.data.TradingData.get(sl).getDepotManager() : null;
+
+        for (com.offtomarket.mod.data.CustomTradeOrder.OrderItem req : order.getItems()) {
+            int needed = req.getTargetQuantity();
+            int gathered = 0;
+
+            // 1) Pull from town-assigned containers if virtual slots exist
+            for (int i = 0; i < BIN_SIZE && gathered < needed; i++) {
+                if (!isVirtualSlot(i)) continue;
+                ItemStack st = items.get(i);
+                if (!st.isEmpty() && ForgeRegistries.ITEMS.getKey(st.getItem()).equals(req.getItemId())) {
+                    VirtualSource vs = slotToVirtualSource.get(i);
+                    if (vs != null && depot != null) {
+                        String assignedTown = depot.getAssignedTown(vs.sourcePos);
+                        if (assignedTown != null && !assignedTown.equalsIgnoreCase(order.getTownId())) {
+                            continue;
+                        }
+                    }
+                    BlockEntity srcBe = level.getBlockEntity(vs.sourcePos);
+                    if (srcBe instanceof Container c && vs.sourceSlot < c.getContainerSize()) {
+                        ItemStack cStack = c.getItem(vs.sourceSlot);
+                        if (!cStack.isEmpty() && ForgeRegistries.ITEMS.getKey(cStack.getItem()).equals(req.getItemId())) {
+                            int take = Math.min(needed - gathered, cStack.getCount());
+                            cStack.shrink(take);
+                            st.shrink(take);
+                            gathered += take;
+                            c.setChanged();
+                        }
+                    }
+                }
+            }
+
+            // 2) Pull remainder from regular bin slots
+            for (int i = 0; i < BIN_SIZE && gathered < needed; i++) {
+                if (isVirtualSlot(i)) continue;
+                ItemStack st = items.get(i);
+                if (!st.isEmpty() && ForgeRegistries.ITEMS.getKey(st.getItem()).equals(req.getItemId())) {
+                    int take = Math.min(needed - gathered, st.getCount());
+                    st.shrink(take);
+                    gathered += take;
+                }
+            }
+
+            if (gathered > 0) {
+                net.minecraft.world.item.Item it = ForgeRegistries.ITEMS.getValue(req.getItemId());
+                int price = PriceCalculator.getBaseValue(new ItemStack(it));
+                shipmentItems.add(new com.offtomarket.mod.data.Shipment.ShipmentItem(
+                        req.getItemId(), gathered, price, req.getDisplayName(), null
+                ));
+            }
+        }
+
+        if (shipmentItems.isEmpty()) return false;
+
+        long gameTime = level.getGameTime();
+        int baseTravelTicks = town.getTravelTimeTicks(com.offtomarket.mod.debug.DebugConfig.getTicksPerDistance());
+        int travelTicks = (int) (baseTravelTicks * post.getTravelTimeMultiplier(town.getId()));
+        long arrivalTime = gameTime + travelTicks;
+
+        com.offtomarket.mod.data.Shipment shipment = new com.offtomarket.mod.data.Shipment(
+                java.util.UUID.randomUUID(), town.getId(), shipmentItems, gameTime, arrivalTime
+        );
+        post.getActiveShipments().add(shipment);
+        post.setChanged();
+
+        recordShipment(
+                gameTime, town.getDisplayName(),
+                shipmentItems.stream().mapToInt(com.offtomarket.mod.data.Shipment.ShipmentItem::getCount).sum(),
+                shipment.getTotalEarnings()
+        );
+
+        customOrders.remove(order);
+        setChanged();
+        syncToClient();
+
+        com.offtomarket.mod.util.SoundHelper.playShipmentSend(level, worldPosition);
         return true;
     }
 
@@ -679,6 +844,17 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             }
         }
 
+        // Include any town depot containers within 16 blocks
+        com.offtomarket.mod.data.TownDepotManager depot = (level instanceof net.minecraft.server.level.ServerLevel sl)
+                ? com.offtomarket.mod.data.TradingData.get(sl).getDepotManager() : null;
+        if (depot != null) {
+            for (BlockPos dPos : depot.getAllAssignedContainers().keySet()) {
+                if (dPos.closerThan(pos, 16.0)) {
+                    positionsToScan.add(dPos);
+                }
+            }
+        }
+
         for (BlockPos adjPos : positionsToScan) {
             BlockEntity adjBe = level.getBlockEntity(adjPos);
             if (!(adjBe instanceof Container container)) continue;
@@ -759,6 +935,21 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
                 slotPrices.remove(staleSlot);
                 slotToVirtualSource.remove(staleSlot);
                 changed = true;
+            }
+        }
+
+        // Update Custom Trade Orders / Manifests progress & trigger auto-dispatch if filled
+        if (!customOrders.isEmpty()) {
+            for (com.offtomarket.mod.data.CustomTradeOrder order : customOrders) {
+                for (com.offtomarket.mod.data.CustomTradeOrder.OrderItem item : order.getItems()) {
+                    int count = countItemAvailableForTown(order.getTownId(), item.getItemId(), depot);
+                    item.setCurrentFilled(count);
+                }
+                if (order.isAllFulfilled() && order.isAutoDispatch()) {
+                    dispatchCustomOrder(order.getId());
+                    changed = true;
+                    break;
+                }
             }
         }
 
@@ -1115,6 +1306,12 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         for (LedgerShipmentRecord rec : shipmentHistory) historyTag.add(rec.save());
         tag.put("ShipmentHistory", historyTag);
 
+        // Custom orders
+        ListTag ordersTag = new ListTag();
+        for (com.offtomarket.mod.data.CustomTradeOrder order : customOrders) {
+            ordersTag.add(order.save());
+        }
+        tag.put("CustomOrders", ordersTag);
     }
 
     @Override
@@ -1191,6 +1388,15 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
             ListTag histList = tag.getList("ShipmentHistory", 10); // 10 = CompoundTag type
             for (int i = 0; i < histList.size(); i++) {
                 shipmentHistory.add(LedgerShipmentRecord.load(histList.getCompound(i)));
+            }
+        }
+
+        // Custom orders
+        customOrders.clear();
+        if (tag.contains("CustomOrders")) {
+            ListTag ordersList = tag.getList("CustomOrders", 10);
+            for (int i = 0; i < ordersList.size(); i++) {
+                customOrders.add(com.offtomarket.mod.data.CustomTradeOrder.load(ordersList.getCompound(i)));
             }
         }
 

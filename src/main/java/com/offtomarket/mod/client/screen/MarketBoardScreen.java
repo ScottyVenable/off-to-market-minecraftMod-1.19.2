@@ -578,16 +578,24 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             drawCenteredString(poseStack, this.font, cartLabel, 339, showingCart ? 6 : 7, cartColor);
         }
 
-        // Refresh countdown timer (shown in title bar when market is refreshing)
+        // Refresh countdown timer & Market Climate badge (shown in title bar)
         if (!showingCart) {
             MarketBoardBlockEntity rbe = menu.getBlockEntity();
+            int climateX = 185;
             if (rbe != null && rbe.getRefreshCooldown() > 0 && !DebugConfig.UNLIMITED_REFRESHES) {
                 int remainTicks = rbe.getRefreshCooldown();
                 int totalSeconds = remainTicks / 20;
                 int minutes = totalSeconds / 60;
                 int seconds = totalSeconds % 60;
                 String countdownStr = "Next: " + String.format("%d:%02d", minutes, seconds);
-                this.font.draw(poseStack, countdownStr, 190, 6, 0xFF8888);
+                this.font.draw(poseStack, countdownStr, 175, 6, 0xFF8888);
+                climateX = 236;
+            }
+            if (rbe != null) {
+                com.offtomarket.mod.data.MarketClimate climate = rbe.getMarketClimate();
+                String climateStr = climate.getIcon() + " " + climate.getDisplayName();
+                int climateColor = 0xFF000000 | climate.getColor();
+                this.font.draw(poseStack, climateStr, climateX, 6, climateColor);
             }
         }
 
@@ -620,7 +628,8 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         drawSortHeader(poseStack, "Item", 17, 22, SortMode.NAME);
         drawSortHeader(poseStack, "Town", 132, 22, SortMode.TOWN);
         drawSortHeader(poseStack, "Qty", 234, 22, SortMode.QTY);
-        drawSortHeader(poseStack, "Price Ea.", 260, 22, SortMode.PRICE);
+        drawSortHeader(poseStack, "Price", 260, 22, SortMode.PRICE);
+        this.font.draw(poseStack, "Deal", 304, 22, 0xFFD700);
 
         int balance = getPlayerCoinBalance();
         int yOff = 33;
@@ -682,6 +691,27 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             this.font.draw(poseStack, townName, 144, yOff, 0xAAAAAA);
             this.font.draw(poseStack, String.valueOf(listing.getCount()), 234, yOff, 0xCCCCCC);
             CoinRenderer.renderCompactCoinValue(poseStack, this.font, 260, yOff, priceEach);
+
+            // Deal rating badge
+            ItemStack sampleStack = listing.createItemStack(1);
+            int baseFairValue = com.offtomarket.mod.data.PriceCalculator.getBaseValue(sampleStack);
+            if (baseFairValue <= 0) baseFairValue = priceEach;
+            double dealRatio = (double) priceEach / (double) baseFairValue;
+            String dealTag;
+            int dealColor;
+            if (listing.isOnSale() || dealRatio <= 0.85) {
+                int savePct = (int) Math.round((1.0 - Math.min(1.0, dealRatio)) * 100);
+                dealTag = savePct > 0 ? "-" + savePct + "%" : "DEAL";
+                dealColor = 0x55FF55; // bright green
+            } else if (dealRatio >= 1.25) {
+                int upPct = (int) Math.round((dealRatio - 1.0) * 100);
+                dealTag = "+" + upPct + "%";
+                dealColor = 0xFFAA44; // gold/orange
+            } else {
+                dealTag = "FAIR";
+                dealColor = 0x888888; // muted gray
+            }
+            this.font.draw(poseStack, dealTag, 304, yOff, dealColor);
 
             // Cart status / Add button
             boolean isHovered = (displayed == hoveredRow);
@@ -819,6 +849,33 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         renderTooltip(poseStack, mouseX, mouseY);
 
+        // Climate tooltip on hover
+        if (!showingCart && selectedListingIndex < 0) {
+            int relX = mouseX - this.leftPos;
+            int relY = mouseY - this.topPos;
+            MarketBoardBlockEntity be = menu.getBlockEntity();
+            if (be != null && relY >= 3 && relY <= 17) {
+                int climateX = (be.getRefreshCooldown() > 0 && !DebugConfig.UNLIMITED_REFRESHES) ? 236 : 185;
+                com.offtomarket.mod.data.MarketClimate climate = be.getMarketClimate();
+                String climateStr = climate.getIcon() + " " + climate.getDisplayName();
+                int cw = this.font.width(climateStr);
+                if (relX >= climateX - 2 && relX <= climateX + cw + 2) {
+                    List<Component> cTip = new ArrayList<>();
+                    cTip.add(Component.literal(climate.getIcon() + " " + climate.getDisplayName() + " Market Climate")
+                            .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+                    cTip.add(Component.literal(climate.getDescription())
+                            .withStyle(ChatFormatting.YELLOW));
+                    cTip.add(Component.literal("Global Payouts: " + (climate.getPayoutMultiplier() >= 1.0 ? "+" : "")
+                            + Math.round((climate.getPayoutMultiplier() - 1.0) * 100) + "%")
+                            .withStyle(ChatFormatting.GRAY));
+                    cTip.add(Component.literal("Market Purchase Prices: " + (climate.getPurchaseCostMultiplier() >= 1.0 ? "+" : "")
+                            + Math.round((climate.getPurchaseCostMultiplier() - 1.0) * 100) + "%")
+                            .withStyle(ChatFormatting.GRAY));
+                    this.renderComponentTooltip(poseStack, cTip, mouseX, mouseY);
+                }
+            }
+        }
+
         // Listing tooltip on hover (not showing cart or overlay)
         if (!showingCart && selectedListingIndex < 0 && hoveredRow >= 0) {
             MarketBoardBlockEntity be = menu.getBlockEntity();
@@ -857,6 +914,24 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         tooltip.add(Component.literal("Price: " + formatCoinText(listing.getPricePerItem()) + " each")
                 .withStyle(ChatFormatting.GRAY));
+
+        int baseFairValue = com.offtomarket.mod.data.PriceCalculator.getBaseValue(listing.createItemStack(1));
+        if (baseFairValue > 0) {
+            double ratio = (double) listing.getPricePerItem() / (double) baseFairValue;
+            if (ratio <= 0.85 || listing.isOnSale()) {
+                int pct = (int) Math.round((1.0 - Math.min(1.0, ratio)) * 100);
+                tooltip.add(Component.literal("Market Evaluation: \u2714 Great Deal (" + pct + "% under fair value " + formatCoinText(baseFairValue) + ")")
+                        .withStyle(ChatFormatting.GREEN));
+            } else if (ratio >= 1.25) {
+                int pct = (int) Math.round((ratio - 1.0) * 100);
+                tooltip.add(Component.literal("Market Evaluation: \u26A0 High Demand (" + pct + "% markup over " + formatCoinText(baseFairValue) + ")")
+                        .withStyle(ChatFormatting.GOLD));
+            } else {
+                tooltip.add(Component.literal("Market Evaluation: Fair Value (" + formatCoinText(baseFairValue) + ")")
+                        .withStyle(ChatFormatting.DARK_GRAY));
+            }
+        }
+
         tooltip.add(Component.literal("Qty: " + listing.getCount() + "  |  Total: " + formatCoinText(listing.getTotalPrice()))
                 .withStyle(ChatFormatting.GRAY));
 

@@ -31,15 +31,16 @@ import java.util.Locale;
  */
 public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMenu> {
 
-    /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings), 2 = History (past orders), 3 = Income. */
+    /** Active tab: 0 = Bin (price book), 1 = Fees (modifiers & settings), 2 = History (past orders), 3 = Income, 4 = Orders. */
     private int activeTab = 0;
     private int historyScrollOffset = 0;
     private int incomeScrollOffset = 0;
+    private int ordersScrollOffset = 0;
 
     // Tab visual constants (Trading Post style)
-    private static final String[] TAB_NAMES = {"Bin", "Fees", "History", "Income"};
-    private static final int[] TAB_OFFSETS = {182, 232, 282, 332};
-    private static final int TAB_W = 49;
+    private static final String[] TAB_NAMES = {"Bin", "Fees", "History", "Income", "Orders"};
+    private static final int[] TAB_OFFSETS = {182, 222, 262, 302, 342};
+    private static final int TAB_W = 39;
     private static final int TAB_H = 12;
 
     // ---- Bin tab widgets ----
@@ -67,6 +68,19 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     private Button autoPriceModeButton;
     private Button applySettingsBtn;
     private Button upgradeCaravanBtn;
+
+    // ---- Orders tab widgets & state ----
+    private Button orderTownPrevBtn;
+    private Button orderTownNextBtn;
+    private EditBox orderQtyInput;
+    private Button orderAddItemBtn;
+    private Button orderAutoDispatchBtn;
+    private Button orderCreateBtn;
+    private Button orderClearBtn;
+    private int orderTownIndex = 0;
+    private boolean orderAutoDispatch = true;
+    private final List<com.offtomarket.mod.data.CustomTradeOrder.OrderItem> stagedOrderItems = new ArrayList<>();
+
     // ---- Right-click context menu ----
     /** The bin slot index for the active context menu, or -1 if none. */
     private int contextMenuSlot = -1;
@@ -173,8 +187,85 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }));
 
+        // ---- Orders tab widgets ----
+        List<com.offtomarket.mod.data.TownData> allTowns = new ArrayList<>(com.offtomarket.mod.data.TownRegistry.getAllTowns());
+        orderTownPrevBtn = addRenderableWidget(new Button(x + 220, y + 33, 14, 14, Component.literal("<"), btn -> {
+            if (!allTowns.isEmpty()) {
+                orderTownIndex = (orderTownIndex - 1 + allTowns.size()) % allTowns.size();
+            }
+        }));
+
+        orderTownNextBtn = addRenderableWidget(new Button(x + 358, y + 33, 14, 14, Component.literal(">"), btn -> {
+            if (!allTowns.isEmpty()) {
+                orderTownIndex = (orderTownIndex + 1) % allTowns.size();
+            }
+        }));
+
+        orderQtyInput = new EditBox(this.font, x + 208, y + 50, 34, 12, Component.literal("Qty"));
+        orderQtyInput.setMaxLength(4);
+        orderQtyInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
+        orderQtyInput.setValue("16");
+        this.addWidget(orderQtyInput);
+
+        orderAddItemBtn = addRenderableWidget(new Button(x + 246, y + 49, 48, 14, Component.literal("+ Item"), btn -> {
+            stageSelectedItem();
+        }));
+
+        orderAutoDispatchBtn = addRenderableWidget(new Button(x + 298, y + 49, 74, 14,
+                Component.literal(orderAutoDispatch ? "Auto: ON" : "Auto: OFF"), btn -> {
+            orderAutoDispatch = !orderAutoDispatch;
+            btn.setMessage(Component.literal(orderAutoDispatch ? "Auto: ON" : "Auto: OFF"));
+        }));
+
+        orderCreateBtn = addRenderableWidget(new Button(x + 184, y + 78, 134, 14, Component.literal("Create Manifest"), btn -> {
+            createManifestFromStaged(allTowns);
+        }));
+
+        orderClearBtn = addRenderableWidget(new Button(x + 322, y + 78, 50, 14, Component.literal("Clear"), btn -> {
+            stagedOrderItems.clear();
+        }));
+
         updateFilteredSlots();
         updateTabVisibility();
+    }
+
+    private void stageSelectedItem() {
+        ItemStack selected = getSelectedItem();
+        if (selected.isEmpty()) return;
+        int qty = 1;
+        try {
+            qty = Integer.parseInt(orderQtyInput.getValue());
+        } catch (NumberFormatException ignored) {}
+        qty = Math.max(1, qty);
+        net.minecraft.resources.ResourceLocation regName = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(selected.getItem());
+        if (regName != null) {
+            stagedOrderItems.add(new com.offtomarket.mod.data.CustomTradeOrder.OrderItem(
+                    regName, selected.getHoverName().getString(), qty, 0));
+        }
+    }
+
+    private void createManifestFromStaged(List<com.offtomarket.mod.data.TownData> allTowns) {
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        if (be == null || allTowns.isEmpty()) return;
+        if (be.getCustomOrders().size() >= be.getMaxCustomOrders()) return;
+
+        // Auto-stage selected item if staged list is currently empty
+        if (stagedOrderItems.isEmpty()) {
+            stageSelectedItem();
+        }
+        if (stagedOrderItems.isEmpty()) return;
+
+        com.offtomarket.mod.data.TownData targetTown = allTowns.get(Math.min(orderTownIndex, allTowns.size() - 1));
+        com.offtomarket.mod.data.CustomTradeOrder order = new com.offtomarket.mod.data.CustomTradeOrder(
+                java.util.UUID.randomUUID(),
+                targetTown.getId(),
+                new ArrayList<>(stagedOrderItems),
+                orderAutoDispatch,
+                this.minecraft != null && this.minecraft.level != null ? this.minecraft.level.getGameTime() : 0
+        );
+        ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                new com.offtomarket.mod.network.CreateCustomOrderPacket(be.getBlockPos(), order));
+        stagedOrderItems.clear();
     }
 
     // ==================== List & Selection Helpers ====================
@@ -212,6 +303,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         activeTab = tab;
         historyScrollOffset = 0;
         incomeScrollOffset = 0;
+        ordersScrollOffset = 0;
         updateTabVisibility();
     }
 
@@ -231,6 +323,26 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         autoPriceModeButton.visible = configActive;
         applySettingsBtn.visible = configActive;
         upgradeCaravanBtn.visible = configActive;
+
+        boolean ordersActive = (activeTab == 4);
+        if (orderTownPrevBtn != null) orderTownPrevBtn.visible = ordersActive;
+        if (orderTownNextBtn != null) orderTownNextBtn.visible = ordersActive;
+        if (orderQtyInput != null) orderQtyInput.visible = ordersActive;
+        if (orderAddItemBtn != null) orderAddItemBtn.visible = ordersActive;
+        if (orderAutoDispatchBtn != null) orderAutoDispatchBtn.visible = ordersActive;
+        if (orderCreateBtn != null) orderCreateBtn.visible = ordersActive;
+        if (orderClearBtn != null) orderClearBtn.visible = ordersActive;
+
+        if (ordersActive && orderCreateBtn != null) {
+            TradingLedgerBlockEntity ble = menu.getBlockEntity();
+            if (ble != null && ble.getCustomOrders().size() >= ble.getMaxCustomOrders()) {
+                orderCreateBtn.active = false;
+                orderCreateBtn.setMessage(Component.literal("Queue Full (" + ble.getMaxCustomOrders() + " Max)"));
+            } else {
+                orderCreateBtn.active = true;
+                orderCreateBtn.setMessage(Component.literal("Create Manifest"));
+            }
+        }
         // History tab (activeTab == 2) and Income tab (activeTab == 3) have no widgets — labels only
     }
 
@@ -260,6 +372,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         if (priceInput != null) priceInput.tick();
         if (taxInput != null) taxInput.tick();
         if (markupInput != null) markupInput.tick();
+        if (orderQtyInput != null) orderQtyInput.tick();
 
         updateFilteredSlots();
 
@@ -416,6 +529,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         } else if (activeTab == 3) {
             // Income tab — header divider only; content drawn in renderIncomeLabels
             drawDivider(poseStack, x, y + 30);
+        } else if (activeTab == 4) {
+            // Orders tab — header divider & qty input
+            drawDivider(poseStack, x, y + 95);
+            if (orderQtyInput != null && orderQtyInput.visible) {
+                orderQtyInput.render(poseStack, mouseX, mouseY, partialTick);
+            }
         } else {
             // Bin tab
             drawDivider(poseStack, x, y + 54);
@@ -462,10 +581,135 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             renderHistoryLabels(poseStack);
         } else if (activeTab == 3) {
             renderIncomeLabels(poseStack);
+        } else if (activeTab == 4) {
+            renderOrdersLabels(poseStack);
         } else {
             renderPriceBookLabels(poseStack);
         }
         // No inventory label — player inventory is not displayed
+    }
+
+    private void renderOrdersLabels(PoseStack poseStack) {
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        if (be == null) return;
+
+        List<com.offtomarket.mod.data.TownData> allTowns = new ArrayList<>(com.offtomarket.mod.data.TownRegistry.getAllTowns());
+        List<com.offtomarket.mod.data.CustomTradeOrder> orders = be.getCustomOrders();
+
+        // Header
+        drawCenteredString(poseStack, this.font, "\u00A7lTrade Manifests (" + orders.size() + "/" + be.getMaxCustomOrders() + ")", 280, 21, 0xFFD700);
+
+        // Town selector label & town display
+        this.font.draw(poseStack, "Town:", 184, 35, 0xCCCCCC);
+        if (!allTowns.isEmpty()) {
+            com.offtomarket.mod.data.TownData town = allTowns.get(Math.min(orderTownIndex, allTowns.size() - 1));
+            String tName = town.getDisplayName();
+            while (this.font.width(tName) > 115 && tName.length() > 3) {
+                tName = tName.substring(0, tName.length() - 1);
+            }
+            if (!tName.equals(town.getDisplayName())) tName += "..";
+            drawCenteredString(poseStack, this.font, "\u00A7e" + tName, 289, 36, 0xFFD700);
+        } else {
+            this.font.draw(poseStack, "No Towns", 240, 35, 0x888888);
+        }
+
+        // Qty label
+        this.font.draw(poseStack, "Qty:", 184, 52, 0xCCCCCC);
+
+        // Staged items preview / Target item info
+        if (stagedOrderItems.isEmpty()) {
+            ItemStack selected = getSelectedItem();
+            if (!selected.isEmpty()) {
+                String name = selected.getHoverName().getString();
+                if (this.font.width(name) > 120 && name.length() > 3) {
+                    name = name.substring(0, 15) + "..";
+                }
+                this.font.draw(poseStack, "Target: " + name + " (from bin)", 184, 66, 0xAAAAAA);
+            } else {
+                this.font.draw(poseStack, "\u00A77Select item on left list", 184, 66, 0x888888);
+            }
+        } else {
+            StringBuilder sb = new StringBuilder("Staged: ");
+            for (int i = 0; i < stagedOrderItems.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(stagedOrderItems.get(i).getTargetQuantity()).append("x ").append(stagedOrderItems.get(i).getDisplayName());
+            }
+            String stagedStr = sb.toString();
+            while (this.font.width(stagedStr) > 190 && stagedStr.length() > 3) {
+                stagedStr = stagedStr.substring(0, stagedStr.length() - 1);
+            }
+            if (stagedStr.length() < sb.length()) stagedStr += "..";
+            this.font.draw(poseStack, "\u00A7a" + stagedStr, 184, 66, 0x88FF88);
+        }
+
+        // Active Orders List
+        int startY = 100;
+        int cardH = 40;
+        int visibleRows = 3;
+
+        if (orders.isEmpty()) {
+            this.font.draw(poseStack, "No active trade manifests.", 184, startY + 6, 0x888888);
+            this.font.draw(poseStack, "Create one above to set trading", 184, startY + 20, 0x666666);
+            this.font.draw(poseStack, "goals and auto-dispatch goods.", 184, startY + 32, 0x666666);
+            return;
+        }
+
+        int maxScroll = Math.max(0, orders.size() - visibleRows);
+        ordersScrollOffset = Math.min(ordersScrollOffset, maxScroll);
+
+        for (int i = 0; i < visibleRows && (ordersScrollOffset + i) < orders.size(); i++) {
+            com.offtomarket.mod.data.CustomTradeOrder order = orders.get(ordersScrollOffset + i);
+            int ry = startY + i * cardH;
+
+            // Inset panel background for order card
+            fill(poseStack, 183, ry, 379, ry + cardH - 2, 0xFF1E1710);
+            fill(poseStack, 184, ry + 1, 378, ry + cardH - 3, 0xFF2A2016);
+
+            // Town display name
+            com.offtomarket.mod.data.TownData td = com.offtomarket.mod.data.TownRegistry.getTown(order.getTownId());
+            String tName = td != null ? td.getDisplayName() : order.getTownId();
+            while (this.font.width(tName) > 65 && tName.length() > 3) {
+                tName = tName.substring(0, tName.length() - 1);
+            }
+            this.font.draw(poseStack, "\u00A76\u00A7l" + tName, 186, ry + 3, 0xFFD700);
+
+            // Auto dispatch badge
+            this.font.draw(poseStack, order.isAutoDispatch() ? "\u00A7a[AUTO]" : "\u00A77[MANUAL]", 254, ry + 3, 0xFFFFFF);
+
+            // Cancel [✖] button
+            this.font.draw(poseStack, "\u00A7c✖", 368, ry + 3, 0xFF5555);
+
+            // Item summary line: e.g. "15x Bread (10/15)"
+            StringBuilder ib = new StringBuilder();
+            for (int k = 0; k < order.getItems().size(); k++) {
+                if (k > 0) ib.append(", ");
+                com.offtomarket.mod.data.CustomTradeOrder.OrderItem it = order.getItems().get(k);
+                ib.append(it.getTargetQuantity()).append("x ").append(it.getDisplayName())
+                  .append(" (").append(it.getCurrentFilled()).append("/").append(it.getTargetQuantity()).append(")");
+            }
+            String itemSummary = ib.toString();
+            while (this.font.width(itemSummary) > 188 && itemSummary.length() > 3) {
+                itemSummary = itemSummary.substring(0, itemSummary.length() - 1);
+            }
+            if (itemSummary.length() < ib.length()) itemSummary += "..";
+            this.font.draw(poseStack, itemSummary, 186, ry + 14, 0xCCCCCC);
+
+            // Progress bar
+            OtmGuiTheme.drawBar(poseStack, 186, ry + 25, 88, 7, order.getOverallProgress(), 0xFF33AA33, 0xFF1A1209);
+            int pct = (int) (order.getOverallProgress() * 100);
+            this.font.draw(poseStack, pct + "%", 278, ry + 25, 0xAAAAAA);
+
+            // Ship Now / Pending button
+            boolean ready = order.isAllFulfilled();
+            int btnBg = ready ? 0xFF2E6B2E : 0xFF383838;
+            fill(poseStack, 308, ry + 22, 362, ry + 35, 0xFF1A1209);
+            fill(poseStack, 309, ry + 23, 361, ry + 34, btnBg);
+            String shipText = ready ? "\u00A7aShip Now" : "\u00A78Pending";
+            this.font.draw(poseStack, shipText, 313, ry + 25, 0xFFFFFF);
+        }
+
+        if (ordersScrollOffset > 0) this.font.draw(poseStack, "\u25B2", 370, startY, 0x6B5A3E);
+        if (ordersScrollOffset < maxScroll) this.font.draw(poseStack, "\u25BC", 370, startY + visibleRows * cardH - 10, 0x6B5A3E);
     }
 
     private void renderConfigLabels(PoseStack poseStack) {
@@ -879,6 +1123,38 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }
 
+        // Orders tab click handling (Ship Now, Cancel)
+        if (button == 0 && activeTab == 4) {
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
+            if (be != null) {
+                int startY = this.topPos + 100;
+                int cardH = 40;
+                List<com.offtomarket.mod.data.CustomTradeOrder> orders = be.getCustomOrders();
+                for (int i = 0; i < 3 && (ordersScrollOffset + i) < orders.size(); i++) {
+                    com.offtomarket.mod.data.CustomTradeOrder order = orders.get(ordersScrollOffset + i);
+                    int ry = startY + i * cardH;
+
+                    // Cancel button [✖] at right edge (364..378, ry+2..ry+12)
+                    int cancelX = this.leftPos + 364;
+                    if (mouseX >= cancelX && mouseX < cancelX + 15 && mouseY >= ry + 1 && mouseY < ry + 14) {
+                        ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                new com.offtomarket.mod.network.CancelCustomOrderPacket(be.getBlockPos(), order.getId()));
+                        return true;
+                    }
+
+                    // Ship Now button (308..362, ry+22..ry+35)
+                    int shipX = this.leftPos + 308;
+                    if (mouseX >= shipX && mouseX < shipX + 54 && mouseY >= ry + 22 && mouseY < ry + 36) {
+                        if (order.isAllFulfilled()) {
+                            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                    new com.offtomarket.mod.network.DispatchCustomOrderPacket(be.getBlockPos(), order.getId()));
+                        }
+                        return true;
+                    }
+                }
+            }
+        }
+
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -926,6 +1202,16 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }
 
+        // Orders tab right-panel scroll
+        if (activeTab == 4 && mouseX >= x + 183 && mouseX < x + 383) {
+            TradingLedgerBlockEntity be = menu.getBlockEntity();
+            if (be != null) {
+                int maxOrderScroll = Math.max(0, be.getCustomOrders().size() - 3);
+                if (delta > 0 && ordersScrollOffset > 0) { ordersScrollOffset--; return true; }
+                if (delta < 0 && ordersScrollOffset < maxOrderScroll) { ordersScrollOffset++; return true; }
+            }
+        }
+
         return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
@@ -954,12 +1240,14 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
 
         // Prevent inventory close / intercept keys while typing in any EditBox
         if (searchInput.isFocused() || priceInput.isFocused()
-                || taxInput.isFocused() || markupInput.isFocused()) {
+                || taxInput.isFocused() || markupInput.isFocused()
+                || (orderQtyInput != null && orderQtyInput.isFocused())) {
             if (keyCode == 256) { // Escape: unfocus all inputs
                 searchInput.setFocus(false);
                 priceInput.setFocus(false);
                 taxInput.setFocus(false);
                 markupInput.setFocus(false);
+                if (orderQtyInput != null) orderQtyInput.setFocus(false);
                 return true;
             }
             // Delegate to focused widget and consume the event
@@ -967,6 +1255,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             if (priceInput.isFocused()) return priceInput.keyPressed(keyCode, scanCode, modifiers) || true;
             if (taxInput.isFocused()) return taxInput.keyPressed(keyCode, scanCode, modifiers) || true;
             if (markupInput.isFocused()) return markupInput.keyPressed(keyCode, scanCode, modifiers) || true;
+            if (orderQtyInput != null && orderQtyInput.isFocused()) return orderQtyInput.keyPressed(keyCode, scanCode, modifiers) || true;
         }
 
         return super.keyPressed(keyCode, scanCode, modifiers);

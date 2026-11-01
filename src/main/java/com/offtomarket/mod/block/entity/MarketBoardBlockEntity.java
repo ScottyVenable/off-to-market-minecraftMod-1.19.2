@@ -36,6 +36,7 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
 
     private final List<MarketListing> listings = new ArrayList<>();
     private int refreshTimer = 0;
+    private com.offtomarket.mod.data.MarketClimate clientMarketClimate = com.offtomarket.mod.data.MarketClimate.STABLE;
 
     public MarketBoardBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.MARKET_BOARD.get(), pos, state);
@@ -43,6 +44,13 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
 
     public List<MarketListing> getListings() {
         return listings;
+    }
+
+    public com.offtomarket.mod.data.MarketClimate getMarketClimate() {
+        if (level != null && !level.isClientSide()) {
+            return com.offtomarket.mod.data.SupplyDemandManager.getCurrentClimate();
+        }
+        return clientMarketClimate;
     }
 
     /** Returns remaining cooldown ticks before refresh is allowed. */
@@ -124,6 +132,7 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putInt("RefreshTimer", refreshTimer);
+        tag.putString("MarketClimate", getMarketClimate().name());
 
         ListTag listingsList = new ListTag();
         for (MarketListing ml : listings) {
@@ -136,6 +145,9 @@ public class MarketBoardBlockEntity extends BlockEntity implements MenuProvider 
     public void load(CompoundTag tag) {
         super.load(tag);
         refreshTimer = tag.getInt("RefreshTimer");
+        if (tag.contains("MarketClimate")) {
+            clientMarketClimate = com.offtomarket.mod.data.MarketClimate.fromName(tag.getString("MarketClimate"));
+        }
 
         listings.clear();
         ListTag listingsList = tag.getList("Listings", Tag.TAG_COMPOUND);

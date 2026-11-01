@@ -190,6 +190,12 @@ public class MarketListing {
                 // Town-aware pricing (distance/type/need-aware), with a protective floor.
                 int price = computeTownListingPrice(town, item, basePrice, random);
 
+                // Apply global macroeconomic climate multiplier (e.g. Buyer's Market discount, Inflation)
+                MarketClimate climate = SupplyDemandManager.getCurrentClimate();
+                if (climate != null && climate.getPurchaseCostMultiplier() != 1.0) {
+                    price = Math.max(1, (int) Math.round(price * climate.getPurchaseCostMultiplier()));
+                }
+
                 // ~20% chance the item is on sale with 10-30% discount
                 boolean sale = random.nextFloat() < 0.2f;
                 int discount = 0;
