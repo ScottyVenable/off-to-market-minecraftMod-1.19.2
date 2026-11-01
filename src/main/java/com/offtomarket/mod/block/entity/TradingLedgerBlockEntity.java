@@ -505,6 +505,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         syncToClient();
 
         com.offtomarket.mod.util.SoundHelper.playShipmentSend(level, worldPosition);
+        com.offtomarket.mod.util.ToastHelper.notifyOrderComplete(level, worldPosition, town.getDisplayName(), shipment.getTotalEarnings());
         return true;
     }
 

@@ -73,6 +73,10 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     private Button orderTownPrevBtn;
     private Button orderTownNextBtn;
     private EditBox orderQtyInput;
+    private Button orderQtyPlus1Btn;
+    private Button orderQtyPlus16Btn;
+    private Button orderQtyPlus64Btn;
+    private Button orderQtyMaxBtn;
     private Button orderAddItemBtn;
     private Button orderAutoDispatchBtn;
     private Button orderCreateBtn;
@@ -201,32 +205,69 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }));
 
-        orderQtyInput = new EditBox(this.font, x + 208, y + 50, 34, 12, Component.literal("Qty"));
+        orderQtyInput = new EditBox(this.font, x + 208, y + 50, 26, 12, Component.literal("Qty"));
         orderQtyInput.setMaxLength(4);
         orderQtyInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
         orderQtyInput.setValue("16");
         this.addWidget(orderQtyInput);
 
-        orderAddItemBtn = addRenderableWidget(new Button(x + 246, y + 49, 48, 14, Component.literal("+ Item"), btn -> {
+        orderQtyPlus1Btn = addRenderableWidget(new Button(x + 236, y + 49, 18, 14, Component.literal("+1"), btn -> adjustOrderQty(1)));
+        orderQtyPlus16Btn = addRenderableWidget(new Button(x + 256, y + 49, 22, 14, Component.literal("+16"), btn -> adjustOrderQty(16)));
+        orderQtyPlus64Btn = addRenderableWidget(new Button(x + 280, y + 49, 22, 14, Component.literal("+64"), btn -> adjustOrderQty(64)));
+        orderQtyMaxBtn = addRenderableWidget(new Button(x + 304, y + 49, 24, 14, Component.literal("Max"), btn -> setOrderQtyMax()));
+
+        orderAddItemBtn = addRenderableWidget(new Button(x + 330, y + 49, 44, 14, Component.literal("+ Item"), btn -> {
             stageSelectedItem();
         }));
 
-        orderAutoDispatchBtn = addRenderableWidget(new Button(x + 298, y + 49, 74, 14,
+        orderAutoDispatchBtn = addRenderableWidget(new Button(x + 306, y + 64, 68, 13,
                 Component.literal(orderAutoDispatch ? "Auto: ON" : "Auto: OFF"), btn -> {
             orderAutoDispatch = !orderAutoDispatch;
             btn.setMessage(Component.literal(orderAutoDispatch ? "Auto: ON" : "Auto: OFF"));
         }));
 
-        orderCreateBtn = addRenderableWidget(new Button(x + 184, y + 78, 134, 14, Component.literal("Create Manifest"), btn -> {
+        orderCreateBtn = addRenderableWidget(new Button(x + 184, y + 79, 134, 14, Component.literal("Create Manifest"), btn -> {
             createManifestFromStaged(allTowns);
         }));
 
-        orderClearBtn = addRenderableWidget(new Button(x + 322, y + 78, 50, 14, Component.literal("Clear"), btn -> {
+        orderClearBtn = addRenderableWidget(new Button(x + 322, y + 79, 52, 14, Component.literal("Clear"), btn -> {
             stagedOrderItems.clear();
         }));
 
         updateFilteredSlots();
         updateTabVisibility();
+    }
+
+    private void adjustOrderQty(int delta) {
+        int current = 0;
+        try {
+            if (orderQtyInput != null && !orderQtyInput.getValue().isEmpty()) {
+                current = Integer.parseInt(orderQtyInput.getValue());
+            }
+        } catch (NumberFormatException ignored) {}
+        int newVal = Math.min(9999, Math.max(1, current + delta));
+        if (orderQtyInput != null) {
+            orderQtyInput.setValue(String.valueOf(newVal));
+        }
+    }
+
+    private void setOrderQtyMax() {
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        ItemStack selected = getSelectedItem();
+        int count = 64;
+        if (be != null && !selected.isEmpty()) {
+            int inBin = 0;
+            for (int s = 0; s < TradingLedgerBlockEntity.BIN_SIZE; s++) {
+                ItemStack is = be.getItem(s);
+                if (ItemStack.isSameItemSameTags(is, selected)) {
+                    inBin += is.getCount();
+                }
+            }
+            if (inBin > 0) count = inBin;
+        }
+        if (orderQtyInput != null) {
+            orderQtyInput.setValue(String.valueOf(count));
+        }
     }
 
     private void stageSelectedItem() {
@@ -328,6 +369,10 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         if (orderTownPrevBtn != null) orderTownPrevBtn.visible = ordersActive;
         if (orderTownNextBtn != null) orderTownNextBtn.visible = ordersActive;
         if (orderQtyInput != null) orderQtyInput.visible = ordersActive;
+        if (orderQtyPlus1Btn != null) orderQtyPlus1Btn.visible = ordersActive;
+        if (orderQtyPlus16Btn != null) orderQtyPlus16Btn.visible = ordersActive;
+        if (orderQtyPlus64Btn != null) orderQtyPlus64Btn.visible = ordersActive;
+        if (orderQtyMaxBtn != null) orderQtyMaxBtn.visible = ordersActive;
         if (orderAddItemBtn != null) orderAddItemBtn.visible = ordersActive;
         if (orderAutoDispatchBtn != null) orderAutoDispatchBtn.visible = ordersActive;
         if (orderCreateBtn != null) orderCreateBtn.visible = ordersActive;
@@ -621,12 +666,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             ItemStack selected = getSelectedItem();
             if (!selected.isEmpty()) {
                 String name = selected.getHoverName().getString();
-                if (this.font.width(name) > 120 && name.length() > 3) {
-                    name = name.substring(0, 15) + "..";
+                if (this.font.width(name) > 115 && name.length() > 3) {
+                    name = name.substring(0, 14) + "..";
                 }
-                this.font.draw(poseStack, "Target: " + name + " (from bin)", 184, 66, 0xAAAAAA);
+                this.font.draw(poseStack, "Target: " + name, 184, 66, 0xAAAAAA);
             } else {
-                this.font.draw(poseStack, "\u00A77Select item on left list", 184, 66, 0x888888);
+                this.font.draw(poseStack, "\u00A77Select item on left", 184, 66, 0x888888);
             }
         } else {
             StringBuilder sb = new StringBuilder("Staged: ");
@@ -635,7 +680,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
                 sb.append(stagedOrderItems.get(i).getTargetQuantity()).append("x ").append(stagedOrderItems.get(i).getDisplayName());
             }
             String stagedStr = sb.toString();
-            while (this.font.width(stagedStr) > 190 && stagedStr.length() > 3) {
+            while (this.font.width(stagedStr) > 115 && stagedStr.length() > 3) {
                 stagedStr = stagedStr.substring(0, stagedStr.length() - 1);
             }
             if (stagedStr.length() < sb.length()) stagedStr += "..";

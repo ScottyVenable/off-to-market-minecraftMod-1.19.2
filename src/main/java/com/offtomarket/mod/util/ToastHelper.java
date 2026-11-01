@@ -48,7 +48,7 @@ public class ToastHelper {
      * Notify nearby players that a shipment has arrived.
      */
     public static void notifyShipmentArrived(Level level, BlockPos pos, String townName) {
-        sendToNearby(level, pos, "📦 Shipment Arrived!", 
+        sendToNearby(level, pos, "Shipment Arrived!", 
                 "Cart returned from " + townName, 
                 NotificationToastRenderer.ToastType.INFO);
     }
@@ -57,7 +57,7 @@ public class ToastHelper {
      * Notify nearby players that items were sold.
      */
     public static void notifyItemsSold(Level level, BlockPos pos, int coinAmount) {
-        sendToNearby(level, pos, "💰 Items Sold!", 
+        sendToNearby(level, pos, "Items Sold!", 
                 "Earned " + coinAmount + " coins", 
                 NotificationToastRenderer.ToastType.COINS);
     }
@@ -66,7 +66,7 @@ public class ToastHelper {
      * Notify nearby players about earnings collected.
      */
     public static void notifyCoinsCollected(Level level, BlockPos pos, int coinAmount) {
-        sendToNearby(level, pos, "✨ Coins Collected", 
+        sendToNearby(level, pos, "Coins Collected", 
                 coinAmount + " coins added to inventory", 
                 NotificationToastRenderer.ToastType.SUCCESS);
     }
@@ -75,7 +75,7 @@ public class ToastHelper {
      * Notify nearby players of a trader level up.
      */
     public static void notifyLevelUp(Level level, BlockPos pos, int newLevel) {
-        sendToNearby(level, pos, "⭐ Level Up!", 
+        sendToNearby(level, pos, "Level Up!", 
                 "Trading Post reached Level " + newLevel, 
                 NotificationToastRenderer.ToastType.LEVEL_UP);
     }
@@ -84,7 +84,7 @@ public class ToastHelper {
      * Notify nearby players that a diplomat has a proposal ready.
      */
     public static void notifyDiplomatProposal(Level level, BlockPos pos, String townName) {
-        sendToNearby(level, pos, "🤝 Diplomat Proposal", 
+        sendToNearby(level, pos, "Diplomat Proposal", 
                 "Trade deal ready from " + townName, 
                 NotificationToastRenderer.ToastType.DIPLOMAT);
     }
@@ -96,7 +96,7 @@ public class ToastHelper {
         String message = accepted ? 
                 "Deal with " + townName + " accepted!" : 
                 "Returned from " + townName;
-        sendToNearby(level, pos, "🤝 Diplomat Returned", 
+        sendToNearby(level, pos, "Diplomat Returned", 
                 message, 
                 NotificationToastRenderer.ToastType.DIPLOMAT);
     }
@@ -105,16 +105,25 @@ public class ToastHelper {
      * Notify nearby players of a quest completion.
      */
     public static void notifyQuestComplete(Level level, BlockPos pos, int rewardCoins, int rewardXp) {
-        sendToNearby(level, pos, "✓ Quest Complete!", 
+        sendToNearby(level, pos, "Quest Complete!", 
                 "+" + rewardCoins + " coins, +" + rewardXp + " XP", 
                 NotificationToastRenderer.ToastType.SUCCESS);
+    }
+
+    /**
+     * Notify nearby players that a custom trade manifest / order was fulfilled and dispatched.
+     */
+    public static void notifyOrderComplete(Level level, BlockPos pos, String townName, int totalCoins) {
+        sendToNearby(level, pos, "Manifest Dispatched!", 
+                "Order shipped to " + townName + " (+" + totalCoins + " coins)", 
+                NotificationToastRenderer.ToastType.COINS);
     }
     
     /**
      * Notify nearby players of a warning (e.g., shipment about to expire).
      */
     public static void notifyWarning(Level level, BlockPos pos, String message) {
-        sendToNearby(level, pos, "⚠ Warning", 
+        sendToNearby(level, pos, "Warning", 
                 message, 
                 NotificationToastRenderer.ToastType.WARNING);
     }
@@ -123,7 +132,7 @@ public class ToastHelper {
      * Notify nearby players of a new quest available.
      */
     public static void notifyNewQuest(Level level, BlockPos pos, String questName) {
-        sendToNearby(level, pos, "📜 New Quest!", 
+        sendToNearby(level, pos, "New Quest!", 
                 questName, 
                 NotificationToastRenderer.ToastType.INFO);
     }
@@ -132,7 +141,7 @@ public class ToastHelper {
      * Notify nearby players of a worker being hired.
      */
     public static void notifyWorkerHired(Level level, BlockPos pos, String workerType) {
-        sendToNearby(level, pos, "👷 Worker Hired!", 
+        sendToNearby(level, pos, "Worker Hired!", 
                 workerType + " now working", 
                 NotificationToastRenderer.ToastType.SUCCESS);
     }

@@ -33,7 +33,7 @@ public class Worker {
                 case 0 -> "\u2696"; // ⚖ scales for negotiator
                 case 1 -> "\u2708"; // ✈ for speed/cart
                 case 2 -> "\u270E"; // ✎ for bookkeeper
-                default -> "\uD83D\uDD0D"; // 🔍 magnifying glass for scout
+                default -> "\u25C9"; // ◉ fisheye/lens/radar for scout
             };
         }
 

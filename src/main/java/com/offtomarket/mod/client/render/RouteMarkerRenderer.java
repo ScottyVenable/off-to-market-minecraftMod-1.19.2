@@ -78,6 +78,26 @@ public class RouteMarkerRenderer {
 
             AABB box = new AABB(pos).inflate(0.005); // slight expansion so lines don't z-fight
             LevelRenderer.renderLineBox(poseStack, linesConsumer, box, r, g, b, a);
+
+            // Floating 3D holographic badge above container if within 16 blocks
+            double distSq = player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            if (distSq <= 16.0 * 16.0) {
+                TownData td = TownRegistry.getTown(townId);
+                String townDisplay = (td != null ? td.getDisplayName() : townId);
+                String badgeText = "§6§l[ §f" + townDisplay + " Depot §6§l]";
+
+                poseStack.pushPose();
+                poseStack.translate(pos.getX() + 0.5, pos.getY() + 1.25, pos.getZ() + 0.5);
+                poseStack.mulPose(camera.rotation());
+                poseStack.scale(-0.025f, -0.025f, 0.025f);
+
+                float textW = mc.font.width(badgeText);
+                float textX = -textW / 2.0f;
+                mc.font.drawInBatch(badgeText, textX, 0, 0xFFFFFFFF, false,
+                        poseStack.last().pose(), bufferSource, false, 0x80000000, 15728880);
+
+                poseStack.popPose();
+            }
         }
 
         poseStack.popPose();

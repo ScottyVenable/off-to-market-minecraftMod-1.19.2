@@ -799,8 +799,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         drawInsetPanel(ps, x + 190, y + 35, 188, 185);
 
         // Right page section dividers (with 2px breathing room after each)
-        fill(ps, x + 196, y + 57, x + 372, y + 58, 0xFFBBA878); // below name/meta
-        fill(ps, x + 196, y + 79, x + 372, y + 80, 0xFFBBA878); // below req/rep
+        fill(ps, x + 196, y + 58, x + 372, y + 59, 0xFF6B5A3E); // below name/meta
+        fill(ps, x + 196, y + 83, x + 372, y + 84, 0xFF6B5A3E); // below req/rep
 
         // Reputation mini-bar background (rendered in Bg so labels draw over it)
         TradingPostBlockEntity be = menu.getBlockEntity();
@@ -810,16 +810,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             boolean unlocked = town.getMinTraderLevel() <= menu.getTraderLevel();
             if (unlocked) {
                 int rep = be.getReputation(town.getId());
-                int repBarX = x + 260;
-                int repBarY = y + 72;
+                int repBarX = x + 258;
+                int repBarY = y + 74;
                 int repBarW = 60;
                 int repBarH = 5;
                 int maxRep = 1000;
                 int halfW = repBarW / 2;
                 int centerX = repBarX + halfW;
                 // Border + bg
-                fill(ps, repBarX - 1, repBarY - 1, repBarX + repBarW + 1, repBarY + repBarH + 1, 0xFFBBA878);
-                fill(ps, repBarX, repBarY, repBarX + repBarW, repBarY + repBarH, 0xFF2A1F14);
+                fill(ps, repBarX - 1, repBarY - 1, repBarX + repBarW + 1, repBarY + repBarH + 1, 0xFF6B5A3E);
+                fill(ps, repBarX, repBarY, repBarX + repBarW, repBarY + repBarH, 0xFF1A1209);
                 // Center tick
                 fill(ps, centerX, repBarY - 1, centerX + 1, repBarY + repBarH + 1, 0xAAFFFFFF);
                 // Bidirectional fill
@@ -1545,14 +1545,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         int rightX = 196;
 
         // Header with count
-        this.font.draw(poseStack, "Towns", leftX, 38, 0x3B2A14);
+        this.font.draw(poseStack, "\u00A7e\u00A7lTowns", leftX, 36, 0xFFD700);
         int unlockCount = 0;
         for (TownData t : allTowns) {
             if (t.getMinTraderLevel() <= traderLevel) unlockCount++;
         }
         String countStr = unlockCount + "/" + allTowns.size();
         int countW = this.font.width(countStr);
-        this.font.draw(poseStack, countStr, 180 - countW, 38, 0x8B7355);
+        this.font.draw(poseStack, countStr, 180 - countW, 36, 0xCCCCCC);
 
         // Town list entries (15 visible rows, 11px each, starting at y=50)
         int visibleTowns = 15;
@@ -1583,17 +1583,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (isSelected) {
                 textColor = 0xFFF0E6; // bright cream on dark bg
             } else if (!townUnlocked) {
-                textColor = 0x664444; // red-gray for locked
+                textColor = 0x886666; // red-gray for locked
             } else {
                 // Unlocked, unselected — tint name by reputation standing
                 textColor = (be != null)
                         ? TradingPostBlockEntity.getReputationColor(be.getReputation(t.getId()))
-                        : 0x8B7355;
-                // Make it a bit darker so it doesn't overpower the selected entry
-                textColor = (textColor & 0xFEFEFE) >> 1; // halve each channel
-                // Ensure minimum legibility (floor at a medium brown)
-                if (((textColor >> 16) & 0xFF) < 0x22 && ((textColor >> 8) & 0xFF) < 0x22 && (textColor & 0xFF) < 0x22) {
-                    textColor = 0x3B2A14;
+                        : 0xCCAA77;
+                // Ensure minimum legibility (floor at warm light brown)
+                if (((textColor >> 16) & 0xFF) < 0x55 && ((textColor >> 8) & 0xFF) < 0x55 && (textColor & 0xFF) < 0x55) {
+                    textColor = 0xAA8855;
                 }
             }
 
@@ -1627,22 +1625,22 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         TownData town = allTowns.get(townViewPage);
         boolean unlocked = town.getMinTraderLevel() <= traderLevel;
 
-        // Town name (larger section above first divider, y=38-56)
+        // Town name (larger section above first divider, y=36-56)
         if (!unlocked) {
-            this.font.draw(poseStack, "\u2716 " + town.getDisplayName(), rightX, 38, 0x664444);
+            this.font.draw(poseStack, "\u2716 " + town.getDisplayName(), rightX, 36, 0xAA6666);
         } else {
-            this.font.draw(poseStack, town.getDisplayName(), rightX, 38, 0x3B2A14);
+            this.font.draw(poseStack, "\u00A76\u00A7l" + town.getDisplayName(), rightX, 36, 0xFFD700);
         }
 
         // Type + distance right of name
         String meta = town.getType().getDisplayName() + " \u00B7 Dist " + town.getDistance();
         String specTag = getTownSpecializationTag(town);
-        this.font.draw(poseStack, meta + "  \u00A72" + specTag, rightX, 48, 0x6B5A3E);
+        this.font.draw(poseStack, meta + "  \u00A7a" + specTag, rightX, 47, 0xCCCCCC);
 
-        // --- Section below first divider (y=59–78): Level + Reputation ---
+        // --- Section below first divider (y=58): Level + Reputation ---
         // Level requirement
         String lvlReq = "Req Lvl " + town.getMinTraderLevel();
-        int lvlColor = unlocked ? 0x3B7A3B : 0x8B2222;
+        int lvlColor = unlocked ? 0x55FF55 : 0xFF5555;
         this.font.draw(poseStack, lvlReq, rightX, 62, lvlColor);
 
         // Reputation (text + mini-bar drawn in Bg)
@@ -1652,7 +1650,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             int repColor = TradingPostBlockEntity.getReputationColor(rep);
             this.font.draw(poseStack, "\u2605 " + repLevel, rightX, 72, repColor);
             // Rep number next to the bar
-            this.font.draw(poseStack, String.valueOf(rep), 324, 72, 0x8B7355);
+            this.font.draw(poseStack, (rep >= 0 ? "+" : "") + rep + " Rep", rightX + 124, 72, 0xAAAAAA);
         }
 
         // --- Scrollable section below second divider (y=83+) ---
@@ -1679,7 +1677,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (this.font.width(test) > 170) {
                 if (currentLine.length() > 0) {
                     lines.add(currentLine.toString());
-                    colors.add(0x5C4A32);
+                    colors.add(0xCCBBAA);
                 }
                 currentLine = new StringBuilder(word);
             } else {
@@ -1688,7 +1686,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
         if (currentLine.length() > 0) {
             lines.add(currentLine.toString());
-            colors.add(0x5C4A32);
+            colors.add(0xCCBBAA);
         }
 
         // Specialty items (gold-highlighted)
@@ -1753,31 +1751,31 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
-        // Build needs/surplus section lines
+        // Build needs/surplus section lines with self-describing multipliers so items are never ambiguous when scrolled
         if (!desperateItems.isEmpty()) {
             lines.add(""); colors.add(0);
             lines.add("\u2757 [||||||] Desperate (2.0x):"); colors.add(0xFF4444);
-            for (String[] e : desperateItems) { lines.add("  " + e[0]); colors.add(0xFF8888); }
+            for (String[] e : desperateItems) { lines.add("  \u2022 " + e[0] + " \u00A7c[2.0x]"); colors.add(0xFF8888); }
         }
         if (!highNeedItems.isEmpty()) {
             lines.add(""); colors.add(0);
             lines.add("\u26A0 [||||  ] High Need (1.5x):"); colors.add(0xFFAA00);
-            for (String[] e : highNeedItems) { lines.add("  " + e[0]); colors.add(0xFFCC77); }
+            for (String[] e : highNeedItems) { lines.add("  \u2022 " + e[0] + " \u00A76[1.5x]"); colors.add(0xFFCC77); }
         }
         if (!moderateItems.isEmpty()) {
             lines.add(""); colors.add(0);
             lines.add("  [|||   ] Moderate (1.2x):"); colors.add(0xCCAA44);
-            for (String[] e : moderateItems) { lines.add("  " + e[0]); colors.add(0xBB9944); }
+            for (String[] e : moderateItems) { lines.add("  \u2022 " + e[0] + " \u00A7e[1.2x]"); colors.add(0xBB9944); }
         }
         if (!surplusItems.isEmpty()) {
             lines.add(""); colors.add(0);
             lines.add("\u25BC [||    ] Surplus (0.8x):"); colors.add(0x4488FF);
-            for (String[] e : surplusItems) { lines.add("  " + e[0]); colors.add(0x88AAFF); }
+            for (String[] e : surplusItems) { lines.add("  \u2022 " + e[0] + " \u00A79[0.8x]"); colors.add(0x88AAFF); }
         }
         if (!oversatItems.isEmpty()) {
             lines.add(""); colors.add(0);
             lines.add("  [|     ] Oversaturated (0.6x):"); colors.add(0x6699CC);
-            for (String[] e : oversatItems) { lines.add("  " + e[0]); colors.add(0x99BBDD); }
+            for (String[] e : oversatItems) { lines.add("  \u2022 " + e[0] + " \u00A7b[0.6x]"); colors.add(0x99BBDD); }
         }
 
         // Scout report section (if scout has scouted this town)
@@ -1795,7 +1793,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 int healthColor = report.getStockHealth() != null
                         ? report.getStockHealth().getColor() : 0x888888;
 
-                lines.add("\uD83D\uDD0D Scout Report (" + freshLabel + ")");
+                lines.add("\u25C9 Scout Report (" + freshLabel + ")");
                 colors.add(stale ? 0xFF6666 : freshColor);
 
                 lines.add("Stock: " + healthStr + " (" + report.getTotalStock()
@@ -1824,8 +1822,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
-        // Draw scrollable content (y=84 to y=190)
-        int contentStartY = 84;
+        // Draw scrollable content (y=87 to y=190)
+        int contentStartY = 87;
         int contentBottomY = 190;
         int lineH = 9;
         int visibleLn = (contentBottomY - contentStartY) / lineH;
@@ -1862,7 +1860,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 com.offtomarket.mod.data.Worker scout = be.getStockScout();
                 if (scout.isHired()) {
                     boolean onMission = be.isScoutOnMission();
-                    String scoutBtnTxt = onMission ? "Scouting..." : "\uD83D\uDD0D Scout";
+                    String scoutBtnTxt = onMission ? "Scouting..." : "\u25C9 Scout";
                     int scoutColor = onMission ? 0x888888 : 0x88CC88;
                     int scoutBtnX = rightX;
                     int scoutTxtW = this.font.width(scoutBtnTxt);
@@ -2182,7 +2180,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             if (sbe != null && sbe.isScoutOnMission()) {
                 TownData targetTown = TownRegistry.getTown(sbe.getScoutTargetTownId());
                 String targetName = targetTown != null ? targetTown.getDisplayName() : sbe.getScoutTargetTownId();
-                this.font.draw(poseStack, "\uD83D\uDD0D Scouting: " + targetName, px, perkY + 44, 0xFFAA44);
+                this.font.draw(poseStack, "\u25C9 Scouting: " + targetName, px, perkY + 44, 0xFFAA44);
 
                 // ETA display
                 long gameTime = sbe.getLevel() != null ? sbe.getLevel().getGameTime() : 0;

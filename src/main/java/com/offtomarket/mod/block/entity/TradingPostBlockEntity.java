@@ -1520,7 +1520,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         // Notify
         String townName = town != null ? town.getDisplayName() : scoutTargetTownId;
         notifyNearbyPlayers(level, worldPosition,
-                Component.literal("\uD83D\uDD0D Scout returned from " + townName + " with a stock report!")
+                Component.literal("\u25C9 Scout returned from " + townName + " with a stock report!")
                         .withStyle(ChatFormatting.GREEN));
         SoundHelper.playShipmentArrive(level, worldPosition);
 

@@ -47,7 +47,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private int hoveredRow = -1;
 
     /** Sort state */
-    private enum SortMode { NONE, NAME, TOWN, QTY, PRICE }
+    private enum SortMode { NONE, NAME, TOWN, QTY, PRICE, DEAL }
     private SortMode sortMode = SortMode.NONE;
     private boolean sortAscending = true;
 
@@ -374,11 +374,20 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 }
                 case QTY -> Integer.compare(listings.get(a).getCount(), listings.get(b).getCount());
                 case PRICE -> Integer.compare(listings.get(a).getPricePerItem(), listings.get(b).getPricePerItem());
+                case DEAL -> Double.compare(calcDealRatio(listings.get(a)), calcDealRatio(listings.get(b)));
                 default -> 0;
             };
             return sortAscending ? cmp : -cmp;
         });
         return indices;
+    }
+
+    private double calcDealRatio(MarketListing listing) {
+        if (listing.isOnSale()) return 0.5; // Sale items are prioritized as top deals
+        ItemStack sample = listing.createItemStack(1);
+        int base = com.offtomarket.mod.data.PriceCalculator.getBaseValue(sample);
+        if (base <= 0) return 1.0;
+        return (double) listing.getPricePerItem() / (double) base;
     }
 
     private void drawSortHeader(PoseStack ps, String label, int x, int y, SortMode mode) {
@@ -626,10 +635,10 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // Sortable headers
         drawSortHeader(poseStack, "Item", 17, 22, SortMode.NAME);
-        drawSortHeader(poseStack, "Town", 132, 22, SortMode.TOWN);
-        drawSortHeader(poseStack, "Qty", 234, 22, SortMode.QTY);
-        drawSortHeader(poseStack, "Price", 260, 22, SortMode.PRICE);
-        this.font.draw(poseStack, "Deal", 304, 22, 0xFFD700);
+        drawSortHeader(poseStack, "Town", 120, 22, SortMode.TOWN);
+        drawSortHeader(poseStack, "Qty", 204, 22, SortMode.QTY);
+        drawSortHeader(poseStack, "Price", 230, 22, SortMode.PRICE);
+        drawSortHeader(poseStack, "Deal", 290, 22, SortMode.DEAL);
 
         int balance = getPlayerCoinBalance();
         int yOff = 33;
@@ -649,14 +658,14 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             boolean inCart = isInCart(actualIdx);
 
             String itemName = listing.getItemDisplayName();
-            if (this.font.width(itemName) > 120) {
-                while (this.font.width(itemName + "..") > 120 && itemName.length() > 3) {
+            if (this.font.width(itemName) > 98) {
+                while (this.font.width(itemName + "..") > 98 && itemName.length() > 3) {
                     itemName = itemName.substring(0, itemName.length() - 1);
                 }
                 itemName += "..";
             }
-            if (this.font.width(townName) > 84) {
-                while (this.font.width(townName + "..") > 84 && townName.length() > 3) {
+            if (this.font.width(townName) > 68) {
+                while (this.font.width(townName + "..") > 68 && townName.length() > 3) {
                     townName = townName.substring(0, townName.length() - 1);
                 }
                 townName += "..";
@@ -674,23 +683,23 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             if (town != null && listingItem != null) {
                 NeedLevel need = town.getNeedLevel(listingItem);
                 int dotColor = 0xFF000000 | need.getColor();
-                this.font.draw(poseStack, "\u25CF", 132, yOff, dotColor); // filled circle
+                this.font.draw(poseStack, "\u25CF", 120, yOff, dotColor); // filled circle
 
                 // Supply trend arrow
                 String itemKey = listing.getItemId().toString();
                 TownData.SupplyTrend trend = town.getTrend(itemKey);
                 if (trend == TownData.SupplyTrend.FALLING) {
                     // Supply falling = demand rising → green up arrow
-                    this.font.draw(poseStack, "\u25B2", 136, yOff, 0xFF44CC44);
+                    this.font.draw(poseStack, "\u25B2", 124, yOff, 0xFF44CC44);
                 } else if (trend == TownData.SupplyTrend.RISING) {
                     // Supply rising = demand falling → red down arrow
-                    this.font.draw(poseStack, "\u25BC", 136, yOff, 0xFFCC4444);
+                    this.font.draw(poseStack, "\u25BC", 124, yOff, 0xFFCC4444);
                 }
             }
 
-            this.font.draw(poseStack, townName, 144, yOff, 0xAAAAAA);
-            this.font.draw(poseStack, String.valueOf(listing.getCount()), 234, yOff, 0xCCCCCC);
-            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 260, yOff, priceEach);
+            this.font.draw(poseStack, townName, 132, yOff, 0xAAAAAA);
+            this.font.draw(poseStack, String.valueOf(listing.getCount()), 204, yOff, 0xCCCCCC);
+            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 230, yOff, priceEach);
 
             // Deal rating badge
             ItemStack sampleStack = listing.createItemStack(1);
@@ -711,17 +720,17 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 dealTag = "FAIR";
                 dealColor = 0x888888; // muted gray
             }
-            this.font.draw(poseStack, dealTag, 304, yOff, dealColor);
+            this.font.draw(poseStack, dealTag, 290, yOff, dealColor);
 
             // Cart status / Add button
             boolean isHovered = (displayed == hoveredRow);
             if (inCart) {
-                this.font.draw(poseStack, "\u2714", 345, yOff, 0x44CC44);
+                this.font.draw(poseStack, "\u2714", 342, yOff, 0x44CC44);
             } else if (canAfford) {
                 int col = isHovered ? 0x55FF55 : 0x44CC44;
-                this.font.draw(poseStack, "[+]", 342, yOff, col);
+                this.font.draw(poseStack, "[+]", 339, yOff, col);
             } else {
-                this.font.draw(poseStack, "[+]", 342, yOff, 0x664444);
+                this.font.draw(poseStack, "[+]", 339, yOff, 0x664444);
             }
 
             yOff += 11;
@@ -1053,10 +1062,11 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 // Listing view: header click for sorting
                 if (relY >= 20 && relY <= 30 && relX >= 5 && relX <= 363) {
                     SortMode clickedMode = SortMode.NONE;
-                    if (relX < 131) clickedMode = SortMode.NAME;
-                    else if (relX < 233) clickedMode = SortMode.TOWN;
-                    else if (relX < 259) clickedMode = SortMode.QTY;
-                    else if (relX < 341) clickedMode = SortMode.PRICE;
+                    if (relX < 118) clickedMode = SortMode.NAME;
+                    else if (relX < 202) clickedMode = SortMode.TOWN;
+                    else if (relX < 228) clickedMode = SortMode.QTY;
+                    else if (relX < 286) clickedMode = SortMode.PRICE;
+                    else if (relX < 335) clickedMode = SortMode.DEAL;
 
                     if (clickedMode != SortMode.NONE) {
                         if (sortMode == clickedMode) {
