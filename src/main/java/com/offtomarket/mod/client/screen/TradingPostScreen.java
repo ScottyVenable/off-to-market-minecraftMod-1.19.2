@@ -73,6 +73,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private int hoveredDiplomatRow = -1;
 
     private int hoveredTownRow = -1; // hover index for town list on left page
+    private int hoveredTownActionBtn = -1; // 0=Contact, 1=Details, 2=Trade
+    private boolean showingTownDetails = false; // Town dossier modal overlay
 
     private enum ActivitySort { TYPE, DETAILS, STATUS }
     private enum QuestSort { TYPE, ITEM, QTY, REWARD, STATUS }
@@ -405,6 +407,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
         currentTab = tab;
         creatingRequest = false;
+        showingTownDetails = false;
         selectedActivityRow = -1;
         confirmCancelShipmentId = null; // Clear cancel confirmation on tab switch
         updateButtonVisibility();
@@ -833,25 +836,41 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 }
             }
 
-            // Trade shortcut button at the bottom of the right detail panel (y+193 to y+203)
-            int tbX = x + 289;
-            int tbY = y + 193;
-            int tbW = 70;
-            int tbH = 10;
-            int tbBg  = unlocked ? 0xFF3A2E1E : 0xFF2A1F14;
-            int tbAcc = unlocked ? 0xFFBBA878 : 0xFF4A3D2B;
-            fill(ps, tbX,         tbY,         tbX + tbW, tbY + tbH, tbBg);
-            fill(ps, tbX,         tbY,         tbX + 1,   tbY + tbH, tbAcc);
-            fill(ps, tbX,         tbY,         tbX + tbW, tbY + 1,   tbAcc);
-            fill(ps, tbX,         tbY + tbH - 1, tbX + tbW, tbY + tbH, tbAcc);
-            fill(ps, tbX + tbW - 1, tbY,       tbX + tbW, tbY + tbH, tbAcc);
+            // 3 Action Buttons at bottom of right detail panel: Contact (196..252), Details (256..312), Trade (316..372)
+            int btnY = y + 193;
+            int btnH = 12;
+
+            drawTownActionButtonBg(ps, x + 196, btnY, 56, btnH, unlocked, hoveredTownActionBtn == 0);
+            drawTownActionButtonBg(ps, x + 256, btnY, 56, btnH, unlocked, hoveredTownActionBtn == 1);
+            drawTownActionButtonBg(ps, x + 316, btnY, 56, btnH, unlocked, hoveredTownActionBtn == 2);
         }
     }
 
+    private void drawTownActionButtonBg(PoseStack ps, int bx, int by, int bw, int bh, boolean enabled, boolean hovered) {
+        int bg = !enabled ? 0xFF221A12 : (hovered ? 0xFF4E3D28 : 0xFF35291B);
+        int border = !enabled ? 0xFF3A2E1F : (hovered ? 0xFFE5C158 : 0xFF8A734C);
+        fill(ps, bx, by, bx + bw, by + bh, bg);
+        fill(ps, bx, by, bx + bw, by + 1, border);
+        fill(ps, bx, by + bh - 1, bx + bw, by + bh, border);
+        fill(ps, bx, by, bx + 1, by + bh, border);
+        fill(ps, bx + bw - 1, by, bx + bw, by + bh, border);
+    }
+
     /**
-     * Compute hover row for the Towns tab left-page town list.
+     * Compute hover row for the Towns tab left-page town list and bottom buttons.
      */
     private void updateTownsDiplomatHover(int x, int y, int mouseX, int mouseY) {
+        // Town action buttons hover (right page bottom)
+        hoveredTownActionBtn = -1;
+        if (!showingTownDetails && currentTab == Tab.TOWNS) {
+            int relX = mouseX - x;
+            int relY = mouseY - y;
+            if (relY >= 193 && relY <= 205) {
+                if (relX >= 196 && relX < 254) hoveredTownActionBtn = 0;
+                else if (relX >= 256 && relX < 314) hoveredTownActionBtn = 1;
+                else if (relX >= 316 && relX <= 372) hoveredTownActionBtn = 2;
+            }
+        }
         // Town list hover (left page)
         hoveredTownRow = -1;
         {
@@ -1845,29 +1864,262 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             this.font.draw(poseStack, "\u25BC", rightX + 165, contentBottomY - lineH + 2, 0x6B5A3E);
         }
 
-        // Trade shortcut button label + Scout button label
+        // Row of 3 Town Action Buttons: Contact, Details, Trade (matching Notion design)
         if (!allTowns.isEmpty()) {
             TownData viewed = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
             boolean viewedUnlocked = viewed.getMinTraderLevel() <= traderLevel;
-            String tradeBtnTxt = viewedUnlocked ? "\u25BA Trade" : "Locked";
-            int tradeBtnColor  = viewedUnlocked ? 0xFFD700    : 0x664444;
-            int tradeBtnX = rightX + 93;
-            int tradeTxtW = this.font.width(tradeBtnTxt);
-            this.font.draw(poseStack, tradeBtnTxt, tradeBtnX + (70 - tradeTxtW) / 2.0f, 195, tradeBtnColor);
 
-            // Scout button (to the left of Trade)
-            if (be != null && viewedUnlocked) {
-                com.offtomarket.mod.data.Worker scout = be.getStockScout();
-                if (scout.isHired()) {
-                    boolean onMission = be.isScoutOnMission();
-                    String scoutBtnTxt = onMission ? "Scouting..." : "\u25C9 Scout";
-                    int scoutColor = onMission ? 0x888888 : 0x88CC88;
-                    int scoutBtnX = rightX;
-                    int scoutTxtW = this.font.width(scoutBtnTxt);
-                    this.font.draw(poseStack, scoutBtnTxt, scoutBtnX + (90 - scoutTxtW) / 2.0f, 195, scoutColor);
+            // 1. Contact (196..252)
+            String contactTxt = "\u2709 Contact";
+            int cColor = viewedUnlocked ? (hoveredTownActionBtn == 0 ? 0xFFFFFF : 0xDDCCAA) : 0x665544;
+            int cW = this.font.width(contactTxt);
+            this.font.draw(poseStack, contactTxt, rightX + (56 - cW) / 2.0f, 195, cColor);
+
+            // 2. Details (256..312)
+            String detailsTxt = "\u25C9 Details";
+            int dColor = viewedUnlocked ? (hoveredTownActionBtn == 1 ? 0xFFFFFF : 0xFFD700) : 0x665544;
+            int dW = this.font.width(detailsTxt);
+            this.font.draw(poseStack, detailsTxt, rightX + 60 + (56 - dW) / 2.0f, 195, dColor);
+
+            // 3. Trade (316..372)
+            String tradeTxt = viewedUnlocked ? "\u25BA Trade" : "Locked";
+            int tColor = viewedUnlocked ? (hoveredTownActionBtn == 2 ? 0xFFFFFF : 0x88EE88) : 0x884444;
+            int tW = this.font.width(tradeTxt);
+            this.font.draw(poseStack, tradeTxt, rightX + 120 + (56 - tW) / 2.0f, 195, tColor);
+        }
+    }
+
+    // ==================== Town Details Dossier Modal ====================
+
+    private void renderTownDetailsModalBg(PoseStack ps) {
+        int x = this.leftPos;
+        int y = this.topPos;
+        int mx = x + 20;
+        int my = y + 13;
+        int mw = 344;
+        int mh = 196;
+
+        // Dark dim backdrop over trading post
+        fill(ps, x, y, x + this.imageWidth, y + this.imageHeight, 0x880A0704);
+
+        // Modal shadow & borders
+        fill(ps, mx - 2, my - 2, mx + mw + 2, my + mh + 2, 0xFF140D07);
+        fill(ps, mx - 1, my - 1, mx + mw + 1, my + mh + 1, 0xFF5A442A);
+        // Modal body (parchment dark wood)
+        fill(ps, mx, my, mx + mw, my + mh, 0xFF2A2016);
+
+        // Header banner
+        fill(ps, mx + 2, my + 2, mx + mw - 2, my + 22, 0xFF3D2E1E);
+        fill(ps, mx + 2, my + 22, mx + mw - 2, my + 23, 0xFF6B5A3E);
+
+        // Vertical column separator
+        fill(ps, mx + 168, my + 26, mx + 169, my + mh - 26, 0xFF4A3824);
+
+        // Action button frames at bottom
+        // Scout button (if scout hired) at mx + 174, my + mh - 22, w: 90, h: 14
+        fill(ps, mx + 174, my + mh - 22, mx + 264, my + mh - 8, 0xFF35291B);
+        fill(ps, mx + 174, my + mh - 22, mx + 264, my + mh - 21, 0xFF6B5A3E);
+        fill(ps, mx + 174, my + mh - 9, mx + 264, my + mh - 8, 0xFF6B5A3E);
+        fill(ps, mx + 174, my + mh - 22, mx + 175, my + mh - 8, 0xFF6B5A3E);
+        fill(ps, mx + 263, my + mh - 22, mx + 264, my + mh - 8, 0xFF6B5A3E);
+
+        // Trade button at mx + 268, my + mh - 22, w: 70, h: 14
+        fill(ps, mx + 268, my + mh - 22, mx + 338, my + mh - 8, 0xFF263D20);
+        fill(ps, mx + 268, my + mh - 22, mx + 338, my + mh - 21, 0xFF5A8E48);
+        fill(ps, mx + 268, my + mh - 9, mx + 338, my + mh - 8, 0xFF5A8E48);
+        fill(ps, mx + 268, my + mh - 22, mx + 269, my + mh - 8, 0xFF5A8E48);
+        fill(ps, mx + 337, my + mh - 22, mx + 338, my + mh - 8, 0xFF5A8E48);
+    }
+
+    private void renderTownDetailsModalLabels(PoseStack ps, int mouseX, int mouseY) {
+        List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
+        if (allTowns.isEmpty()) return;
+        TownData town = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
+        TradingPostBlockEntity be = menu.getBlockEntity();
+        int traderLevel = menu.getTraderLevel();
+        boolean unlocked = town.getMinTraderLevel() <= traderLevel;
+
+        int mx = 20;
+        int my = 13;
+        int mw = 344;
+        int mh = 196;
+
+        // Title in header
+        String title = "\u00A76\u00A7l" + town.getDisplayName() + " \u00A77(" + town.getType().getDisplayName() + " \u00B7 Level " + town.getMinTraderLevel() + ")";
+        this.font.draw(ps, title, mx + 8, my + 7, 0xFFD700);
+
+        // Close button [✖]
+        this.font.draw(ps, "\u00A7c\u00A7l[✖]", mx + mw - 22, my + 7, 0xFF5555);
+
+        // ---- LEFT COLUMN: Town Profile & Standing (mx + 8 to mx + 162) ----
+        int leftX = mx + 8;
+        int curY = my + 28;
+
+        this.font.draw(ps, "\u00A7e\u00A7lTown Dossier", leftX, curY, 0xFFD700);
+        curY += 12;
+
+        // Distance & Transit
+        this.font.draw(ps, "Distance: \u00A7f" + town.getDistance() + " km", leftX, curY, 0xCCCCCC);
+        curY += 10;
+        int etaSec = Math.max(15, town.getDistance() * 8);
+        this.font.draw(ps, "Caravan ETA: \u00A7f~" + etaSec + "s", leftX, curY, 0xCCCCCC);
+        curY += 12;
+
+        // Standing & Reputation
+        int rep = (be != null && unlocked) ? be.getReputation(town.getId()) : 0;
+        String repTier = TradingPostBlockEntity.getReputationLevel(rep);
+        int repColor = TradingPostBlockEntity.getReputationColor(rep);
+        this.font.draw(ps, "Standing: " + repTier + " (" + (rep >= 0 ? "+" : "") + rep + ")", leftX, curY, repColor);
+        curY += 10;
+
+        // Active Perks
+        this.font.draw(ps, "\u00A77Perks:", leftX, curY, 0xAAAAAA);
+        curY += 10;
+        int tariffDisc = Math.min(25, Math.max(0, rep / 50));
+        this.font.draw(ps, " \u2714 Tariff: \u00A7a-" + tariffDisc + "% Payout Tax", leftX, curY, 0x88CC88);
+        curY += 9;
+        boolean priorityCaravan = rep >= 200;
+        this.font.draw(ps, " \u2714 Speed: \u00A7" + (priorityCaravan ? "aPriority (+20%)" : "7Standard"), leftX, curY, priorityCaravan ? 0x88CC88 : 0x888888);
+        curY += 12;
+
+        // Description lore
+        this.font.draw(ps, "\u00A77Lore:", leftX, curY, 0xAAAAAA);
+        curY += 9;
+        String desc = town.getDescription();
+        String[] words = desc.split(" ");
+        StringBuilder line = new StringBuilder();
+        for (String w : words) {
+            String test = line.length() == 0 ? w : line + " " + w;
+            if (this.font.width(test) > 150) {
+                if (line.length() > 0) {
+                    this.font.draw(ps, line.toString(), leftX, curY, 0xCCBBAA);
+                    curY += 9;
                 }
+                line = new StringBuilder(w);
+            } else {
+                line = new StringBuilder(test);
             }
         }
+        if (line.length() > 0) {
+            this.font.draw(ps, line.toString(), leftX, curY, 0xCCBBAA);
+            curY += 11;
+        }
+
+        // Specialties
+        if (!town.getSpecialtyItems().isEmpty()) {
+            StringBuilder spec = new StringBuilder("\u2726 Specialties: ");
+            boolean first = true;
+            for (net.minecraft.resources.ResourceLocation srl : town.getSpecialtyItems()) {
+                net.minecraft.world.item.Item sItem = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(srl);
+                if (sItem != null) {
+                    if (!first) spec.append(", ");
+                    spec.append(new ItemStack(sItem).getHoverName().getString());
+                    first = false;
+                }
+            }
+            String specStr = spec.toString();
+            while (this.font.width(specStr) > 150 && specStr.length() > 5) {
+                specStr = specStr.substring(0, specStr.length() - 1);
+            }
+            if (specStr.length() < spec.length()) specStr += "..";
+            this.font.draw(ps, specStr, leftX, curY, 0xCCAA44);
+        }
+
+        // ---- RIGHT COLUMN: Supply/Demand & Scout Intel (mx + 174 to mx + 338) ----
+        int rightX = mx + 174;
+        curY = my + 28;
+
+        this.font.draw(ps, "\u00A7e\u00A7lSupply & Market Trends", rightX, curY, 0xFFD700);
+        curY += 12;
+
+        // Needs preview
+        int needItemsDrawn = 0;
+        java.util.LinkedHashSet<String> allNeedKeys = new java.util.LinkedHashSet<>();
+        allNeedKeys.addAll(town.getNeedLevels().keySet());
+        allNeedKeys.addAll(town.getSupplyLevels().keySet());
+        for (net.minecraft.resources.ResourceLocation rl : town.getNeeds()) allNeedKeys.add(rl.toString());
+        for (net.minecraft.resources.ResourceLocation rl : town.getSurplus()) allNeedKeys.add(rl.toString());
+
+        for (String k : allNeedKeys) {
+            if (needItemsDrawn >= 5) break;
+            net.minecraft.resources.ResourceLocation rl = net.minecraft.resources.ResourceLocation.tryParse(k);
+            if (rl == null) continue;
+            net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(rl);
+            if (item == null) continue;
+            com.offtomarket.mod.data.NeedLevel lvl = town.getNeedLevel(item);
+            if (lvl == com.offtomarket.mod.data.NeedLevel.BALANCED) continue;
+
+            String iname = new ItemStack(item).getHoverName().getString();
+            while (this.font.width(iname) > 78 && iname.length() > 3) {
+                iname = iname.substring(0, iname.length() - 1);
+            }
+            String tag = switch (lvl) {
+                case DESPERATE -> "\u00A7c[2.0x Desperate]";
+                case HIGH_NEED -> "\u00A76[1.5x High Need]";
+                case MODERATE_NEED -> "\u00A7e[1.2x Moderate]";
+                case SURPLUS -> "\u00A79[0.8x Surplus]";
+                case OVERSATURATED -> "\u00A7b[0.6x Saturated]";
+                default -> "";
+            };
+            this.font.draw(ps, " \u2022 " + iname + " " + tag, rightX, curY, 0xCCCCCC);
+            curY += 9;
+            needItemsDrawn++;
+        }
+        if (needItemsDrawn == 0) {
+            this.font.draw(ps, " \u00A77All goods currently in balanced supply.", rightX, curY, 0x888888);
+            curY += 10;
+        }
+
+        curY += 4;
+        // Scout Intelligence Section
+        this.font.draw(ps, "\u00A7e\u00A7lScout Intelligence", rightX, curY, 0xFFD700);
+        curY += 12;
+
+        if (be != null && unlocked) {
+            com.offtomarket.mod.data.ScoutReport report = be.getScoutReport(town.getId());
+            if (report != null) {
+                long gameTime = be.getLevel() != null ? be.getLevel().getGameTime() : 0;
+                String fresh = report.getFreshnessLabel(gameTime);
+                int fColor = report.getFreshnessColor(gameTime);
+                this.font.draw(ps, "Report Status: " + fresh, rightX, curY, fColor);
+                curY += 9;
+                String hStr = report.getStockHealth() != null ? report.getStockHealth().getDisplayName() : "Unknown";
+                this.font.draw(ps, "Warehouse Stock: \u00A7f" + hStr + " (" + report.getTotalStock() + " items)", rightX, curY, 0xAAAAAA);
+                curY += 10;
+
+                // Show up to 3 top items from scout
+                int count = 0;
+                for (com.offtomarket.mod.data.ScoutReport.ReportEntry ent : report.getEntries()) {
+                    if (count >= 3) break;
+                    String sLine = " \u25C9 " + ent.getItemName() + " x" + ent.getQuantity() + " (" + formatCoinText(ent.getPrice()) + ")";
+                    while (this.font.width(sLine) > 155 && sLine.length() > 5) {
+                        sLine = sLine.substring(0, sLine.length() - 1);
+                    }
+                    this.font.draw(ps, sLine, rightX, curY, ent.isBestDeal() ? 0xFFD700 : 0x88CC88);
+                    curY += 9;
+                    count++;
+                }
+            } else {
+                this.font.draw(ps, "\u00A77No recent scout report on file.", rightX, curY, 0x888888);
+                curY += 10;
+                this.font.draw(ps, "\u00A77Hire a Stock Scout to survey warehouse.", rightX, curY, 0x666666);
+            }
+        }
+
+        // Bottom action button text inside modal
+        // Scout button text at rightX, my + mh - 19
+        boolean scoutHired = be != null && be.getStockScout().isHired();
+        boolean scoutBusy = be != null && be.isScoutOnMission();
+        String scTxt = !scoutHired ? "No Scout Hired" : (scoutBusy ? "Scouting..." : "\u25C9 Dispatch Scout");
+        int scCol = !scoutHired ? 0x665544 : (scoutBusy ? 0x888888 : 0x88CC88);
+        int scW = this.font.width(scTxt);
+        this.font.draw(ps, scTxt, rightX + (90 - scW) / 2.0f, my + mh - 19, scCol);
+
+        // Trade button text at rightX + 94, my + mh - 19
+        String trTxt = unlocked ? "\u25BA Trade" : "Locked";
+        int trCol = unlocked ? 0xFFD700 : 0x884444;
+        int trW = this.font.width(trTxt);
+        this.font.draw(ps, trTxt, rightX + 94 + (70 - trW) / 2.0f, my + mh - 19, trCol);
     }
 
     // ==================== Quests Tab ====================
@@ -2539,6 +2791,15 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         super.render(poseStack, mouseX, mouseY, partialTick);
         renderTooltip(poseStack, mouseX, mouseY);
 
+        if (showingTownDetails) {
+            renderTownDetailsModalBg(poseStack);
+            poseStack.pushPose();
+            poseStack.translate(this.leftPos, this.topPos, 0);
+            renderTownDetailsModalLabels(poseStack, mouseX, mouseY);
+            poseStack.popPose();
+            return;
+        }
+
         // Activity tooltip on hover (Activity tab)
         if (currentTab == Tab.ACTIVITY && hoveredActivityRow >= 0) {
             renderActivityTooltip(poseStack, mouseX, mouseY);
@@ -3106,15 +3367,100 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
             }
         }
 
-        // Towns tab: Trade button click — navigate to Trade tab with the viewed town selected
+        // Towns tab: Handle action buttons and Town Details modal
         if (currentTab == Tab.TOWNS && button == 0) {
             double lx = mouseX - x;
             double ly = mouseY - y;
-            if (lx >= 289 && lx <= 359 && ly >= 193 && ly <= 203) {
+
+            if (showingTownDetails) {
+                // Modal bounds: modalX = 20, modalY = 13, modalW = 344, modalH = 196
+                // Close button [✖] at modalX + 322, modalY + 7 (size 18x12)
+                if (lx >= 338 && lx <= 360 && ly >= 18 && ly <= 34) {
+                    showingTownDetails = false;
+                    SoundHelper.playUIClick();
+                    return true;
+                }
+                // Dispatch Scout button inside modal at lx >= 194 && lx <= 284 && ly >= 184 && ly <= 204
+                if (lx >= 194 && lx <= 284 && ly >= 184 && ly <= 204) {
+                    TradingPostBlockEntity sbe = menu.getBlockEntity();
+                    if (sbe != null && sbe.getStockScout().isHired() && !sbe.isScoutOnMission()) {
+                        List<TownData> allT = new ArrayList<>(TownRegistry.getAllTowns());
+                        if (!allT.isEmpty()) {
+                            TownData viewed = allT.get(Math.min(townViewPage, allT.size() - 1));
+                            if (viewed.getMinTraderLevel() <= menu.getTraderLevel()) {
+                                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                        new DispatchScoutPacket(sbe.getBlockPos(), viewed.getId()));
+                                SoundHelper.playUIClick();
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // Trade Now button inside modal at lx >= 288 && lx <= 358 && ly >= 184 && ly <= 204
+                if (lx >= 288 && lx <= 358 && ly >= 184 && ly <= 204) {
+                    List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
+                    if (!allTowns.isEmpty()) {
+                        TownData viewed = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
+                        if (viewed.getMinTraderLevel() <= menu.getTraderLevel()) {
+                            List<TownData> available = getAvailableTowns();
+                            for (int i = 0; i < available.size(); i++) {
+                                if (available.get(i).getId().equals(viewed.getId())) {
+                                    selectedTownIndex = i;
+                                    selectTown(available.get(i));
+                                    showingTownDetails = false;
+                                    switchTab(Tab.TRADE);
+                                    SoundHelper.playUIClick();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Click outside modal closes it
+                if (lx < 20 || lx > 364 || ly < 13 || ly > 209) {
+                    showingTownDetails = false;
+                    SoundHelper.playUIClick();
+                    return true;
+                }
+                return true;
+            }
+
+            // Normal Towns tab 3 action buttons: Contact (196..252), Details (256..312), Trade (316..372)
+            if (ly >= 193 && ly <= 205) {
                 List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
                 if (!allTowns.isEmpty()) {
                     TownData viewed = allTowns.get(Math.min(townViewPage, allTowns.size() - 1));
-                    if (viewed.getMinTraderLevel() <= menu.getTraderLevel()) {
+                    boolean viewedUnlocked = viewed.getMinTraderLevel() <= menu.getTraderLevel();
+
+                    // 1. Contact
+                    if (lx >= 196 && lx < 254 && viewedUnlocked) {
+                        TradingPostBlockEntity sbe = menu.getBlockEntity();
+                        if (sbe != null && sbe.getStockScout().isHired() && !sbe.isScoutOnMission()) {
+                            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                    new DispatchScoutPacket(sbe.getBlockPos(), viewed.getId()));
+                            if (this.minecraft != null && this.minecraft.player != null) {
+                                this.minecraft.player.displayClientMessage(
+                                        Component.literal("\u25C9 Courier & Scout dispatched to " + viewed.getDisplayName() + "!"), true);
+                            }
+                        } else {
+                            if (this.minecraft != null && this.minecraft.player != null) {
+                                this.minecraft.player.displayClientMessage(
+                                        Component.literal("\u2709 Diplomatic letter sent to " + viewed.getDisplayName() + ". Relations strengthened!"), true);
+                            }
+                        }
+                        SoundHelper.playUIClick();
+                        return true;
+                    }
+
+                    // 2. Details
+                    if (lx >= 256 && lx < 314) {
+                        showingTownDetails = true;
+                        SoundHelper.playUIClick();
+                        return true;
+                    }
+
+                    // 3. Trade
+                    if (lx >= 316 && lx <= 372 && viewedUnlocked) {
                         List<TownData> available = getAvailableTowns();
                         for (int i = 0; i < available.size(); i++) {
                             if (available.get(i).getId().equals(viewed.getId())) {
@@ -3125,23 +3471,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                                 return true;
                             }
                         }
-                    }
-                }
-                return true;
-            }
-            // Scout button (left of Trade): dispatch scout to the viewed town
-            if (lx >= 196 && lx <= 286 && ly >= 193 && ly <= 203) {
-                TradingPostBlockEntity sbe = menu.getBlockEntity();
-                if (sbe != null && sbe.getStockScout().isHired() && !sbe.isScoutOnMission()) {
-                    List<TownData> allT = new ArrayList<>(TownRegistry.getAllTowns());
-                    if (!allT.isEmpty()) {
-                        TownData viewed = allT.get(Math.min(townViewPage, allT.size() - 1));
-                        if (viewed.getMinTraderLevel() <= menu.getTraderLevel()) {
-                            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                                    new DispatchScoutPacket(sbe.getBlockPos(), viewed.getId()));
-                            SoundHelper.playUIClick();
-                            return true;
-                        }
+                        return true;
                     }
                 }
                 return true;
@@ -3149,7 +3479,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         }
 
         // Towns tab: click town in list to select it (left page)
-        if (currentTab == Tab.TOWNS && hoveredTownRow >= 0) {
+        if (!showingTownDetails && currentTab == Tab.TOWNS && hoveredTownRow >= 0) {
             int townIdx = townListScroll + hoveredTownRow;
             List<TownData> allTowns = new ArrayList<>(TownRegistry.getAllTowns());
             if (townIdx < allTowns.size() && townIdx != townViewPage) {
@@ -3187,6 +3517,7 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (showingTownDetails) return true;
         if (currentTab == Tab.ACTIVITY) {
             TradingPostBlockEntity be = menu.getBlockEntity();
             if (be != null) {
@@ -3289,6 +3620,13 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (showingTownDetails) {
+            if (keyCode == 256 || (this.minecraft != null && this.minecraft.options.keyInventory.matches(keyCode, scanCode))) {
+                showingTownDetails = false;
+                SoundHelper.playUIClick();
+                return true;
+            }
+        }
         if (creatingRequest && requestSearchBox != null && requestSelectedItem == null) {
             if (requestSearchBox.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;

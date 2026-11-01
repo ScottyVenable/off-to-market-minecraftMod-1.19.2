@@ -3,256 +3,126 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.6.1-blue" alt="Version 0.6.1">
+  <img src="https://img.shields.io/badge/Version-0.6.6-blue" alt="Version 0.6.6">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
-A comprehensive trading and economy mod for Minecraft that brings a complete merchant experience to your world. Build trading posts, establish trade routes with fictional towns, manage your merchant reputation, and grow your trading empire!
-
-## Features
-
-### Currency System
-- **Gold Coins** - High value currency (100 copper value)
-- **Silver Coins** - Medium value currency (10 copper value)  
-- **Copper Coins** - Base currency unit
-- **Coin Bag** - Store and manage your currency in one convenient item
-
-### Trading Blocks
-
-#### Trading Post
-The central hub for all your trading activities. Use it to:
-- Browse items from multiple towns and cities
-- Send shipments to distant markets
-- Accept diplomat requests for premium prices
-- Complete quests for reputation and rewards
-- Track your merchant level progression
-
-#### Trading Ledger
-Your local storage for items to sell:
-- Set prices per item slot
-- Items are automatically valued when caravans come
-- Quick interface for managing inventory
-
-#### Market Board
-Wall-mounted board to view:
-- Current market prices
-- Available quests
-- Town information and your standing
-
-### Town System
-
-Trade with 9 unique towns, each with their own personality:
-
-| Town | Type | Specialty | Min. Level |
-|------|------|-----------|------------|
-| **Greenhollow Village** | Village | Farming, crops, produce | 1 |
-| **Irondeep Settlement** | Village | Ores, metals, mining supplies | 1 |
-| **Peenam Animal Market** | Village | Livestock, animal trade slips | 1 |
-| **Saltmere Harbor** | Town | Fish, coastal goods | 1 |
-| **Timberwatch** | Town | Lumber, wood products | 2 |
-| **Crossroads Market** | Market | General trade, diverse goods | 2 |
-| **Basaltkeep Fortress** | City | Weapons, armor, construction | 3 |
-| **Arcaneveil Spire** | City | Enchanting supplies, magic items | 4 |
-| **Goldspire Capital** | City | Luxury goods, rare items, endgame trade | 5 |
-
-### Dynamic Mod Compatibility
-
-**Off to Market automatically integrates with your modpack!**
-
-When other mods are installed, the system:
-- **Discovers items** from all loaded mods at runtime
-- **Categorizes items** by type (ingots, gems, foods, weapons, armor, magic, etc.)
-- **Generates new towns** themed around popular mods
-
-#### Supported Mod Themes
-
-When these mods are detected, specialized markets are created:
-
-| Mod | Generated Town |
-|-----|---------------|
-| Farmer's Delight | Harvest Valley Market |
-| Alex's Mobs | Wanderer's Outpost |
-| Twilight Forest | Twilight Market |
-| Blue Skies | Sky Haven Trading Post |
-| The Aether | Aether Outpost |
-| Ars Nouveau | Arcane Emporium |
-| Iron's Spellbooks | Spellforge Market |
-| Apotheosis | Enchanter's Bazaar |
-| Aquaculture | Fisherman's Wharf |
-| MineColonies | Colonial Trading Co. |
-| Vinery | Vineyard Market |
-| Cataclysm | Dungeon Outpost |
-| Simply Swords | Bladeworks Market |
-| Supplementaries | Artisan's Market |
-| Quark | Oddities Emporium |
-| Oh The Biomes You'll Go | Explorer's Trading Post |
-| *And more...* | |
-
-### Trading Features
-
-- **Supply & Demand Pricing** - Prices fluctuate based on what towns need and have surplus of
-- **Merchant Reputation** - Build standing with towns for better deals
-- **Quests** - Accept delivery quests for bonus rewards
-  - Standard deliveries
-  - Bulk orders
-  - Rush deliveries (time-sensitive)
-  - Specialty requests
-  - Charity missions (high rep, lower pay)
-- **Diplomat System** - Negotiate premium prices for your goods
-- **Shipments** - Send goods to distant markets via caravan
-- **Workers** - Hire specialized NPCs to boost your trading empire:
-  - **Negotiator** - Increases sale prices at markets
-  - **Trading Cart** - Reduces caravan travel time
-  - **Bookkeeper** - Reduces worker operating costs
-  - **Stock Scout** - Scouts towns to reveal stock levels, prices, and best deals
-
-### Animal Trading
-
-Trade livestock with the **Animal Trade Slip** system:
-- Purchase slips for various animals from the Peenam Animal Market
-- Redeem slips to spawn tamed animals
-- Buy and sell: Cows, Pigs, Sheep, Chickens, Horses, Donkeys, Llamas, and more!
-
-### Items
-
-| Item | Description |
-|------|-------------|
-| **Ledger** | Track your trading history and finances |
-| **Shipment Note** | Proof of goods sent to market |
-| **Guide Book** | In-game documentation and tutorials |
-| **Animal Trade Slip** | Redeemable voucher for livestock |
-
-## Getting Started
-
-1. **Craft a Trading Post** - Your gateway to commerce
-2. **Craft a Trading Ledger** - Store items you want to sell
-3. **Earn some coins** - Complete initial quests or sell goods
-4. **Build reputation** - Unlock access to more towns and better prices
-5. **Expand your empire** - Set up trade routes and grow wealth!
-
-## Crafting Recipes
-
-*Recipes are viewable in-game with JEI/REI*
-
-### Trading Post
-```
-[Oak Log] [Oak Log] [Oak Log]
-[Oak Log] [Emerald] [Oak Log]
-[Oak Log] [Oak Log] [Oak Log]
-```
-
-### Trading Ledger
-```
-[Oak Planks] [Oak Planks] [Oak Planks]
-[Oak Planks] [Chest]      [Oak Planks]
-[Oak Planks] [Oak Planks] [Oak Planks]
-```
-
-### Market Board
-```
-[Oak Sign] [Oak Sign] [Oak Sign]
-[Oak Sign] [Paper]    [Oak Sign]
-[Oak Sign] [Oak Sign] [Oak Sign]
-```
-
-### Ledger
-```
-[Leather] [Ink Sac] [Leather]
-[Ink Sac] [Paper]   [Ink Sac]
-[Leather] [Ink Sac] [Leather]
-```
-
-### Coin Bag
-```
-[Leather] [String]  [Leather]
-[Leather] [       ] [Leather]
-[Leather] [Leather] [Leather]
-```
-
-### Guide Book
-*Shapeless recipe:*
-- Book + Emerald
-
-### Animal Trade Slip
-*Shapeless recipe (yields 3):*
-- 3× Paper + Ink Sac
-
-## Configuration
-
-The mod is highly configurable through the TOML config file at `config/offtomarket-common.toml`.
-
-### Config Sections
-
-| Section | Description |
-|---------|-------------|
-| `[timing]` | Control travel times, sale intervals |
-| `[pricing]` | Adjust price multipliers, sale chances |
-| `[currency]` | Coin exchange rates, gold-only mode |
-| `[leveling]` | XP and trader progression settings |
-| `[quests]` | Quest count, rewards, expiry |
-| `[workers]` | Hire costs, worker bonuses |
-| `[diplomats]` | Diplomat premiums and timing |
-| `[animals]` | Animal trading settings |
-| `[modCompat]` | Dynamic mod integration settings |
-| `[supplyDemand]` | Market dynamics |
-| `[tradingBin]` | Bin search radius, defaults |
-| `[debug]` | Debug mode, instant travel, free purchases |
-
-### Key Settings
-
-```toml
-[pricing]
-# Global multiplier for all prices (2.0 = everything costs/sells for double)
-globalPriceMultiplier = 1.0
-
-[currency]
-# Gold Only mode: disables silver and copper coins
-goldOnlyMode = false
-
-[modCompat]
-# Enable auto-generated towns based on installed mods
-enableDynamicTowns = true
-# Log discovered mod items to console (for debugging)
-logDiscoveredItems = false
-
-[debug]
-# Make all shipments arrive instantly (for testing)
-instantTravel = false
-# All purchases are free (for testing)
-freePurchases = false
-```
-
-## Compatibility
-
-- **Minecraft**: 1.19.2
-- **Forge**: 43.x+
-- **Modpack Tested**: Cisco's Fantasy Medieval RPG [Ultimate] (300+ mods)
-
-Works alongside other economy mods and integrates automatically with item-adding mods.
-
-## Installation
-
-1. Install Minecraft Forge 1.19.2 (version 43.x or higher)
-2. Download `offtomarket-0.4.3.jar`
-3. Place in your `mods` folder
-4. Launch the game!
-
-## Roadmap
-
-- [x] Custom town creation — data-driven JSON town system (v0.2)
-- [ ] Multiplayer trading between players
-- [ ] Trading caravans as entities
-- [ ] More mod integrations
-- [ ] Seasonal market events
-
-## Credits
-
-**Author**: Scotty Venable
-
-## License
-
-All Rights Reserved © 2024-2026
+A comprehensive trading and economy mod for Minecraft Forge 1.19.2 that brings a complete merchant experience to your world. Build trading posts, establish automated container depots, negotiate with dynamic towns, manage workers and market climates, and grow your trading empire!
 
 ---
 
-*"May your coffers overflow and your trade routes prosper!"*
+## 🌟 Key Features
+
+### 🪙 Multi-Denomination Currency System
+- **Gold Coins** — High value currency (100 copper value)
+- **Silver Coins** — Medium value currency (10 copper value)
+- **Copper Coins** — Base currency unit
+- **Coin Bag** — Portable coin wallet with automatic denomination condensing and quick withdrawal
+- *Configurable Gold-Only mode supported for lightweight modpack economies*
+
+### 🏛️ Trading Blocks
+
+#### 1. Trading Post
+The central hub for all commerce:
+- **Towns Directory & Dossiers**: Browse towns with rich lore, distance, caravan transit times, and unlock requirements.
+- **Interactive Action Bar**: Instant access to **`Contact`** (courier inquiries & diplomatic messages), **`Details`** (full town economic dossier), and **`Trade`**.
+- **Town Dossier Modal**: Comprehensive deep-dive overlay displaying active tariff discounts, priority caravan perks, full supply/demand tables, and warehouse intelligence.
+- **Shipments**: Dispatch shipments to distant markets via automated or manual caravans.
+- **Diplomat Requests**: Accept high-value orders for premium coin payouts and massive reputation gains.
+- **Quest Board**: Standard deliveries, bulk contracts, rush deliveries, and charity missions.
+- **Merchant Progression**: Level up your trader license (Levels 1–10) to access high-tier cities and capital markets.
+- **Workers Quarters**: Hire and manage a staff of specialized merchants:
+  - ⚖ **Negotiator**: Increases sale prices and negotiation margins.
+  - ✈ **Cart Courier**: Decreases caravan transit time across all routes.
+  - ✎ **Bookkeeper**: Lowers operating overhead and worker salaries.
+  - ◉ **Stock Scout**: Dispatched across the realm to scout town warehouses, returning with freshness-rated inventory reports and best deals.
+
+#### 2. Trading Ledger & Custom Trade Manifests
+Your local storage and automated shipping station:
+- **Price Book**: Custom pricing per item slot with automatic pricing modes.
+- **Custom Trade Manifests**: Set target shipping quotas (e.g. 128 Wheat, 16 Bread to Greenhollow Village).
+- **Quick Quota Buttons**: One-click **`[+1]`**, **`[+16]`**, **`[+64]`**, and **`[Max]`** controls that instantly detect available container stock.
+- **Automated Caravan Dispatch**: Toggle auto-shipping so orders depart the moment containers are filled.
+- **Caravan Capacity Upgrades**: Increase weight allowances to send massive bulk shipments in a single trip.
+
+#### 3. Market Board
+Wall-mounted exchange board with live-updating market ticker:
+- **Live Auto-Refresh**: Dynamic countdown timer showing next listing rotation.
+- **Sort by Deal Bargains**: Sort listings by best discounts (**`-30%`**, **`-15%`**, **`DEAL`**) to hunt for bargains across realm markets.
+- **Integrated Shopping Cart**: Add items to cart and check out in a single transaction directly from your wallet or nearby accounts.
+- **Prosperity & Economic Climates**: World-wide climate states (**Prosperity**, **Recession**, **Normal**) that dynamically modify market sale frequencies and purchase costs.
+
+#### 4. Route Marker & In-World Depot Holograms
+- **Container Depot Linking**: Shift-right-click any chest or barrel to assign it as a designated depot for a specific town.
+- **Cluster Linking**: Touching containers automatically inherit depot assignments.
+- **In-World 3D Holographic Badges**: Holding the Route Marker highlights linked containers within 16 blocks with floating billboard badges (**`[ 🚩 <Town> Depot ]`**).
+
+---
+
+## 🗺️ Towns & Dynamic Mod Compatibility
+
+### Core Realm Towns
+| Town | Type | Specialty | Min. Level |
+|------|------|-----------|------------|
+| **Greenhollow Village** | Village | Farming, crops, agriculture | 1 |
+| **Irondeep Settlement** | Village | Ores, metals, mining tools | 1 |
+| **Peenam Animal Market** | Village | Livestock & animal trade slips | 1 |
+| **Saltmere Harbor** | Town | Seafood, fish, coastal imports | 1 |
+| **Timberwatch** | Town | Lumber, logs, forestry goods | 2 |
+| **Crossroads Market** | Market | Diverse general trade | 2 |
+| **Basaltkeep Fortress** | City | Weapons, armor, military masonry | 3 |
+| **Arcaneveil Spire** | City | Enchanting, magic supplies, relics | 4 |
+| **Goldspire Capital** | City | Luxury artifacts, gems, endgame trade | 5 |
+
+### Dynamic Mod Integration
+Off to Market automatically detects loaded mods in your modpack and generates themed towns with custom items:
+- **Farmer's Delight** → *Harvest Valley Market*
+- **Alex's Mobs** → *Wanderer's Outpost*
+- **Twilight Forest** → *Twilight Market*
+- **Blue Skies** → *Sky Haven Trading Post*
+- **Iron's Spellbooks** → *Spellforge Market*
+- **Simply Swords** → *Bladeworks Market*
+- **Aquaculture** → *Fisherman's Wharf*
+- **Supplementaries** → *Artisan's Market*
+- *And many more...*
+
+---
+
+## 📈 Supply & Demand Pricing Mechanics
+
+Towns dynamically adjust pricing according to local needs:
+- **Desperate (2.0x)**: Town urgently needs this good — pays double! Live demand trending `▲ Rising`.
+- **High Need (1.5x)**: Premium payouts for priority shipments.
+- **Moderate (1.2x)**: Above-average market rate.
+- **Balanced (1.0x)**: Standard fair market value.
+- **Surplus (0.8x)**: Town has excess inventory — cheaper purchase prices.
+- **Oversaturated (0.6x)**: Heavy surplus — demand trending `▼ Falling`.
+
+---
+
+## 🛠️ Crafting Recipes
+
+*All recipes are viewable in-game via JEI / REI*
+
+- **Trading Post**: 8× Oak Logs surrounding an Emerald
+- **Trading Ledger**: 8× Oak Planks surrounding a Chest
+- **Market Board**: 8× Oak Signs surrounding a Paper
+- **Route Marker**: Stick + Red Wool + Gold Nugget
+- **Coin Bag**: 7× Leather + String
+- **Animal Trade Slip**: 3× Paper + Ink Sac
+
+---
+
+## ⚙️ Installation & Requirements
+
+1. Install **Minecraft Forge 1.19.2** (version `43.2.0` or higher, tested on `43.5.0`).
+2. Download the latest **`offtomarket-v0.6.6-Forge-1.19.2.jar`**.
+3. Place into your Minecraft instance's `.minecraft/mods` folder.
+4. Launch and start building your merchant empire!
+
+---
+
+## 📜 Credits & License
+
+**Author**: Scotty Venable  
+**License**: All Rights Reserved © 2024–2026
