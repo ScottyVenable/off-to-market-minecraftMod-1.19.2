@@ -20,7 +20,8 @@ public class Worker {
         NEGOTIATOR("Negotiator", "Negotiates better prices with towns, boosting sale earnings."),
         TRADING_CART("Trading Cart", "A faster cart that reduces delivery time for all shipments."),
         BOOKKEEPER("Bookkeeper", "Manages the ledger, reducing worker overhead costs per trip."),
-        STOCK_SCOUT("Stock Scout", "Scouts towns to reveal stock levels, prices, and best deals.");
+        STOCK_SCOUT("Stock Scout", "Scouts towns to reveal stock levels, prices, and best deals."),
+        TRADE_MANAGER("Trade Manager", "Automates manifest dispatching, coin vault deposits, and contract fulfillment.");
 
         private final String displayName;
         private final String description;
@@ -33,7 +34,8 @@ public class Worker {
                 case 0 -> "\u2696"; // ⚖ scales for negotiator
                 case 1 -> "\u2708"; // ✈ for speed/cart
                 case 2 -> "\u270E"; // ✎ for bookkeeper
-                default -> "\u25C9"; // ◉ fisheye/lens/radar for scout
+                case 3 -> "\u25C9"; // ◉ fisheye/lens/radar for scout
+                default -> "\u2699"; // ⚙ gear for trade manager
             };
         }
 
@@ -184,6 +186,12 @@ public class Worker {
                 case 9 -> "Master Appraiser";
                 default -> null;
             };
+            case TRADE_MANAGER -> switch (milestone) {
+                case 3 -> "Auto-Dispatch";
+                case 6 -> "Vault Sweeper";
+                case 9 -> "Contract Broker";
+                default -> null;
+            };
         };
     }
 
@@ -216,6 +224,12 @@ public class Worker {
                 case 9 -> "Identifies best deals and rare stock";
                 default -> "";
             };
+            case TRADE_MANAGER -> switch (milestone) {
+                case 3 -> "Automatically dispatches ready Trade Manifests";
+                case 6 -> "Auto-collects sold shipment earnings into Finance Table";
+                case 9 -> "Auto-delivers bin items to accepted Quests";
+                default -> "";
+            };
         };
     }
 
@@ -237,6 +251,7 @@ public class Worker {
             case TRADING_CART -> ModConfig.cartHireCost;
             case BOOKKEEPER -> ModConfig.bookkeeperHireCost;
             case STOCK_SCOUT -> ModConfig.scoutHireCost;
+            case TRADE_MANAGER -> 750;
         };
     }
 
@@ -257,6 +272,7 @@ public class Worker {
             case TRADING_CART -> 13 + level * 3;    // 16-43 CP per trip
             case BOOKKEEPER -> 15 + level * 3;      // 18-45 CP per trip
             case STOCK_SCOUT -> 10 + level * 2;     // 12-30 CP per scout mission
+            case TRADE_MANAGER -> 18 + level * 4;   // 22-58 CP per trip
         };
     }
 
@@ -353,6 +369,8 @@ public class Worker {
             case TRADING_CART -> "-" + (int)(getSpeedBonus() * 100) + "% travel time";
             case BOOKKEEPER -> "-" + (int)(getCostReductionBonus() * 100) + "% worker costs";
             case STOCK_SCOUT -> "Reveals " + getScoutDetailLevel() + " detail";
+            case TRADE_MANAGER -> level >= 9 ? "Full Trade & Quest Automation"
+                    : (level >= 6 ? "Auto-Dispatch + Vault Sweep" : "Auto-dispatches manifests");
         };
     }
 
@@ -378,6 +396,7 @@ public class Worker {
             case TRADING_CART -> "Total time saved";
             case BOOKKEEPER -> "Total costs saved";
             case STOCK_SCOUT -> "Towns scouted";
+            case TRADE_MANAGER -> "Orders & contracts automated";
         };
     }
 

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.8] - 2026-11-01
+
+### Fixed
+- **[BUG] ModSounds Registration Crash on Startup**:
+  - Fixed a startup `NullPointerException: Registry Object not present: offtomarket:coin_jingle` by registering `ModSounds.SOUNDS.register(modEventBus)` in `OffToMarket`.
+- **[BUG] Town Details Modal Text Bleed-Through (Z-Order)**:
+  - Fixed underlying Towns tab labels (`"Towns"`, `"Trading Post"`, tab names, and town list text) bleeding through the Town Details modal in `TradingPostScreen` by skipping underlying label rendering when `showingTownDetails` is active and rendering the modal overlay at `z = 200` with depth testing disabled.
+- **[BUG] Manifest Shipments Not Appearing in Trading Post Activity Menu**:
+  - Fixed custom manifest shipments dispatched from the Trading Ledger not appearing in the Trading Post Activity tab by invoking `post.syncToClient()` upon manifest dispatch, checking manifest fulfillment immediately on creation, syncing `TradingData` shared state when opening the Trading Post, and invalidating the client Activity sort cache when shipment counts change.
+- **[BUG] Trading Ledger "Upgrade Caravan" Button Unresponsive**:
+  - Fixed `UpgradeCaravanWeightPacket` and `TradingLedgerBlockEntity.upgradeCaravanWeight()` so the Upgrade Caravan button draws from both player inventory/Coin Bag and any nearby Finance Table (or succeeds for free in Creative mode), syncs `maxCraftingCost` via `ContainerData` slot 8, and displays clear action-bar feedback plus caravan level/capacity details on the Fees tab.
+
+### Added
+- **Market Board Improved Listing Detail & Purchase Modal**:
+  - Clicking any Market Board listing now opens a comprehensive `288x165` dossier & purchase modal showing Item Icon, Full Item Name, Sale/Deal Rating Badge, Origin Town + Type + Distance/ETA, Unit Price vs Base Fair Value, Town Need Level + Supply Trend, Stock & Affordability, a vanilla `AbstractSliderButton` quantity slider, `-10 / -1 / Max / +1 / +10` buttons, and mouse-wheel adjustment.
+- **Market Board Hover Tooltip Delay**:
+  - Added a 2.2-second hover delay on Market Board listing rows before displaying the floating tooltip so browsing listings is clean and unobstructed.
+- **Recurring Trade Manifests (`1x`, `3x`, `5x`, `10x`, `∞`)**:
+  - Added `repeatCount` and `completedCycles` to `CustomTradeOrder` along with a `Run: 1x / ∞ / 3x / 5x / 10x` cycle selector button and `[RECUR ∞]` / `[RECUR x/N]` badges in the Trading Ledger Orders tab. Recurring manifests stay active across shipments and automatically refill when supplies arrive.
+- **Trade Manifest Quantity Slider**:
+  - Replaced the small `+1 / +16 / +64 / Max` buttons in the Trading Ledger Orders tab with a smooth, draggable `AbstractSliderButton` bidirectionally synced with the custom `Qty` input field.
+- **Trading Ledger Item Demand View (Top Buyers)**:
+  - Selecting an item in the Trading Ledger or typing any item name in the search bar now displays a scrollable **Town Demand (Top Buyers)** breakdown ranking all unlocked towns by need level (`Desperate 200%`, `High Need 150%`, `Moderate 120%`, `Regular 100%`, `Surplus 75%`).
+- **Auto-Deposit Arrived Buy Orders & Diplomat Shipments into Marked Containers**:
+  - Arrived Market Board purchases and Diplomat requests now automatically deposit into nearby marked depot containers (prioritizing containers assigned to that town, with a 30-second re-import suppression window) or remain claimable via the **Collect** button if no marked container has space.
+- **New Worker: Trade Manager (`⚙`) & Automated Logistics**:
+  - Added the 5th worker type, **Trade Manager**, who automatically dispatches ready Trade Manifests, sweeps completed shipment earnings into nearby Finance Tables (`Vault Sweeper`), and auto-delivers matching bin items to accepted Quests (`Contract Broker`).
+- **Interactive Mail Dialogue & Persuasion System**:
+  - Added interactive reply buttons (`✉ Warm Thanks` and `⚖ Persuade Terms`) to the Mailbox screen (`MailboxScreen` & `ReplyMailNotePacket`), allowing players to build Town Reputation, earn Trader XP, or attempt persuasion checks (scaling with Trader Level, Negotiator Level, and Town Standing) for bonus coin rebates.
+- **Automated CurseForge Publishing Workflow**:
+  - Added `.github/workflows/curseforge-publish.yml` to automatically run tests, build the mod jar, and publish releases to CurseForge.
+
+---
+
 ## [0.6.7] - 2026-11-01
 
 ### Fixed

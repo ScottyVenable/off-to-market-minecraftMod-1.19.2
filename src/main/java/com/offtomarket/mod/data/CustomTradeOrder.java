@@ -22,6 +22,10 @@ public class CustomTradeOrder {
     private final List<OrderItem> items = new ArrayList<>();
     private boolean autoDispatch;
     private final long createdTime;
+    /** 1 = run once (delete after completion), -1 = unlimited recurring, >1 = delete after N completions. */
+    private int repeatCount;
+    /** Number of times this manifest has been dispatched so far. */
+    private int completedCycles;
 
     public static class OrderItem {
         private final ResourceLocation itemId;
@@ -67,11 +71,18 @@ public class CustomTradeOrder {
     }
 
     public CustomTradeOrder(UUID id, String townId, List<OrderItem> items, boolean autoDispatch, long createdTime) {
+        this(id, townId, items, autoDispatch, createdTime, 1, 0);
+    }
+
+    public CustomTradeOrder(UUID id, String townId, List<OrderItem> items, boolean autoDispatch, long createdTime,
+                            int repeatCount, int completedCycles) {
         this.id = id != null ? id : UUID.randomUUID();
         this.townId = townId != null ? townId : "";
         if (items != null) this.items.addAll(items);
         this.autoDispatch = autoDispatch;
         this.createdTime = createdTime;
+        this.repeatCount = (repeatCount == -1 || repeatCount >= 1) ? repeatCount : 1;
+        this.completedCycles = Math.max(0, completedCycles);
     }
 
     public UUID getId() { return id; }
@@ -80,6 +91,37 @@ public class CustomTradeOrder {
     public boolean isAutoDispatch() { return autoDispatch; }
     public void setAutoDispatch(boolean autoDispatch) { this.autoDispatch = autoDispatch; }
     public long getCreatedTime() { return createdTime; }
+    public int getRepeatCount() { return repeatCount; }
+    public void setRepeatCount(int repeatCount) {
+        this.repeatCount = (repeatCount == -1 || repeatCount >= 1) ? repeatCount : 1;
+    }
+    public int getCompletedCycles() { return completedCycles; }
+    public void setCompletedCycles(int completedCycles) { this.completedCycles = Math.max(0, completedCycles); }
+
+    public boolean isRecurring() {
+        return repeatCount == -1 || repeatCount > 1;
+    }
+
+    /**
+     * Records a completed dispatch cycle and returns true if this manifest should remain active
+     * for another cycle, or false if it has completed all scheduled runs and should be deleted.
+     */
+    public boolean recordCycleAndCheckShouldKeep() {
+        completedCycles++;
+        if (repeatCount == -1) {
+            return true;
+        }
+        return completedCycles < repeatCount;
+    }
+
+    public String getScheduleBadgeText() {
+        if (repeatCount == -1) {
+            return completedCycles > 0 ? "RECUR \u221E (" + completedCycles + ")" : "RECUR \u221E";
+        } else if (repeatCount > 1) {
+            return "RECUR " + completedCycles + "/" + repeatCount;
+        }
+        return "ONCE";
+    }
 
     public boolean isAllFulfilled() {
         if (items.isEmpty()) return false;
@@ -106,6 +148,8 @@ public class CustomTradeOrder {
         tag.putString("Town", townId);
         tag.putBoolean("AutoDispatch", autoDispatch);
         tag.putLong("Created", createdTime);
+        tag.putInt("RepeatCount", repeatCount);
+        tag.putInt("CompletedCycles", completedCycles);
         ListTag list = new ListTag();
         for (OrderItem item : items) {
             list.add(item.save());
@@ -119,6 +163,8 @@ public class CustomTradeOrder {
         String townId = tag.getString("Town");
         boolean autoDispatch = tag.getBoolean("AutoDispatch");
         long created = tag.getLong("Created");
+        int repeatCount = tag.contains("RepeatCount") ? tag.getInt("RepeatCount") : 1;
+        int completedCycles = tag.contains("CompletedCycles") ? tag.getInt("CompletedCycles") : 0;
         List<OrderItem> items = new ArrayList<>();
         if (tag.contains("Items")) {
             ListTag list = tag.getList("Items", Tag.TAG_COMPOUND);
@@ -126,6 +172,6 @@ public class CustomTradeOrder {
                 items.add(OrderItem.load(list.getCompound(i)));
             }
         }
-        return new CustomTradeOrder(id, townId, items, autoDispatch, created);
+        return new CustomTradeOrder(id, townId, items, autoDispatch, created, repeatCount, completedCycles);
     }
 }

@@ -95,6 +95,7 @@ public class TradingPostBlock extends BaseEntityBlock {
         if (!level.isClientSide()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TradingPostBlockEntity tpbe) {
+                tpbe.syncToClient();
                 NetworkHooks.openScreen((ServerPlayer) player, tpbe, pos);
             }
         }

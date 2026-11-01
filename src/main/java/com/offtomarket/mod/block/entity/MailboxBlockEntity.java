@@ -91,6 +91,111 @@ public class MailboxBlockEntity extends BlockEntity implements MenuProvider {
         syncToClient();
     }
 
+    /**
+     * Process an interactive dialogue / persuasion reply to a mail note.
+     * Choice 0: Warm diplomatic response (safe +5 Reputation, +5 Trader XP).
+     * Choice 1: Persuade for better terms / rebate (scales with Trader Level, Negotiator Level, and Reputation).
+     */
+    public void replyToNote(UUID noteId, int choiceIndex, Player player) {
+        if (level == null || level.isClientSide()) return;
+
+        MailNote target = null;
+        for (MailNote n : notes) {
+            if (n.getId().equals(noteId)) {
+                target = n;
+                break;
+            }
+        }
+        if (target == null || target.isReplied()) return;
+
+        // Find nearest TradingPostBlockEntity within 32 blocks to apply reputation/XP/coins
+        TradingPostBlockEntity post = null;
+        int radius = 32;
+        for (BlockPos p : BlockPos.betweenClosed(
+                worldPosition.offset(-radius, -8, -radius),
+                worldPosition.offset(radius, 8, radius))) {
+            BlockEntity be = level.getBlockEntity(p);
+            if (be instanceof TradingPostBlockEntity tp) {
+                post = tp;
+                break;
+            }
+        }
+
+        // Resolve sender town ID
+        String townId = "greenhollow";
+        String senderLower = target.getSender() != null ? target.getSender().toLowerCase() : "";
+        for (com.offtomarket.mod.data.TownData td : com.offtomarket.mod.data.TownRegistry.getAllTowns()) {
+            if (senderLower.contains(td.getDisplayName().toLowerCase())
+                    || senderLower.contains(td.getId().toLowerCase())) {
+                townId = td.getId();
+                break;
+            }
+        }
+
+        if (choiceIndex == 0) {
+            // Safe friendly reply
+            if (post != null) {
+                post.addReputation(townId, 5);
+                post.addTraderXp(5);
+            }
+            String summary = "Sent Warm Regards (+5 Rep, +5 Trader XP)";
+            target.markReplied(summary);
+            syncToClient();
+            if (player != null) {
+                player.displayClientMessage(Component.literal(
+                        "\u00A7a[Mail] \u00A7fYou sent a warm diplomatic reply to " + target.getSender()
+                                + " (+5 Rep, +5 XP)."), true);
+            }
+        } else {
+            // Persuasion check
+            int traderLvl = post != null ? post.getTraderLevel() : 1;
+            int negLvl = (post != null && post.getNegotiator().isHired()) ? post.getNegotiator().getLevel() : 0;
+            int rep = post != null ? post.getReputation(townId) : 0;
+
+            // Base 45% + 4% per Trader Level + 5% per Negotiator Level + up to 20% from Reputation
+            int chancePct = Math.min(92, Math.max(20, 45 + traderLvl * 4 + negLvl * 5 + (rep / 30)));
+            int roll = level.getRandom().nextInt(100);
+            if (roll < chancePct) {
+                int bonusCoins = 25 + traderLvl * 8 + negLvl * 6;
+                if (post != null) {
+                    post.addReputation(townId, 12);
+                    post.addTraderXp(10);
+                    FinanceTableBlockEntity ft = TradingPostBlockEntity.findNearbyFinanceTable(level, post.getBlockPos());
+                    if (ft != null) {
+                        ft.setBalance(ft.getBalance() + bonusCoins);
+                        ft.recordTransaction("Mail Rebate", bonusCoins, "Persuaded " + target.getSender());
+                        ft.syncToClient();
+                    } else if (player != null) {
+                        player.getInventory().add(new net.minecraft.world.item.ItemStack(
+                                com.offtomarket.mod.registry.ModItems.COPPER_COIN.get(),
+                                Math.min(64, bonusCoins)));
+                    }
+                }
+                String summary = "Persuasion Succeeded! (+12 Rep, +" + bonusCoins + "c Rebate)";
+                target.markReplied(summary);
+                syncToClient();
+                if (player != null) {
+                    player.displayClientMessage(Component.literal(
+                            "\u00A76[Persuasion Success!] \u00A7f" + target.getSender()
+                                    + " granted better terms (+12 Rep, +" + bonusCoins + "c)!"), true);
+                }
+            } else {
+                if (post != null) {
+                    post.addReputation(townId, -2);
+                    post.addTraderXp(2);
+                }
+                String summary = "Persuasion Declined (" + chancePct + "% odds; -2 Rep, +2 XP)";
+                target.markReplied(summary);
+                syncToClient();
+                if (player != null) {
+                    player.displayClientMessage(Component.literal(
+                            "\u00A7e[Persuasion Failed] \u00A77" + target.getSender()
+                                    + " politely declined your counter-offer (-2 Rep)."), true);
+                }
+            }
+        }
+    }
+
     // ==================== Sync ====================
 
     public void syncToClient() {

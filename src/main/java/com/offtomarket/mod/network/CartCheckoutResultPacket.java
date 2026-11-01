@@ -1,9 +1,8 @@
 package com.offtomarket.mod.network;
 
+import com.offtomarket.mod.client.screen.MarketBoardScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -40,9 +39,8 @@ public class CartCheckoutResultPacket {
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
-                    com.offtomarket.mod.client.screen.MarketBoardScreen.handleCheckoutResult(
-                            marketBoardPos, success, message));
+            // Runs on the client when received via PLAY_TO_CLIENT
+            MarketBoardScreen.handleCheckoutResult(marketBoardPos, success, message);
         });
         ctx.get().setPacketHandled(true);
     }

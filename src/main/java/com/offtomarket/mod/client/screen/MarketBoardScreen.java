@@ -15,6 +15,7 @@ import com.offtomarket.mod.item.CoinItem;
 import com.offtomarket.mod.menu.MarketBoardMenu;
 import com.offtomarket.mod.network.CartCheckoutPacket;
 import com.offtomarket.mod.network.ModNetwork;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
@@ -45,6 +46,10 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
     /** Row index (0-based within visible rows) the mouse is currently hovering, or -1. */
     private int hoveredRow = -1;
+    /** Hover tooltip delay tracking (2.2s delay before showing listing hover popup). */
+    private int lastHoveredListingIdx = -1;
+    private long hoverStartTimeMs = 0L;
+    private static final long HOVER_TOOLTIP_DELAY_MS = 2200L;
 
     /** Sort state */
     private enum SortMode { NONE, NAME, TOWN, QTY, PRICE, DEAL }
@@ -83,18 +88,18 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private static final int VISIBLE_CART_ROWS = 13;
     private int hoveredCartRow = -1;
 
-    // Quantity selection overlay
-    private int selectedListingIndex = -1;  // -1 = no overlay shown
+    // Listing detail & quantity selection modal
+    private int selectedListingIndex = -1;  // -1 = no modal shown
     private int selectedQuantity = 1;
     private int selectedMaxQty = 1;
     private String selectedItemName = "";
     private int selectedPricePerItem = 0;
 
-    // Overlay geometry (relative to leftPos/topPos)
-    private static final int OVL_X = 92;
-    private static final int OVL_Y = 30;
-    private static final int OVL_W = 200;
-    private static final int OVL_H = 96;
+    // Modal geometry (relative to leftPos/topPos)
+    private static final int OVL_X = 48;
+    private static final int OVL_Y = 21;
+    private static final int OVL_W = 288;
+    private static final int OVL_H = 165;
 
     // ==================== Buttons ====================
 
@@ -103,8 +108,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private Button cartScrollUpBtn, cartScrollDownBtn;
     private boolean checkoutPending = false;
 
-    // Quantity overlay buttons (only visible during selection)
-    private Button qtyMinusBtn, qtyPlusBtn, qtyMinus10Btn, qtyPlus10Btn;
+    // Listing detail modal widgets (only visible during selection)
+    private AbstractSliderButton qtySlider;
+    private Button qtyMinusBtn, qtyPlusBtn, qtyMinus10Btn, qtyPlus10Btn, qtyMaxBtn;
     private Button addToCartBtn, cancelQtyBtn;
 
     public MarketBoardScreen(MarketBoardMenu menu, Inventory inv, Component title) {
@@ -112,6 +118,49 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         this.imageWidth = 384;
         this.imageHeight = 222;
         this.playerInv = inv;
+    }
+
+    private void syncSliderFromQuantity() {
+        if (qtySlider == null) return;
+        double norm = (selectedMaxQty <= 1) ? 1.0
+                : (double) (selectedQuantity - 1) / (double) (selectedMaxQty - 1);
+        qtySlider.setMessage(Component.literal("Quantity: " + selectedQuantity + " / " + selectedMaxQty
+                + "  (" + formatCoinText(selectedQuantity * selectedPricePerItem) + ")"));
+        // Update slider thumb position via reflection-free helper on custom subclass
+        if (qtySlider instanceof ListingQtySlider lqs) {
+            lqs.setSliderFraction(norm);
+        }
+    }
+
+    private class ListingQtySlider extends AbstractSliderButton {
+        ListingQtySlider(int x, int y, int width, int height) {
+            super(x, y, width, height, Component.empty(), 0.0);
+            updateMessage();
+        }
+
+        void setSliderFraction(double fraction) {
+            this.value = net.minecraft.util.Mth.clamp(fraction, 0.0, 1.0);
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            int cost = selectedQuantity * selectedPricePerItem;
+            setMessage(Component.literal("Qty: " + selectedQuantity + " / " + selectedMaxQty
+                    + "  \u2014  Total: " + formatCoinText(cost)));
+        }
+
+        @Override
+        protected void applyValue() {
+            if (selectedMaxQty <= 1) {
+                selectedQuantity = 1;
+            } else {
+                selectedQuantity = net.minecraft.util.Mth.clamp(
+                        1 + (int) Math.round(this.value * (selectedMaxQty - 1)),
+                        1, selectedMaxQty);
+            }
+            updateMessage();
+        }
     }
 
     @Override
@@ -152,42 +201,54 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         cartScrollDownBtn = addRenderableWidget(new Button(x + 366, y + 183, 14, 14,
                 Component.literal("v"), btn -> cartScrollOffset++));
 
-        // ==== Quantity overlay buttons ====
+        // ==== Listing Detail & Quantity Modal widgets ====
 
         int overlayX = x + OVL_X;
         int overlayY = y + OVL_Y;
 
-        qtyMinus10Btn = addRenderableWidget(new Button(overlayX + 12, overlayY + 48, 34, 18,
+        qtySlider = addRenderableWidget(new ListingQtySlider(overlayX + 10, overlayY + 102, OVL_W - 20, 18));
+
+        qtyMinus10Btn = addRenderableWidget(new Button(overlayX + 10, overlayY + 123, 46, 16,
                 Component.literal("-10"), btn -> {
             selectedQuantity = Math.max(1, selectedQuantity - 10);
+            syncSliderFromQuantity();
         }));
 
-        qtyMinusBtn = addRenderableWidget(new Button(overlayX + 50, overlayY + 48, 34, 18,
+        qtyMinusBtn = addRenderableWidget(new Button(overlayX + 60, overlayY + 123, 46, 16,
                 Component.literal("-1"), btn -> {
             if (selectedQuantity > 1) selectedQuantity--;
+            syncSliderFromQuantity();
         }));
 
-        qtyPlusBtn = addRenderableWidget(new Button(overlayX + 116, overlayY + 48, 34, 18,
+        qtyMaxBtn = addRenderableWidget(new Button(overlayX + 110, overlayY + 123, 68, 16,
+                Component.literal("Max"), btn -> {
+            selectedQuantity = Math.max(1, selectedMaxQty);
+            syncSliderFromQuantity();
+        }));
+
+        qtyPlusBtn = addRenderableWidget(new Button(overlayX + 182, overlayY + 123, 46, 16,
                 Component.literal("+1"), btn -> {
             if (selectedQuantity < selectedMaxQty) selectedQuantity++;
+            syncSliderFromQuantity();
         }));
 
-        qtyPlus10Btn = addRenderableWidget(new Button(overlayX + 154, overlayY + 48, 34, 18,
+        qtyPlus10Btn = addRenderableWidget(new Button(overlayX + 232, overlayY + 123, 46, 16,
                 Component.literal("+10"), btn -> {
             selectedQuantity = Math.min(selectedMaxQty, selectedQuantity + 10);
+            syncSliderFromQuantity();
         }));
 
-        addToCartBtn = addRenderableWidget(new Button(overlayX + 12, overlayY + 72, 84, 18,
+        addToCartBtn = addRenderableWidget(new Button(overlayX + 10, overlayY + 142, 130, 18,
                 Component.literal("Add to Cart"), btn -> {
-            if (selectedListingIndex >= 0) {
+            if (selectedListingIndex >= 0 && getPlayerCoinBalance() >= selectedPricePerItem) {
                 addToCart(selectedListingIndex, selectedQuantity);
                 selectedListingIndex = -1;
                 updateButtonVisibility();
             }
         }));
 
-        cancelQtyBtn = addRenderableWidget(new Button(overlayX + 104, overlayY + 72, 84, 18,
-                Component.literal("Cancel"), btn -> {
+        cancelQtyBtn = addRenderableWidget(new Button(overlayX + 148, overlayY + 142, 130, 18,
+                Component.literal("Close"), btn -> {
             selectedListingIndex = -1;
             updateButtonVisibility();
         }));
@@ -254,11 +315,26 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         cartScrollUpBtn.visible = cartView;
         cartScrollDownBtn.visible = cartView;
 
+        boolean canAffordSelected = qtyOverlay && getPlayerCoinBalance() >= selectedPricePerItem;
+        if (qtySlider != null) {
+            qtySlider.visible = qtyOverlay;
+            qtySlider.active = canAffordSelected && selectedMaxQty > 1;
+        }
         qtyMinus10Btn.visible = qtyOverlay;
+        qtyMinus10Btn.active = canAffordSelected;
         qtyMinusBtn.visible = qtyOverlay;
+        qtyMinusBtn.active = canAffordSelected;
+        if (qtyMaxBtn != null) {
+            qtyMaxBtn.visible = qtyOverlay;
+            qtyMaxBtn.active = canAffordSelected;
+        }
         qtyPlusBtn.visible = qtyOverlay;
+        qtyPlusBtn.active = canAffordSelected;
         qtyPlus10Btn.visible = qtyOverlay;
+        qtyPlus10Btn.active = canAffordSelected;
         addToCartBtn.visible = qtyOverlay;
+        addToCartBtn.active = canAffordSelected;
+        addToCartBtn.setMessage(Component.literal(canAffordSelected ? "Add to Cart" : "Can't Afford"));
         cancelQtyBtn.visible = qtyOverlay;
     }
 
@@ -512,6 +588,10 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         } else {
             renderListingBg(poseStack, x, y, mouseX, mouseY);
         }
+
+        if (selectedListingIndex >= 0) {
+            renderQtyOverlayBg(poseStack, x, y);
+        }
     }
 
     private void renderListingBg(PoseStack poseStack, int x, int y, int mouseX, int mouseY) {
@@ -558,6 +638,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             };
             fill(poseStack, hlX1, y + 29, hlX2, y + 30, 0xFFFFD700);
         }
+
+        // Skip drawing row icons if modal is covering the table
+        if (selectedListingIndex >= 0) return;
 
         // Item icons in listing rows
         for (int i = 0; i < VISIBLE_LISTINGS; i++) {
@@ -610,14 +693,31 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     }
 
     private void renderQtyOverlayBg(PoseStack poseStack, int x, int y) {
-        // Qty overlay dims the content area only
-        fill(poseStack, x + 4, y + 19, x + 380, y + 192, 0xFF000000);
+        // Dim the content area behind the modal
+        fill(poseStack, x + 4, y + 19, x + 380, y + 198, 0xCC0D0A06);
 
-        // Overlay panel — centered in the content area
+        // Modal outer panel & inner inset boxes
         int ox = x + OVL_X;
         int oy = y + OVL_Y;
         drawPanel(poseStack, ox, oy, OVL_W, OVL_H);
         drawInsetPanel(poseStack, ox + 4, oy + 4, OVL_W - 8, OVL_H - 8);
+
+        // Header bar background
+        fill(poseStack, ox + 6, oy + 6, ox + OVL_W - 6, oy + 24, 0xFF231B12);
+        fill(poseStack, ox + 6, oy + 24, ox + OVL_W - 6, oy + 25, 0xFF6B583E);
+
+        // Market & Origin Details inset box
+        fill(poseStack, ox + 8, oy + 28, ox + OVL_W - 8, oy + 98, 0xFF282018);
+        fill(poseStack, ox + 8, oy + 28, ox + OVL_W - 8, oy + 29, 0xFF1A140E);
+        fill(poseStack, ox + 8, oy + 97, ox + OVL_W - 8, oy + 98, 0xFF4A3C2C);
+
+        // Render item icon inside modal header
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be != null && selectedListingIndex >= 0 && selectedListingIndex < be.getListings().size()) {
+            MarketListing listing = be.getListings().get(selectedListingIndex);
+            ItemStack renderStack = listing.createItemStack(1);
+            this.itemRenderer.renderAndDecorateItem(renderStack, ox + 9, oy + 7);
+        }
     }
 
     // ==================== Render Labels ====================
@@ -659,7 +759,9 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             }
         }
 
-        if (showingCart) {
+        if (selectedListingIndex >= 0) {
+            renderQtyOverlayLabels(poseStack);
+        } else if (showingCart) {
             renderCartLabels(poseStack);
         } else {
             renderListingLabels(poseStack);
@@ -858,27 +960,113 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     }
 
     private void renderQtyOverlayLabels(PoseStack poseStack) {
-        int cx = OVL_X + OVL_W / 2;  // center X in gui-local coords
-        int oy = OVL_Y + 8;
+        MarketBoardBlockEntity be = menu.getBlockEntity();
+        if (be == null || selectedListingIndex < 0 || selectedListingIndex >= be.getListings().size()) return;
+        MarketListing listing = be.getListings().get(selectedListingIndex);
 
-        // Item name
-        String name = selectedItemName;
-        if (this.font.width(name) > OVL_W - 24) {
-            while (this.font.width(name + "..") > OVL_W - 24 && name.length() > 3) {
+        int ox = OVL_X;
+        int oy = OVL_Y;
+
+        // 1. Header: Item Name + Sale / Deal Rating Pill
+        String name = listing.getItemDisplayName();
+        int maxNameW = 175;
+        if (this.font.width(name) > maxNameW) {
+            while (this.font.width(name + "..") > maxNameW && name.length() > 3) {
                 name = name.substring(0, name.length() - 1);
             }
             name += "..";
         }
-        drawCenteredString(poseStack, this.font, name, cx, oy, 0xFFFFFF);
+        int titleColor = listing.isOnSale() ? 0xFFD700 : 0xFFFFFF;
+        this.font.draw(poseStack, "\u00A7l" + name, ox + 29, oy + 11, titleColor);
 
-        // Quantity display
-        String qtyStr = "Qty: " + selectedQuantity + " / " + selectedMaxQty;
-        drawCenteredString(poseStack, this.font, qtyStr, cx, oy + 14, 0xFFD700);
+        int priceEach = listing.getPricePerItem();
+        int baseFairValue = com.offtomarket.mod.data.PriceCalculator.getBaseValue(listing.createItemStack(1));
+        if (baseFairValue <= 0) baseFairValue = priceEach;
+        double dealRatio = (double) priceEach / (double) baseFairValue;
 
-        // Cost preview
-        int cost = selectedQuantity * selectedPricePerItem;
-        String costStr = "Cost: " + formatCoinText(cost);
-        drawCenteredString(poseStack, this.font, costStr, cx, oy + 26, 0xFFCC44);
+        String badgeText;
+        int badgeColor;
+        if (listing.isOnSale()) {
+            badgeText = "\u2605 SALE " + listing.getSaleDiscount() + "% OFF";
+            badgeColor = 0xFFD700;
+        } else if (dealRatio <= 0.85) {
+            int savePct = (int) Math.round((1.0 - dealRatio) * 100);
+            badgeText = "\u2714 GREAT DEAL (-" + savePct + "%)";
+            badgeColor = 0x55FF55;
+        } else if (dealRatio >= 1.25) {
+            int upPct = (int) Math.round((dealRatio - 1.0) * 100);
+            badgeText = "\u26A0 HIGH DEMAND (+" + upPct + "%)";
+            badgeColor = 0xFFAA44;
+        } else {
+            badgeText = "FAIR MARKET VALUE";
+            badgeColor = 0xAAAAAA;
+        }
+        int badgeW = this.font.width(badgeText);
+        this.font.draw(poseStack, badgeText, ox + OVL_W - 10 - badgeW, oy + 11, badgeColor);
+
+        // 2. Origin Town, Type & Distance/ETA
+        TownData town = TownRegistry.getTown(listing.getTownId());
+        String townLine;
+        if (town != null) {
+            int dist = town.getDistance();
+            int estMinutes = Math.max(1, dist);
+            townLine = "\u00A76Origin:\u00A7r " + town.getDisplayName()
+                    + " \u00A77(" + town.getType().getDisplayName() + " \u2022 Dist " + dist + ", ~" + estMinutes + "m delivery)";
+        } else {
+            townLine = "\u00A76Origin:\u00A7r " + listing.getTownId();
+        }
+        this.font.draw(poseStack, townLine, ox + 12, oy + 33, 0xE0D4B8);
+
+        // 3. Unit Price vs Base Fair Value
+        String priceLine = "\u00A76Unit Price:\u00A7r " + formatCoinText(priceEach)
+                + "   \u00A77(Base Fair Value: " + formatCoinText(baseFairValue) + "\u00A77)";
+        this.font.draw(poseStack, priceLine, ox + 12, oy + 47, 0xCCCCCC);
+
+        // 4. Town Need Level & Supply Trend
+        Item listingItem = ForgeRegistries.ITEMS.getValue(listing.getItemId());
+        if (town != null && listingItem != null) {
+            NeedLevel need = town.getNeedLevel(listingItem);
+            String itemKey = listing.getItemId().toString();
+            TownData.SupplyTrend trend = town.getTrend(itemKey);
+            String trendLabel = switch (trend) {
+                case FALLING -> "\u00A7a\u25B2 Rising Demand";
+                case RISING -> "\u00A7c\u25BC Falling Demand";
+                default -> "\u00A77\u25CF Stable Supply";
+            };
+            String demandLine = "\u00A76Town Demand:\u00A7r " + need.getDisplayName()
+                    + " (" + String.format("%.0f%%", need.getPriceMultiplier() * 100) + ")  \u2022  " + trendLabel;
+            int needColor = 0xFF000000 | need.getColor();
+            this.font.draw(poseStack, demandLine, ox + 12, oy + 61, needColor);
+        } else {
+            this.font.draw(poseStack, "\u00A76Town Demand:\u00A7r Balanced (100%)", ox + 12, oy + 61, 0x88CC88);
+        }
+
+        // 5. Stock & Affordability Summary
+        int balance = getPlayerCoinBalance();
+        int canAffordCount = priceEach > 0 ? Math.min(listing.getCount(), balance / priceEach) : listing.getCount();
+        String stockLine;
+        int stockColor;
+        if (canAffordCount > 0) {
+            stockLine = "\u00A76Stock:\u00A7r " + listing.getCount() + " avail.  \u2022  \u00A7a\u2714 You can afford up to " + canAffordCount;
+            stockColor = 0x55FF55;
+        } else {
+            stockLine = "\u00A76Stock:\u00A7r " + listing.getCount() + " avail.  \u2022  \u00A7c\u2718 Need "
+                    + formatCoinText(Math.max(1, priceEach - balance)) + "\u00A7c more for 1";
+            stockColor = 0xFF6666;
+        }
+        this.font.draw(poseStack, stockLine, ox + 12, oy + 75, stockColor);
+
+        // 6. Total Lot Value / Cart Status
+        int existingInCart = 0;
+        for (CartEntry ce : cart) {
+            if (ce.listingIndex == selectedListingIndex) {
+                existingInCart = ce.quantity;
+                break;
+            }
+        }
+        String lotLine = "Full Lot (" + listing.getCount() + "): " + formatCoinText(listing.getTotalPrice())
+                + (existingInCart > 0 ? "   \u00A7a[In Cart: x" + existingInCart + "]" : "");
+        this.font.draw(poseStack, lotLine, ox + 12, oy + 87, 0xAAAAAA);
     }
 
     // ==================== Utilities ====================
@@ -896,17 +1084,6 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         renderBackground(poseStack);
         super.render(poseStack, mouseX, mouseY, partialTick);
-
-        // Render quantity overlay AFTER super.render() so it draws on top of all item icons
-        if (selectedListingIndex >= 0) {
-            renderQtyOverlayBg(poseStack, this.leftPos, this.topPos);
-            // renderLabels is pre-translated by (leftPos, topPos); replicate that here
-            poseStack.pushPose();
-            poseStack.translate(this.leftPos, this.topPos, 0);
-            renderQtyOverlayLabels(poseStack);
-            poseStack.popPose();
-        }
-
         renderTooltip(poseStack, mouseX, mouseY);
 
         // Climate tooltip on hover
@@ -936,7 +1113,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             }
         }
 
-        // Listing tooltip on hover (not showing cart or overlay)
+        // Listing tooltip on hover (only after holding hover for HOVER_TOOLTIP_DELAY_MS)
         if (!showingCart && selectedListingIndex < 0 && hoveredRow >= 0) {
             MarketBoardBlockEntity be = menu.getBlockEntity();
             if (be != null) {
@@ -945,10 +1122,22 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 int sortedIdx = scrollOffset + hoveredRow;
                 if (sortedIdx >= 0 && sortedIdx < sorted.size()) {
                     int actualIdx = sorted.get(sortedIdx);
-                    MarketListing listing = listings.get(actualIdx);
-                    renderListingTooltip(poseStack, listing, mouseX, mouseY);
+                    long now = System.currentTimeMillis();
+                    if (actualIdx != lastHoveredListingIdx) {
+                        lastHoveredListingIdx = actualIdx;
+                        hoverStartTimeMs = now;
+                    } else if (now - hoverStartTimeMs >= HOVER_TOOLTIP_DELAY_MS) {
+                        MarketListing listing = listings.get(actualIdx);
+                        renderListingTooltip(poseStack, listing, mouseX, mouseY);
+                    }
+                } else {
+                    lastHoveredListingIdx = -1;
+                    hoverStartTimeMs = 0L;
                 }
             }
+        } else {
+            lastHoveredListingIdx = -1;
+            hoverStartTimeMs = 0L;
         }
 
         // Cart row tooltip
@@ -1007,7 +1196,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
         }
 
         tooltip.add(Component.literal(""));
-        tooltip.add(Component.literal("Click to select quantity & add to cart")
+        tooltip.add(Component.literal("Click for full item details & purchase options")
                 .withStyle(ChatFormatting.YELLOW));
 
         TownData town = TownRegistry.getTown(listing.getTownId());
@@ -1093,10 +1282,18 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                 return true;
             }
 
-            // If quantity overlay is showing, don't allow other clicks
-            // (buttons handle overlay interaction)
+            // If listing detail modal is showing, handle modal widgets or click-outside-to-close
             if (selectedListingIndex >= 0) {
-                return super.mouseClicked(mouseX, mouseY, button);
+                boolean handled = super.mouseClicked(mouseX, mouseY, button);
+                if (!handled) {
+                    // Clicking outside the modal closes it
+                    if (relX < OVL_X || relX > OVL_X + OVL_W || relY < OVL_Y || relY > OVL_Y + OVL_H) {
+                        selectedListingIndex = -1;
+                        updateButtonVisibility();
+                        return true;
+                    }
+                }
+                return handled;
             }
 
             if (showingCart) {
@@ -1131,7 +1328,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                     }
                 }
 
-                // Listing row click: open quantity selector
+                // Listing row click: open Listing Detail & Purchase Modal
                 MarketBoardBlockEntity be = menu.getBlockEntity();
                 if (be != null) {
                     List<MarketListing> listings = be.getListings();
@@ -1145,18 +1342,17 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
                             int actualIdx = sorted.get(sortedIdx);
                             MarketListing listing = listings.get(actualIdx);
                             int balance = getPlayerCoinBalance();
+                            int priceEach = Math.max(1, listing.getPricePerItem());
 
-                            if (balance >= listing.getPricePerItem()) {
-                                // Open quantity overlay
-                                selectedListingIndex = actualIdx;
-                                selectedMaxQty = Math.min(listing.getCount(),
-                                        balance / listing.getPricePerItem());
-                                selectedQuantity = 1;
-                                selectedItemName = listing.getItemDisplayName();
-                                selectedPricePerItem = listing.getPricePerItem();
-                                updateButtonVisibility();
-                                return true;
-                            }
+                            selectedListingIndex = actualIdx;
+                            int affordable = balance / priceEach;
+                            selectedMaxQty = Math.max(1, Math.min(listing.getCount(), Math.max(1, affordable)));
+                            selectedQuantity = 1;
+                            selectedItemName = listing.getItemDisplayName();
+                            selectedPricePerItem = listing.getPricePerItem();
+                            syncSliderFromQuantity();
+                            updateButtonVisibility();
+                            return true;
                         }
                     }
                 }
@@ -1166,8 +1362,32 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     }
 
     @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (selectedListingIndex >= 0 && qtySlider != null && qtySlider.visible && qtySlider.active) {
+            if (qtySlider.isMouseOver(mouseX, mouseY) || this.getFocused() == qtySlider) {
+                if (qtySlider.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+                    return true;
+                }
+            }
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (selectedListingIndex >= 0) return true; // block scrolling during overlay
+        if (selectedListingIndex >= 0) {
+            // Allow mouse wheel to fine-tune quantity inside the modal!
+            if (getPlayerCoinBalance() >= selectedPricePerItem) {
+                if (delta > 0 && selectedQuantity < selectedMaxQty) {
+                    selectedQuantity++;
+                    syncSliderFromQuantity();
+                } else if (delta < 0 && selectedQuantity > 1) {
+                    selectedQuantity--;
+                    syncSliderFromQuantity();
+                }
+            }
+            return true;
+        }
 
         if (showingCart) {
             int maxScroll = Math.max(0, cart.size() - VISIBLE_CART_ROWS);

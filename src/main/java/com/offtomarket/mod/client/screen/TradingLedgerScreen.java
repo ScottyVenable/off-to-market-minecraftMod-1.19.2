@@ -10,14 +10,18 @@ import com.offtomarket.mod.network.SetPricePacket;
 import com.offtomarket.mod.network.UpgradeCaravanWeightPacket;
 import com.offtomarket.mod.network.UpdateBinSettingsPacket;
 import com.offtomarket.mod.network.WithdrawBinItemPacket;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,17 +77,76 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     private Button orderTownPrevBtn;
     private Button orderTownNextBtn;
     private EditBox orderQtyInput;
-    private Button orderQtyPlus1Btn;
-    private Button orderQtyPlus16Btn;
-    private Button orderQtyPlus64Btn;
-    private Button orderQtyMaxBtn;
+    private OrderQtySlider orderQtySlider;
     private Button orderAddItemBtn;
+    private Button orderRepeatBtn;
     private Button orderAutoDispatchBtn;
     private Button orderCreateBtn;
     private Button orderClearBtn;
     private int orderTownIndex = 0;
     private boolean orderAutoDispatch = true;
+    private static final int[] REPEAT_OPTIONS = {1, -1, 3, 5, 10};
+    private int orderRepeatModeIndex = 0;
+    private boolean updatingSliderFromInput = false;
     private final List<com.offtomarket.mod.data.CustomTradeOrder.OrderItem> stagedOrderItems = new ArrayList<>();
+
+    // ---- Price Book Town Demand view scroll state ----
+    private int demandScrollOffset = 0;
+
+    private int getMaxSliderQtyForSelected() {
+        TradingLedgerBlockEntity be = menu.getBlockEntity();
+        ItemStack selected = getSelectedItem();
+        int inBin = 0;
+        if (be != null && !selected.isEmpty()) {
+            for (int s = 0; s < TradingLedgerBlockEntity.BIN_SIZE; s++) {
+                ItemStack is = be.getItem(s);
+                if (ItemStack.isSameItemSameTags(is, selected)) {
+                    inBin += is.getCount();
+                }
+            }
+        }
+        return Math.max(64, Math.min(2000, inBin > 0 ? inBin : 128));
+    }
+
+    private String getRepeatModeLabel() {
+        int val = REPEAT_OPTIONS[orderRepeatModeIndex];
+        if (val == -1) return "Run: \u221E";
+        if (val == 1) return "Run: 1x";
+        return "Run: " + val + "x";
+    }
+
+    private class OrderQtySlider extends AbstractSliderButton {
+        OrderQtySlider(int x, int y, int width, int height) {
+            super(x, y, width, height, Component.empty(), 15.0 / 63.0);
+            updateMessage();
+        }
+
+        void syncFromQty(int qty) {
+            int max = Math.max(2, getMaxSliderQtyForSelected());
+            int clamped = Mth.clamp(qty, 1, max);
+            this.value = (double) (clamped - 1) / (double) (max - 1);
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            int max = Math.max(2, getMaxSliderQtyForSelected());
+            int qty = Mth.clamp(1 + (int) Math.round(this.value * (max - 1)), 1, max);
+            setMessage(Component.literal("Slide: " + qty + "/" + max));
+        }
+
+        @Override
+        protected void applyValue() {
+            int max = Math.max(2, getMaxSliderQtyForSelected());
+            int qty = Mth.clamp(1 + (int) Math.round(this.value * (max - 1)), 1, max);
+            updateMessage();
+            if (orderQtyInput != null && !updatingSliderFromInput) {
+                updatingSliderFromInput = true;
+                orderQtyInput.setValue(String.valueOf(qty));
+                updatingSliderFromInput = false;
+            }
+        }
+    }
 
     // ---- Right-click context menu ----
     /** The bin slot index for the active context menu, or -1 if none. */
@@ -112,6 +175,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
                 Component.literal("Search"));
         searchInput.setMaxLength(20);
         searchInput.setResponder(text -> {
+            demandScrollOffset = 0;
             updateFilteredSlots();
             if (selectedSlot >= 0 && !filteredSlots.contains(selectedSlot)) {
                 selectedSlot = -1;
@@ -182,12 +246,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         applySettingsBtn = addRenderableWidget(new Button(x + 294, y + 64, 80, 14,
                 Component.literal("Apply"), btn -> sendSettingsToServer()));
 
-        upgradeCaravanBtn = addRenderableWidget(new Button(x + 184, y + 213, 190, 14,
+        upgradeCaravanBtn = addRenderableWidget(new Button(x + 184, y + 206, 190, 14,
             Component.literal("Upgrade Caravan"), btn -> {
             TradingLedgerBlockEntity blockEntity = menu.getBlockEntity();
             if (blockEntity != null) {
-            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
-                new UpgradeCaravanWeightPacket(blockEntity.getBlockPos()));
+                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                    new UpgradeCaravanWeightPacket(blockEntity.getBlockPos()));
             }
         }));
 
@@ -205,19 +269,32 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }));
 
-        orderQtyInput = new EditBox(this.font, x + 206, y + 50, 34, 12, Component.literal("Qty"));
+        orderQtyInput = new EditBox(this.font, x + 206, y + 50, 32, 12, Component.literal("Qty"));
         orderQtyInput.setMaxLength(4);
         orderQtyInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
         orderQtyInput.setValue("16");
+        orderQtyInput.setResponder(val -> {
+            if (!updatingSliderFromInput && orderQtySlider != null && !val.isEmpty()) {
+                try {
+                    int parsed = Integer.parseInt(val);
+                    updatingSliderFromInput = true;
+                    orderQtySlider.syncFromQty(parsed);
+                    updatingSliderFromInput = false;
+                } catch (NumberFormatException ignored) {}
+            }
+        });
         this.addWidget(orderQtyInput);
 
-        orderQtyPlus1Btn = addRenderableWidget(new Button(x + 242, y + 49, 16, 14, Component.literal("+1"), btn -> adjustOrderQty(1)));
-        orderQtyPlus16Btn = addRenderableWidget(new Button(x + 260, y + 49, 20, 14, Component.literal("+16"), btn -> adjustOrderQty(16)));
-        orderQtyPlus64Btn = addRenderableWidget(new Button(x + 282, y + 49, 20, 14, Component.literal("+64"), btn -> adjustOrderQty(64)));
-        orderQtyMaxBtn = addRenderableWidget(new Button(x + 304, y + 49, 22, 14, Component.literal("Max"), btn -> setOrderQtyMax()));
+        orderQtySlider = addRenderableWidget(new OrderQtySlider(x + 240, y + 49, 86, 14));
 
         orderAddItemBtn = addRenderableWidget(new Button(x + 328, y + 49, 46, 14, Component.literal("+ Item"), btn -> {
             stageSelectedItem();
+        }));
+
+        orderRepeatBtn = addRenderableWidget(new Button(x + 252, y + 64, 52, 13,
+                Component.literal(getRepeatModeLabel()), btn -> {
+            orderRepeatModeIndex = (orderRepeatModeIndex + 1) % REPEAT_OPTIONS.length;
+            btn.setMessage(Component.literal(getRepeatModeLabel()));
         }));
 
         orderAutoDispatchBtn = addRenderableWidget(new Button(x + 306, y + 64, 68, 13,
@@ -236,38 +313,6 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
 
         updateFilteredSlots();
         updateTabVisibility();
-    }
-
-    private void adjustOrderQty(int delta) {
-        int current = 0;
-        try {
-            if (orderQtyInput != null && !orderQtyInput.getValue().isEmpty()) {
-                current = Integer.parseInt(orderQtyInput.getValue());
-            }
-        } catch (NumberFormatException ignored) {}
-        int newVal = Math.min(9999, Math.max(1, current + delta));
-        if (orderQtyInput != null) {
-            orderQtyInput.setValue(String.valueOf(newVal));
-        }
-    }
-
-    private void setOrderQtyMax() {
-        TradingLedgerBlockEntity be = menu.getBlockEntity();
-        ItemStack selected = getSelectedItem();
-        int count = 64;
-        if (be != null && !selected.isEmpty()) {
-            int inBin = 0;
-            for (int s = 0; s < TradingLedgerBlockEntity.BIN_SIZE; s++) {
-                ItemStack is = be.getItem(s);
-                if (ItemStack.isSameItemSameTags(is, selected)) {
-                    inBin += is.getCount();
-                }
-            }
-            if (inBin > 0) count = inBin;
-        }
-        if (orderQtyInput != null) {
-            orderQtyInput.setValue(String.valueOf(count));
-        }
     }
 
     private void stageSelectedItem() {
@@ -296,13 +341,16 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         }
         if (stagedOrderItems.isEmpty()) return;
 
+        int repeatCount = REPEAT_OPTIONS[orderRepeatModeIndex];
         com.offtomarket.mod.data.TownData targetTown = allTowns.get(Math.min(orderTownIndex, allTowns.size() - 1));
         com.offtomarket.mod.data.CustomTradeOrder order = new com.offtomarket.mod.data.CustomTradeOrder(
                 java.util.UUID.randomUUID(),
                 targetTown.getId(),
                 new ArrayList<>(stagedOrderItems),
                 orderAutoDispatch,
-                this.minecraft != null && this.minecraft.level != null ? this.minecraft.level.getGameTime() : 0
+                this.minecraft != null && this.minecraft.level != null ? this.minecraft.level.getGameTime() : 0,
+                repeatCount,
+                0
         );
         ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                 new com.offtomarket.mod.network.CreateCustomOrderPacket(be.getBlockPos(), order));
@@ -345,6 +393,7 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         historyScrollOffset = 0;
         incomeScrollOffset = 0;
         ordersScrollOffset = 0;
+        demandScrollOffset = 0;
         if (orderQtyInput != null) orderQtyInput.setFocus(false);
         if (priceInput != null) priceInput.setFocus(false);
         if (taxInput != null) taxInput.setFocus(false);
@@ -374,11 +423,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         if (orderTownPrevBtn != null) orderTownPrevBtn.visible = ordersActive;
         if (orderTownNextBtn != null) orderTownNextBtn.visible = ordersActive;
         if (orderQtyInput != null) orderQtyInput.visible = ordersActive;
-        if (orderQtyPlus1Btn != null) orderQtyPlus1Btn.visible = ordersActive;
-        if (orderQtyPlus16Btn != null) orderQtyPlus16Btn.visible = ordersActive;
-        if (orderQtyPlus64Btn != null) orderQtyPlus64Btn.visible = ordersActive;
-        if (orderQtyMaxBtn != null) orderQtyMaxBtn.visible = ordersActive;
+        if (orderQtySlider != null) {
+            orderQtySlider.visible = ordersActive;
+            if (ordersActive) orderQtySlider.updateMessage();
+        }
         if (orderAddItemBtn != null) orderAddItemBtn.visible = ordersActive;
+        if (orderRepeatBtn != null) orderRepeatBtn.visible = ordersActive;
         if (orderAutoDispatchBtn != null) orderAutoDispatchBtn.visible = ordersActive;
         if (orderCreateBtn != null) orderCreateBtn.visible = ordersActive;
         if (orderClearBtn != null) orderClearBtn.visible = ordersActive;
@@ -666,26 +716,27 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         // Qty label
         this.font.draw(poseStack, "Qty:", 184, 52, 0xCCCCCC);
 
-        // Staged items preview / Target item info
+        // Staged items preview / Target item info (truncated to fit left of orderRepeatBtn at x=252)
         if (stagedOrderItems.isEmpty()) {
             ItemStack selected = getSelectedItem();
             if (!selected.isEmpty()) {
                 String name = selected.getHoverName().getString();
-                if (this.font.width(name) > 115 && name.length() > 3) {
-                    name = name.substring(0, 14) + "..";
+                while (this.font.width(name) > 58 && name.length() > 3) {
+                    name = name.substring(0, name.length() - 1);
                 }
-                this.font.draw(poseStack, "Target: " + name, 184, 66, 0xAAAAAA);
+                if (name.length() < selected.getHoverName().getString().length()) name += "..";
+                this.font.draw(poseStack, "\u00A77" + name, 184, 66, 0xAAAAAA);
             } else {
-                this.font.draw(poseStack, "\u00A77Select item on left", 184, 66, 0x888888);
+                this.font.draw(poseStack, "\u00A77Pick item", 184, 66, 0x888888);
             }
         } else {
-            StringBuilder sb = new StringBuilder("Staged: ");
+            StringBuilder sb = new StringBuilder();
             for (int i = 0; i < stagedOrderItems.size(); i++) {
                 if (i > 0) sb.append(", ");
                 sb.append(stagedOrderItems.get(i).getTargetQuantity()).append("x ").append(stagedOrderItems.get(i).getDisplayName());
             }
             String stagedStr = sb.toString();
-            while (this.font.width(stagedStr) > 115 && stagedStr.length() > 3) {
+            while (this.font.width(stagedStr) > 64 && stagedStr.length() > 3) {
                 stagedStr = stagedStr.substring(0, stagedStr.length() - 1);
             }
             if (stagedStr.length() < sb.length()) stagedStr += "..";
@@ -718,13 +769,17 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             // Town display name
             com.offtomarket.mod.data.TownData td = com.offtomarket.mod.data.TownRegistry.getTown(order.getTownId());
             String tName = td != null ? td.getDisplayName() : order.getTownId();
-            while (this.font.width(tName) > 65 && tName.length() > 3) {
+            while (this.font.width(tName) > 62 && tName.length() > 3) {
                 tName = tName.substring(0, tName.length() - 1);
             }
             this.font.draw(poseStack, "\u00A76\u00A7l" + tName, 186, ry + 3, 0xFFD700);
 
-            // Auto dispatch badge
-            this.font.draw(poseStack, order.isAutoDispatch() ? "\u00A7a[AUTO]" : "\u00A77[MANUAL]", 254, ry + 3, 0xFFFFFF);
+            // Auto dispatch & Recurring schedule badges
+            String modeBadge = order.isAutoDispatch() ? "\u00A7a[AUTO]" : "\u00A77[MAN]";
+            this.font.draw(poseStack, modeBadge, 250, ry + 3, 0xFFFFFF);
+            String schedBadge = "[" + order.getScheduleBadgeText() + "]";
+            int schedColor = order.isRecurring() ? 0x55FFFF : 0x888888;
+            this.font.draw(poseStack, schedBadge, 286, ry + 3, schedColor);
 
             // Cancel [✖] button
             this.font.draw(poseStack, "\u00A7c✖", 368, ry + 3, 0xFF5555);
@@ -843,7 +898,12 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             this.font.draw(poseStack, "Select an item to preview modifiers.", 184, 140, 0x666666);
         }
 
-        // Caravan Weight display removed — not shown in Fees panel
+        // Caravan Weight Upgrade Status
+        int cwLvl = cbe.getCaravanWeightUpgradeLevel();
+        int cwCap = cbe.getCaravanWeightCapacity();
+        int cwCur = cbe.getCurrentCaravanWeight();
+        this.font.draw(poseStack, "\u00A7eCaravan Lv." + cwLvl + " \u00A77(\u00A7f" + cwCur + "/" + cwCap + " Wt\u00A77)", 184, 182, 0xFFD700);
+        this.font.draw(poseStack, "\u00A77Next upgrade: \u00A7a+" + TradingLedgerBlockEntity.CARAVAN_WEIGHT_PER_UPGRADE + " Wt capacity", 184, 193, 0x88CC88);
     }
 
     private void renderHistoryLabels(PoseStack poseStack) {
@@ -1061,13 +1121,106 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
 
         String est = TradingLedgerBlockEntity.getEstimatedMarketTime(
             effectivePrice, bd.materialCost(), bd.maxPrice());
-        this.font.draw(poseStack, "Sells: " + est, 184, 140, 0x888888);
+        this.font.draw(poseStack, "Sells: " + est, 184, 138, 0x888888);
+
+        renderTownDemandBreakdown(poseStack, stack.getItem(), effectivePrice, 150, 4);
+    }
+
+    private ItemStack findCatalogSearchItem() {
+        if (searchInput == null) return ItemStack.EMPTY;
+        String q = searchInput.getValue().trim().toLowerCase(Locale.ROOT);
+        if (q.length() < 2) return ItemStack.EMPTY;
+        Item bestExact = null;
+        Item bestStarts = null;
+        Item bestContains = null;
+        for (Item item : ForgeRegistries.ITEMS.getValues()) {
+            if (item == net.minecraft.world.item.Items.AIR) continue;
+            ItemStack st = new ItemStack(item);
+            String name = st.getHoverName().getString().toLowerCase(Locale.ROOT);
+            if (name.equals(q)) {
+                bestExact = item;
+                break;
+            } else if (bestStarts == null && name.startsWith(q)) {
+                bestStarts = item;
+            } else if (bestContains == null && name.contains(q)) {
+                bestContains = item;
+            }
+        }
+        Item match = bestExact != null ? bestExact : (bestStarts != null ? bestStarts : bestContains);
+        return match != null ? new ItemStack(match) : ItemStack.EMPTY;
+    }
+
+    private void renderTownDemandBreakdown(PoseStack poseStack, Item item, int basePrice, int startY, int maxRows) {
+        List<com.offtomarket.mod.data.TownData> towns = new ArrayList<>(com.offtomarket.mod.data.TownRegistry.getAllTowns());
+        if (towns.isEmpty() || item == null) return;
+
+        // Sort towns so Desperate (2.0x) and High Need (1.5x) are at the top, Regular/Surplus below
+        towns.sort((a, b) -> {
+            com.offtomarket.mod.data.NeedLevel na = a.getNeedLevel(item);
+            com.offtomarket.mod.data.NeedLevel nb = b.getNeedLevel(item);
+            int cmp = Double.compare(nb.getPriceMultiplier(), na.getPriceMultiplier());
+            if (cmp != 0) return cmp;
+            return a.getDisplayName().compareToIgnoreCase(b.getDisplayName());
+        });
+
+        OtmGuiTheme.drawDividerH(poseStack, 183, 379, startY - 3);
+        this.font.draw(poseStack, "\u00A7e\u00A7lTown Demand \u00A77(Top Buyers)", 184, startY, 0xFFD700);
+
+        int rowStartY = startY + 11;
+        int rowH = 11;
+        int maxScroll = Math.max(0, towns.size() - maxRows);
+        demandScrollOffset = Math.max(0, Math.min(demandScrollOffset, maxScroll));
+
+        for (int i = 0; i < maxRows && (demandScrollOffset + i) < towns.size(); i++) {
+            com.offtomarket.mod.data.TownData town = towns.get(demandScrollOffset + i);
+            com.offtomarket.mod.data.NeedLevel need = town.getNeedLevel(item);
+            int ry = rowStartY + i * rowH;
+
+            String badge = switch (need) {
+                case DESPERATE -> "\u00A7c\u25B2 Desp";
+                case HIGH_NEED -> "\u00A76\u25B2 High";
+                case MODERATE_NEED -> "\u00A7e\u25B2 Mod";
+                case BALANCED -> "\u00A7a\u25CF Reg";
+                case SURPLUS -> "\u00A7b\u25BC Surp";
+                case OVERSATURATED -> "\u00A78\u25BC Over";
+            };
+            this.font.draw(poseStack, badge, 184, ry, 0xFFFFFF);
+
+            String tName = town.getDisplayName();
+            while (this.font.width(tName) > 78 && tName.length() > 3) {
+                tName = tName.substring(0, tName.length() - 1);
+            }
+            this.font.draw(poseStack, tName, 224, ry, need.isInDemand() ? 0xFFF0C0 : 0xBBBBBB);
+
+            int townPayout = Math.max(1, (int) Math.round(basePrice * need.getPriceMultiplier()));
+            String multStr = String.format("%.0f%% ", need.getPriceMultiplier() * 100);
+            this.font.draw(poseStack, multStr, 306, ry, 0xFF000000 | need.getColor());
+            CoinRenderer.renderCompactCoinValue(poseStack, this.font, 336, ry, townPayout);
+        }
+
+        if (demandScrollOffset > 0) this.font.draw(poseStack, "\u25B2", 371, startY, 0x888888);
+        if (demandScrollOffset < maxScroll) this.font.draw(poseStack, "\u25BC", 371, rowStartY + (maxRows - 1) * rowH, 0x888888);
     }
 
     private void renderEmptyHint(PoseStack poseStack) {
+        // If user typed an item query in searchInput (even if not in bin), show its Town Demand Breakdown!
+        ItemStack searchMatch = findCatalogSearchItem();
+        if (!searchMatch.isEmpty()) {
+            String itemName = searchMatch.getHoverName().getString();
+            while (this.font.width(itemName) > 168 && itemName.length() > 3) {
+                itemName = itemName.substring(0, itemName.length() - 1);
+            }
+            this.font.draw(poseStack, "\u00A7e" + itemName, 184, 36, 0xFFD700);
+            int fair = PriceCalculator.getBaseValue(searchMatch);
+            this.font.draw(poseStack, "Fair Value: " + formatCoinText(fair), 184, 48, 0xAAAAAA);
+            renderTownDemandBreakdown(poseStack, searchMatch.getItem(), fair, 66, 12);
+            return;
+        }
+
         drawCenteredString(poseStack, this.font, "Select an item from", 280, 58, 0x888888);
-        drawCenteredString(poseStack, this.font, "the list to view and", 280, 70, 0x888888);
-        drawCenteredString(poseStack, this.font, "set its price.", 280, 82, 0x888888);
+        drawCenteredString(poseStack, this.font, "the list or search any", 280, 70, 0x888888);
+        drawCenteredString(poseStack, this.font, "item to view Town Demand", 280, 82, 0x888888);
+        drawCenteredString(poseStack, this.font, "and set its price.", 280, 94, 0x888888);
     }
 
     // ==================== Mouse Handling ====================
@@ -1217,6 +1370,18 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
     }
 
     @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (activeTab == 4 && orderQtySlider != null && orderQtySlider.visible && orderQtySlider.active) {
+            if (orderQtySlider.isMouseOver(mouseX, mouseY) || this.getFocused() == orderQtySlider) {
+                if (orderQtySlider.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+                    return true;
+                }
+            }
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         int x = this.leftPos;
         int y = this.topPos;
@@ -1234,6 +1399,15 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
                 listScrollOffset++;
                 return true;
             }
+        }
+
+        // Price Book tab Town Demand right-panel scroll
+        if (activeTab == 0 && mouseX >= x + 183 && mouseX < x + 383 && mouseY >= y + 60) {
+            int totalTowns = com.offtomarket.mod.data.TownRegistry.getAllTowns().size();
+            int visRows = !getSelectedItem().isEmpty() ? 4 : 12;
+            int maxDemandScroll = Math.max(0, totalTowns - visRows);
+            if (delta > 0 && demandScrollOffset > 0) { demandScrollOffset--; return true; }
+            if (delta < 0 && demandScrollOffset < maxDemandScroll) { demandScrollOffset++; return true; }
         }
 
         // History tab right-panel scroll

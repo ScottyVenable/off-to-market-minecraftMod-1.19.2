@@ -6,6 +6,8 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
@@ -16,6 +18,7 @@ import net.minecraft.world.item.ItemStack;
  */
 public class TradingLedgerMenu extends AbstractContainerMenu {
     private final TradingLedgerBlockEntity blockEntity;
+    private final ContainerData data;
 
     // Client-side constructor
     public TradingLedgerMenu(int containerId, Inventory inv) {
@@ -25,6 +28,30 @@ public class TradingLedgerMenu extends AbstractContainerMenu {
     public TradingLedgerMenu(int containerId, Inventory inv, TradingLedgerBlockEntity be) {
         super(ModMenuTypes.TRADING_LEDGER.get(), containerId);
         this.blockEntity = be;
+
+        if (be != null) {
+            this.data = new ContainerData() {
+                @Override
+                public int get(int index) {
+                    return index == 0 ? be.getCaravanWeightUpgradeLevel() : 0;
+                }
+
+                @Override
+                public void set(int index, int value) {
+                    if (index == 0) {
+                        be.setCaravanWeightUpgradeLevel(value);
+                    }
+                }
+
+                @Override
+                public int getCount() {
+                    return 1;
+                }
+            };
+        } else {
+            this.data = new SimpleContainerData(1);
+        }
+        this.addDataSlots(this.data);
 
         net.minecraft.world.Container container = be != null ? be : new SimpleContainer(TradingLedgerBlockEntity.BIN_SIZE);
 

@@ -104,6 +104,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     private Worker tradingCart = new Worker(Worker.WorkerType.TRADING_CART);
     private Worker bookkeeper = new Worker(Worker.WorkerType.BOOKKEEPER);
     private Worker stockScout = new Worker(Worker.WorkerType.STOCK_SCOUT);
+    private Worker tradeManager = new Worker(Worker.WorkerType.TRADE_MANAGER);
 
     // Stock Scout mission state
     private String scoutTargetTownId = "";  // town currently being scouted (empty = idle)
@@ -154,6 +155,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
     public Worker getTradingCart() { return tradingCart; }
     public Worker getBookkeeper() { return bookkeeper; }
     public Worker getStockScout() { return stockScout; }
+    public Worker getTradeManager() { return tradeManager; }
 
     /**
      * Get a worker by type.
@@ -164,6 +166,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             case TRADING_CART -> tradingCart;
             case BOOKKEEPER -> bookkeeper;
             case STOCK_SCOUT -> stockScout;
+            case TRADE_MANAGER -> tradeManager;
         };
     }
 
@@ -344,6 +347,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         tag.put("TradingCart", tradingCart.save());
         tag.put("Bookkeeper", bookkeeper.save());
         tag.put("StockScout", stockScout.save());
+        tag.put("TradeManager", tradeManager.save());
 
         // Scout mission state
         tag.putString("ScoutTarget", scoutTargetTownId);
@@ -446,6 +450,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("StockScout")) {
             stockScout = Worker.load(tag.getCompound("StockScout"));
+        }
+        if (tag.contains("TradeManager")) {
+            tradeManager = Worker.load(tag.getCompound("TradeManager"));
         }
 
         scoutTargetTownId = tag.getString("ScoutTarget");
@@ -1004,11 +1011,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         for (BuyOrder order : activeBuyOrders) {
             if (order.getId().equals(orderId) && order.getStatus() == BuyOrder.Status.ARRIVED) {
                 ItemStack stack = order.createStack();
-                if (!stack.isEmpty()) {
-                    if (!player.getInventory().add(stack)) {
-                        player.drop(stack, false);
-                    }
-                }
+                giveItemStackChunks(player, stack);
                 toRemove = order;
                 break;
             }
@@ -1017,6 +1020,109 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             activeBuyOrders.remove(toRemove);
             syncToClient();
         }
+    }
+
+    private static void giveItemStackChunks(Player player, ItemStack fullStack) {
+        if (fullStack.isEmpty()) return;
+        int remaining = fullStack.getCount();
+        int maxStack = Math.max(1, fullStack.getMaxStackSize());
+        while (remaining > 0) {
+            int chunk = Math.min(remaining, maxStack);
+            ItemStack part = fullStack.copy();
+            part.setCount(chunk);
+            if (!player.getInventory().add(part)) {
+                player.drop(part, false);
+            }
+            remaining -= chunk;
+        }
+    }
+
+    /**
+     * Attempts to deposit an arrived purchase or diplomat item stack into nearby marked depot containers.
+     * Prioritizes containers assigned to the origin town, then any other marked container within 24 blocks.
+     * Returns true if the entire stack was deposited into marked container(s).
+     */
+    public boolean tryDepositToMarkedContainers(Level level, BlockPos postPos, String townId, ItemStack fullStack) {
+        if (!(level instanceof ServerLevel serverLevel) || fullStack.isEmpty()) return false;
+        TownDepotManager depot = TradingData.get(serverLevel).getDepotManager();
+        Map<BlockPos, String> allMarked = depot.getAllAssignedContainers();
+        if (allMarked.isEmpty()) return false;
+
+        List<BlockPos> candidates = new ArrayList<>();
+        // 1) Containers explicitly marked for this town within 24 blocks
+        for (BlockPos cPos : depot.getContainersForTown(townId)) {
+            if (cPos.distSqr(postPos) <= 24 * 24) {
+                candidates.add(cPos);
+            }
+        }
+        // 2) Any other marked container within 24 blocks
+        for (BlockPos cPos : allMarked.keySet()) {
+            if (!candidates.contains(cPos) && cPos.distSqr(postPos) <= 24 * 24) {
+                candidates.add(cPos);
+            }
+        }
+        if (candidates.isEmpty()) return false;
+
+        // First verify total capacity across candidate containers so we only deposit if the whole order fits
+        int needed = fullStack.getCount();
+        int maxStack = Math.max(1, fullStack.getMaxStackSize());
+        int availableSpace = 0;
+        for (BlockPos cPos : candidates) {
+            BlockEntity cbe = level.getBlockEntity(cPos);
+            if (cbe instanceof net.minecraft.world.Container container) {
+                for (int s = 0; s < container.getContainerSize(); s++) {
+                    ItemStack existing = container.getItem(s);
+                    if (existing.isEmpty()) {
+                        availableSpace += maxStack;
+                    } else if (ItemStack.isSameItemSameTags(existing, fullStack) && existing.getCount() < maxStack) {
+                        availableSpace += (maxStack - existing.getCount());
+                    }
+                    if (availableSpace >= needed) break;
+                }
+            }
+            if (availableSpace >= needed) break;
+        }
+        if (availableSpace < needed) return false;
+
+        int remaining = needed;
+        TradingLedgerBlockEntity nearbyBin = findNearbyBin(level, postPos);
+        for (BlockPos cPos : candidates) {
+            if (remaining <= 0) break;
+            BlockEntity cbe = level.getBlockEntity(cPos);
+            if (!(cbe instanceof net.minecraft.world.Container container)) continue;
+            boolean touched = false;
+
+            // Merge into partial stacks first
+            for (int s = 0; s < container.getContainerSize() && remaining > 0; s++) {
+                ItemStack existing = container.getItem(s);
+                if (!existing.isEmpty() && ItemStack.isSameItemSameTags(existing, fullStack) && existing.getCount() < maxStack) {
+                    int add = Math.min(remaining, maxStack - existing.getCount());
+                    existing.grow(add);
+                    container.setItem(s, existing);
+                    remaining -= add;
+                    touched = true;
+                }
+            }
+            // Place into empty slots
+            for (int s = 0; s < container.getContainerSize() && remaining > 0; s++) {
+                ItemStack existing = container.getItem(s);
+                if (existing.isEmpty()) {
+                    int add = Math.min(remaining, maxStack);
+                    ItemStack part = fullStack.copy();
+                    part.setCount(add);
+                    container.setItem(s, part);
+                    remaining -= add;
+                    touched = true;
+                }
+            }
+            if (touched) {
+                container.setChanged();
+                if (nearbyBin != null) {
+                    nearbyBin.suppressContainerSync(cPos, 600);
+                }
+            }
+        }
+        return remaining <= 0;
     }
 
     /**
@@ -1377,6 +1483,13 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             int saved = costsBeforeReduction - totalCosts;
             if (saved > 0) bookkeeper.addLifetimeBonusValue(saved);
         }
+        if (tradeManager.isHired()) {
+            int rawCost = tradeManager.getPerTripCost();
+            int adjustedCost = (int) Math.max(1, rawCost * (1.0 - costReduction));
+            totalCosts += adjustedCost;
+            costsBeforeReduction += rawCost;
+            tradeManager.completedTrip();
+        }
 
         // Track negotiator lifetime bonus (extra earnings from negotiation)
         // This is tracked at the call site where negotiation bonus is applied
@@ -1726,11 +1839,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         for (DiplomatRequest req : activeDiplomatRequests) {
             if (req.getId().equals(requestId) && req.getStatus() == DiplomatRequest.Status.ARRIVED) {
                 ItemStack stack = req.createStack();
-                if (!stack.isEmpty()) {
-                    if (!player.getInventory().add(stack)) {
-                        player.drop(stack, false);
-                    }
-                }
+                giveItemStackChunks(player, stack);
                 toRemove = req;
                 break;
             }
@@ -1952,18 +2061,32 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             changed = true;
         }
 
-        // Process buy orders (IN_TRANSIT → ARRIVED)
+        // Process buy orders (IN_TRANSIT → ARRIVED, or auto-deposit into marked containers)
+        List<BuyOrder> depositedOrders = new ArrayList<>();
         for (BuyOrder order : be.activeBuyOrders) {
             if (order.getStatus() == BuyOrder.Status.IN_TRANSIT
                     && gameTime >= order.getArrivalTime()) {
-                order.setStatus(BuyOrder.Status.ARRIVED);
                 TownData orderTown = TownRegistry.getTown(order.getTownId());
                 String orderTownName = orderTown != null ? orderTown.getDisplayName() : order.getTownId();
-                notifyNearbyPlayers(level, pos,
-                        Component.literal("\u2709 Purchase from " + orderTownName + " has arrived! Collect at Trading Post.")
-                                .withStyle(ChatFormatting.AQUA));
+                ItemStack arrivedStack = order.createStack();
+                if (be.tryDepositToMarkedContainers(level, pos, order.getTownId(), arrivedStack)) {
+                    depositedOrders.add(order);
+                    notifyNearbyPlayers(level, pos,
+                            Component.literal("\u2709 Purchase from " + orderTownName + " (" + order.getCount() + "x "
+                                    + order.getItemDisplayName() + ") arrived and was deposited into your marked container!")
+                                    .withStyle(ChatFormatting.GREEN));
+                    SoundHelper.playShipmentArrive(level, pos);
+                } else {
+                    order.setStatus(BuyOrder.Status.ARRIVED);
+                    notifyNearbyPlayers(level, pos,
+                            Component.literal("\u2709 Purchase from " + orderTownName + " has arrived! Collect at Trading Post.")
+                                    .withStyle(ChatFormatting.AQUA));
+                }
                 changed = true;
             }
+        }
+        if (!depositedOrders.isEmpty()) {
+            be.activeBuyOrders.removeAll(depositedOrders);
         }
 
         // Process diplomat requests through stages
@@ -2012,12 +2135,22 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
                 case TRAVELING_BACK -> {
                     // Diplomat returning with goods
                     if (gameTime >= req.getReturnEndTime()) {
-                        req.setStatus(DiplomatRequest.Status.ARRIVED);
                         TownData reqTown = TownRegistry.getTown(req.getTownId());
                         String reqTownName = reqTown != null ? reqTown.getDisplayName() : req.getTownId();
-                        notifyNearbyPlayers(level, pos,
-                                Component.literal("\u2709 Diplomat returned from " + reqTownName + " with " + req.getItemDisplayName() + "!")
-                                        .withStyle(ChatFormatting.LIGHT_PURPLE));
+                        ItemStack arrivedStack = req.createStack();
+                        if (be.tryDepositToMarkedContainers(level, pos, req.getTownId(), arrivedStack)) {
+                            failedRequests.add(req);
+                            notifyNearbyPlayers(level, pos,
+                                    Component.literal("\u2709 Diplomat returned from " + reqTownName + " — "
+                                            + req.getRequestedCount() + "x " + req.getItemDisplayName()
+                                            + " deposited into marked container!")
+                                            .withStyle(ChatFormatting.GREEN));
+                        } else {
+                            req.setStatus(DiplomatRequest.Status.ARRIVED);
+                            notifyNearbyPlayers(level, pos,
+                                    Component.literal("\u2709 Diplomat returned from " + reqTownName + " with " + req.getItemDisplayName() + "!")
+                                            .withStyle(ChatFormatting.LIGHT_PURPLE));
+                        }
                         SoundHelper.playDiplomatReturn(level, pos);
                         ToastHelper.notifyDiplomatReturned(level, pos, reqTownName, true);
                         changed = true;
@@ -2103,9 +2236,106 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
             changed = true;
         }
 
+        // Trade Manager automation (runs every 60 ticks = 3 seconds when hired)
+        if (be.tradeManager.isHired() && gameTime % 60 == 0) {
+            if (be.tickTradeManagerAutomation(level, pos, gameTime)) {
+                changed = true;
+            }
+        }
+
         if (changed) {
             be.syncToClient();
         }
+    }
+
+    /**
+     * Executes automated logistics rules when the Trade Manager worker is hired:
+     * 1. Automatically dispatches ready Trade Manifests from linked Trading Ledgers.
+     * 2. Automatically sweeps completed shipment payouts into a nearby Finance Table (Lv 6+ or Bookkeeper hired).
+     * 3. Automatically delivers matching bin items to accepted Quests (Lv 9+ Contract Broker).
+     */
+    private boolean tickTradeManagerAutomation(Level level, BlockPos pos, long gameTime) {
+        boolean anyAction = false;
+        TradingLedgerBlockEntity bin = findNearbyBin(level, pos);
+
+        // 1. Auto-dispatch fulfilled Trade Manifests from nearby Trading Ledger
+        if (bin != null) {
+            List<CustomTradeOrder> readyOrders = new ArrayList<>();
+            for (CustomTradeOrder order : bin.getCustomOrders()) {
+                if (order.isAllFulfilled()) {
+                    readyOrders.add(order);
+                }
+            }
+            for (CustomTradeOrder ready : readyOrders) {
+                if (bin.dispatchCustomOrder(ready.getId())) {
+                    tradeManager.addLifetimeBonusValue(1);
+                    tradeManager.addXp(5);
+                    anyAction = true;
+                }
+            }
+        }
+
+        // 2. Auto-sweep COMPLETED shipment payouts into nearby Finance Table (Vault Sweeper Lv 6+ or Bookkeeper synergy)
+        if (tradeManager.hasPerk(6) || bookkeeper.isHired()) {
+            FinanceTableBlockEntity ft = findNearbyFinanceTable(level, pos);
+            if (ft != null) {
+                List<Shipment> swept = new ArrayList<>();
+                for (Shipment s : activeShipments) {
+                    if (s.getStatus() == Shipment.Status.COMPLETED && s.getTotalEarnings() > 0) {
+                        int payout = s.getTotalEarnings();
+                        TownData td = TownRegistry.getTown(s.getTownId());
+                        String tName = td != null ? td.getDisplayName() : s.getTownId();
+                        ft.setBalance(ft.getBalance() + payout);
+                        ft.recordTransaction("Auto-Sweep", payout, "Trade Manager collected from " + tName);
+                        swept.add(s);
+                        tradeManager.addLifetimeBonusValue(1);
+                        tradeManager.addXp(4);
+                        anyAction = true;
+                    }
+                }
+                if (!swept.isEmpty()) {
+                    activeShipments.removeAll(swept);
+                    ft.syncToClient();
+                }
+            }
+        }
+
+        // 3. Auto-fulfill ACCEPTED quests from nearby Trading Ledger bin slots (Contract Broker Lv 9+ or Lv 3+)
+        if (bin != null && tradeManager.getLevel() >= 3) {
+            for (Quest quest : activeQuests) {
+                if (quest.getStatus() != Quest.Status.ACCEPTED || quest.getRemainingCount() <= 0) continue;
+                int needed = quest.getRemainingCount();
+                int deliveredNow = 0;
+                for (int slot = 0; slot < TradingLedgerBlockEntity.BIN_SIZE && needed > 0; slot++) {
+                    ItemStack stack = bin.getItem(slot);
+                    if (stack.isEmpty()) continue;
+                    net.minecraft.resources.ResourceLocation rl =
+                            net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem());
+                    if (rl != null && rl.equals(quest.getRequiredItemId())) {
+                        int take = Math.min(needed, stack.getCount());
+                        bin.removeItem(slot, take);
+                        needed -= take;
+                        deliveredNow += take;
+                    }
+                }
+                if (deliveredNow > 0) {
+                    boolean completed = quest.deliver(deliveredNow);
+                    bin.syncToClient();
+                    if (completed) {
+                        TownData qTown = TownRegistry.getTown(quest.getTownId());
+                        int baseTravelTicks = qTown != null
+                                ? qTown.getTravelTimeTicks(DebugConfig.getTicksPerDistance()) : 600;
+                        int travelTicks = (int) (baseTravelTicks * getTravelTimeMultiplier(quest.getTownId()));
+                        quest.setRewardArrivalTime(gameTime + travelTicks);
+                        tradeManager.addLifetimeBonusValue(1);
+                        tradeManager.addXp(8);
+                    }
+                    anyAction = true;
+                }
+            }
+        }
+
+        return anyAction;
     }
 
     private void processMarketSales(Shipment shipment, TownData town, long gameTime) {
@@ -2366,6 +2596,7 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         tag.put("TradingCart", tradingCart.save());
         tag.put("Bookkeeper", bookkeeper.save());
         tag.put("StockScout", stockScout.save());
+        tag.put("TradeManager", tradeManager.save());
 
         // Scout mission state
         tag.putString("ScoutTarget", scoutTargetTownId);
@@ -2489,6 +2720,9 @@ public class TradingPostBlockEntity extends BlockEntity implements MenuProvider 
         }
         if (tag.contains("StockScout")) {
             stockScout = Worker.load(tag.getCompound("StockScout"));
+        }
+        if (tag.contains("TradeManager")) {
+            tradeManager = Worker.load(tag.getCompound("TradeManager"));
         }
 
         // Scout mission state

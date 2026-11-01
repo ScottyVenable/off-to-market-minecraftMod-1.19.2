@@ -16,6 +16,8 @@ public class MailNote {
     private final String sender;
     private final long timestamp; // game time when created
     private boolean read;
+    private boolean replied;
+    private String replySummary;
 
     public enum NoteType {
         DIPLOMAT_FAILURE("Diplomat"),
@@ -38,10 +40,12 @@ public class MailNote {
         this.sender = sender;
         this.timestamp = timestamp;
         this.read = false;
+        this.replied = false;
+        this.replySummary = "";
     }
 
     private MailNote(UUID id, NoteType type, String subject, String body, String sender,
-                     long timestamp, boolean read) {
+                     long timestamp, boolean read, boolean replied, String replySummary) {
         this.id = id;
         this.type = type;
         this.subject = subject;
@@ -49,6 +53,8 @@ public class MailNote {
         this.sender = sender;
         this.timestamp = timestamp;
         this.read = read;
+        this.replied = replied;
+        this.replySummary = replySummary != null ? replySummary : "";
     }
 
     // Getters
@@ -59,8 +65,16 @@ public class MailNote {
     public String getSender() { return sender; }
     public long getTimestamp() { return timestamp; }
     public boolean isRead() { return read; }
+    public boolean isReplied() { return replied; }
+    public String getReplySummary() { return replySummary; }
 
     public void markRead() { this.read = true; }
+
+    public void markReplied(String summary) {
+        this.read = true;
+        this.replied = true;
+        this.replySummary = summary != null ? summary : "";
+    }
 
     // ==================== NBT ====================
 
@@ -73,6 +87,10 @@ public class MailNote {
         tag.putString("Sender", sender);
         tag.putLong("Timestamp", timestamp);
         tag.putBoolean("Read", read);
+        tag.putBoolean("Replied", replied);
+        if (replySummary != null && !replySummary.isEmpty()) {
+            tag.putString("ReplySummary", replySummary);
+        }
         return tag;
     }
 
@@ -84,6 +102,8 @@ public class MailNote {
         String sender = tag.getString("Sender");
         long timestamp = tag.getLong("Timestamp");
         boolean read = tag.getBoolean("Read");
-        return new MailNote(id, type, subject, body, sender, timestamp, read);
+        boolean replied = tag.getBoolean("Replied");
+        String replySummary = tag.contains("ReplySummary") ? tag.getString("ReplySummary") : "";
+        return new MailNote(id, type, subject, body, sender, timestamp, read, replied, replySummary);
     }
 }

@@ -129,9 +129,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
     private Button questScrollUpBtn, questScrollDownBtn;
     private Button questSortBtn;
     // Workers tab
-    private Button hireNegotiatorBtn, hireCartBtn, hireBookkeeperBtn, hireScoutBtn;
+    private Button hireNegotiatorBtn, hireCartBtn, hireBookkeeperBtn, hireScoutBtn, hireTradeManagerBtn;
     private Button fireWorkerBtn;
-    private int selectedWorkerIndex = 0; // 0=Negotiator, 1=Trading Cart, 2=Bookkeeper, 3=Stock Scout
+    private int selectedWorkerIndex = 0; // 0=Negotiator, 1=Trading Cart, 2=Bookkeeper, 3=Stock Scout, 4=Trade Manager
     // Diplomat tab
     private Button diplomatScrollUpBtn, diplomatScrollDownBtn;
     private Button newRequestBtn, sendRequestBtn, cancelRequestBtn;
@@ -285,6 +285,16 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                         new HireWorkerPacket(tbe.getBlockPos(),
                                 com.offtomarket.mod.data.Worker.WorkerType.STOCK_SCOUT));
+            }
+        }));
+
+        hireTradeManagerBtn = addRenderableWidget(new Button(x + 156, y + 208, 114, 14,
+                Component.literal("Hire Trade Manager"), btn -> {
+            TradingPostBlockEntity tbe = menu.getBlockEntity();
+            if (tbe != null) {
+                ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                        new HireWorkerPacket(tbe.getBlockPos(),
+                                com.offtomarket.mod.data.Worker.WorkerType.TRADE_MANAGER));
             }
         }));
 
@@ -454,6 +464,9 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         hireCartBtn.visible = workers && selNotHired && selectedWorkerIndex == 1;
         hireBookkeeperBtn.visible = workers && selNotHired && selectedWorkerIndex == 2;
         hireScoutBtn.visible = workers && selNotHired && selectedWorkerIndex == 3;
+        if (hireTradeManagerBtn != null) {
+            hireTradeManagerBtn.visible = workers && selNotHired && selectedWorkerIndex == 4;
+        }
         fireWorkerBtn.visible = workers && selHired;
 
         diplomatScrollUpBtn.visible = diplomat && !creatingRequest;
@@ -667,6 +680,12 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         List<Shipment> shipments = be.getActiveShipments();
         List<BuyOrder> orders   = be.getActiveBuyOrders();
         int key = (shipments.size() << 12) | (orders.size() << 4) | (activitySort.ordinal() << 1) | (activitySortAscending ? 1 : 0);
+        for (Shipment s : shipments) {
+            key = 31 * key + s.getId().hashCode() + s.getStatus().ordinal();
+        }
+        for (BuyOrder o : orders) {
+            key = 31 * key + o.getId().hashCode() + o.getStatus().ordinal();
+        }
         if (cachedSortedActivity != null && key == cachedActivityKey) {
             return cachedSortedActivity;
         }
@@ -1040,6 +1059,11 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
 
     @Override
     protected void renderLabels(PoseStack poseStack, int mouseX, int mouseY) {
+        if (showingTownDetails) {
+            // Do not draw underlying screen title/tab shadow text when modal overlay is active
+            return;
+        }
+
         // Title
         drawCenteredString(poseStack, this.font, "Trading Post", 192, 6, 0xFFD700);
 
@@ -2418,7 +2442,8 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
                 } else {
                     lifetimeValue = seconds + "s";
                 }
-            } else if (worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.STOCK_SCOUT) {
+            } else if (worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.STOCK_SCOUT
+                    || worker.getType() == com.offtomarket.mod.data.Worker.WorkerType.TRADE_MANAGER) {
                 lifetimeValue = String.valueOf(worker.getLifetimeBonusValue());
             } else {
                 lifetimeValue = formatCoinText((int) Math.min(worker.getLifetimeBonusValue(), Integer.MAX_VALUE));
@@ -2792,11 +2817,14 @@ public class TradingPostScreen extends AbstractContainerScreen<TradingPostMenu> 
         renderTooltip(poseStack, mouseX, mouseY);
 
         if (showingTownDetails) {
-            renderTownDetailsModalBg(poseStack);
+            RenderSystem.disableDepthTest();
             poseStack.pushPose();
+            poseStack.translate(0, 0, 200);
+            renderTownDetailsModalBg(poseStack);
             poseStack.translate(this.leftPos, this.topPos, 0);
             renderTownDetailsModalLabels(poseStack, mouseX, mouseY);
             poseStack.popPose();
+            RenderSystem.enableDepthTest();
             return;
         }
 

@@ -1,0 +1,68 @@
+name: Build & Publish to CurseForge / GitHub Releases
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      curseforge_project_id:
+        description: 'CurseForge Project ID (optional override)'
+        required: false
+        default: ''
+      release_type:
+        description: 'CurseForge release type (release, beta, alpha)'
+        required: false
+        default: 'release'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Run Unit Tests & Build Mod Jar
+        run: ./gradlew test build --no-daemon
+
+      - name: Extract Mod Version from gradle.properties
+        id: mod_meta
+        run: |
+          MOD_VER=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
+          MC_VER=$(grep '^minecraft_version=' gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
+          echo "mod_version=${MOD_VER}" >> $GITHUB_OUTPUT
+          echo "minecraft_version=${MC_VER}" >> $GITHUB_OUTPUT
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offtomarket-${{ steps.mod_meta.outputs.mod_version }}
+          path: build/libs/offtomarket-${{ steps.mod_meta.outputs.mod_version }}.jar
+
+      - name: Publish to CurseForge
+        if: ${{ env.CURSEFORGE_TOKEN != '' && (env.CURSEFORGE_PROJECT_ID != '' || github.event.inputs.curseforge_project_id != '') }}
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          CURSEFORGE_PROJECT_ID: ${{ secrets.CURSEFORGE_PROJECT_ID }}
+        uses: itzg/curseforge-upload@v1
+        with:
+          token: ${{ secrets.CURSEFORGE_TOKEN }}
+          projectId: ${{ github.event.inputs.curseforge_project_id != '' && github.event.inputs.curseforge_project_id || secrets.CURSEFORGE_PROJECT_ID }}
+          filePath: build/libs/offtomarket-${{ steps.mod_meta.outputs.mod_version }}.jar
+          displayName: "Off to Market v${{ steps.mod_meta.outputs.mod_version }} (Forge ${{ steps.mod_meta.outputs.minecraft_version }})"
+          gameVersion: ${{ steps.mod_meta.outputs.minecraft_version }}
+          javaVersion: 'Java 17'
+          modLoaderType: Forge
+          releaseType: ${{ github.event.inputs.release_type || 'release' }}
+          changelogFromFile: CHANGELOG.md
+          changelogType: markdown

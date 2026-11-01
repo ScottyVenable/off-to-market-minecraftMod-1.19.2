@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.6.7-blue" alt="Version 0.6.7">
+  <img src="https://img.shields.io/badge/Version-0.6.8-blue" alt="Version 0.6.8">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -36,13 +36,14 @@ The central hub for all commerce:
   - ✈ **Cart Courier**: Decreases caravan transit time across all routes.
   - ✎ **Bookkeeper**: Lowers operating overhead and worker salaries.
   - ◉ **Stock Scout**: Dispatched across the realm to scout town warehouses, returning with freshness-rated inventory reports and best deals.
+  - ⚙ **Trade Manager**: Automates manifest dispatching, sweeps completed shipment payouts into nearby Finance Tables, and fulfills accepted Quests from linked ledgers.
 
 #### 2. Trading Ledger & Custom Trade Manifests
 Your local storage and automated shipping station:
-- **Price Book**: Custom pricing per item slot with automatic pricing modes.
-- **Custom Trade Manifests**: Set target shipping quotas (e.g. 128 Wheat, 16 Bread to Greenhollow Village).
-- **Quick Quota Buttons**: One-click **`[+1]`**, **`[+16]`**, **`[+64]`**, and **`[Max]`** controls that instantly detect available container stock.
-- **Automated Caravan Dispatch**: Toggle auto-shipping so orders depart the moment containers are filled.
+- **Price Book & Item Demand View**: Custom pricing per item slot, automatic pricing modes, and a live **Town Demand (Top Buyers)** ranking showing which towns have Desperate or High Need for any selected or searched item.
+- **Custom & Recurring Trade Manifests**: Set target shipping quotas with one-time (`1x`), multi-cycle (`3x`, `5x`, `10x`), or unlimited (`∞`) recurring schedules.
+- **Interactive Quantity Slider & Input**: Smooth draggable quantity slider bidirectionally synced with direct numeric `Qty` input.
+- **Automated Caravan Dispatch & Arrival Routing**: Toggle auto-shipping so manifests depart as soon as containers are filled, and automatically receive arrived Market Board & Diplomat orders into marked depot containers.
 - **Caravan Capacity Upgrades**: Increase weight allowances to send massive bulk shipments in a single trip.
 
 #### 3. Market Board

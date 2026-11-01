@@ -306,6 +306,7 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
     public int getRareMarkupPercent() { return rareMarkupPercent; }
     public void setRareMarkupPercent(int percent) { this.rareMarkupPercent = Math.max(0, Math.min(200, percent)); syncToClient(); }
     public int getCaravanWeightUpgradeLevel() { return caravanWeightUpgradeLevel; }
+    public void setCaravanWeightUpgradeLevel(int level) { this.caravanWeightUpgradeLevel = Math.max(0, level); }
 
     public int getCaravanWeightCapacity() {
         return BASE_CARAVAN_WEIGHT_CAPACITY + caravanWeightUpgradeLevel * CARAVAN_WEIGHT_PER_UPGRADE;
@@ -338,12 +339,32 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
 
     public boolean upgradeCaravanWeight(Player player) {
         int cost = getNextCaravanUpgradeCost();
-        if (!TradingPostBlockEntity.hasEnoughCoins(player, cost)) {
+        FinanceTableBlockEntity ft = TradingPostBlockEntity.findNearbyFinanceTable(level, worldPosition);
+        boolean creative = player != null && player.getAbilities().instabuild;
+        if (!creative && !TradingPostBlockEntity.hasEnoughCoins(player, cost, ft)) {
+            if (player != null) {
+                int gp = cost / 100;
+                int sp = (cost % 100) / 10;
+                int cp = cost % 10;
+                String costStr = (gp > 0 ? gp + "g " : "") + (sp > 0 ? sp + "s " : "") + (cp > 0 || cost == 0 ? cp + "c" : "");
+                player.displayClientMessage(Component.literal(
+                        "\u00A7cNot enough coins to upgrade caravan! Need " + costStr.trim() + "."), true);
+            }
             return false;
         }
-        TradingPostBlockEntity.deductCoins(player, cost);
+        if (!creative) {
+            TradingPostBlockEntity.deductCoins(player, cost, ft);
+        }
         caravanWeightUpgradeLevel++;
         syncToClient();
+        if (level != null) {
+            com.offtomarket.mod.util.SoundHelper.playWorkerLevelUp(level, worldPosition);
+        }
+        if (player != null) {
+            player.displayClientMessage(Component.literal(
+                    "\u00A7aCaravan upgraded to Lv." + caravanWeightUpgradeLevel
+                            + "! Capacity: " + getCaravanWeightCapacity() + " Wt"), true);
+        }
         return true;
     }
 
@@ -355,6 +376,23 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-16, -8, -16), worldPosition.offset(16, 8, 16))) {
             BlockEntity be = level.getBlockEntity(p);
             if (be instanceof TradingPostBlockEntity tp) return tp;
+        }
+        // Fallback: check registered Trading Posts in TradingData
+        if (level instanceof net.minecraft.server.level.ServerLevel sl) {
+            TradingPostBlockEntity closest = null;
+            double bestDist = Double.MAX_VALUE;
+            for (BlockPos regPos : com.offtomarket.mod.data.TradingData.get(sl).getRegisteredPositions()) {
+                if (!level.isLoaded(regPos)) continue;
+                BlockEntity be = level.getBlockEntity(regPos);
+                if (be instanceof TradingPostBlockEntity tp) {
+                    double d = regPos.distSqr(worldPosition);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        closest = tp;
+                    }
+                }
+            }
+            if (closest != null) return closest;
         }
         return null;
     }
@@ -374,9 +412,20 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
 
     public boolean addCustomOrder(com.offtomarket.mod.data.CustomTradeOrder order) {
         if (customOrders.size() >= getMaxCustomOrders()) return false;
+        // Immediately compute currentFilled for all items in the new manifest
+        com.offtomarket.mod.data.TownDepotManager depot = (level instanceof net.minecraft.server.level.ServerLevel sl)
+                ? com.offtomarket.mod.data.TradingData.get(sl).getDepotManager() : null;
+        for (com.offtomarket.mod.data.CustomTradeOrder.OrderItem item : order.getItems()) {
+            int count = countItemAvailableForTown(order.getTownId(), item.getItemId(), depot);
+            item.setCurrentFilled(count);
+        }
         customOrders.add(order);
-        setChanged();
-        syncToClient();
+        if (order.isAllFulfilled() && order.isAutoDispatch()) {
+            dispatchCustomOrder(order.getId());
+        } else {
+            setChanged();
+            syncToClient();
+        }
         return true;
     }
 
@@ -419,7 +468,15 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
                 break;
             }
         }
-        if (order == null || !order.isAllFulfilled()) return false;
+        if (order == null) return false;
+
+        com.offtomarket.mod.data.TownDepotManager depot = (level instanceof net.minecraft.server.level.ServerLevel sl)
+                ? com.offtomarket.mod.data.TradingData.get(sl).getDepotManager() : null;
+        for (com.offtomarket.mod.data.CustomTradeOrder.OrderItem item : order.getItems()) {
+            int count = countItemAvailableForTown(order.getTownId(), item.getItemId(), depot);
+            item.setCurrentFilled(count);
+        }
+        if (!order.isAllFulfilled()) return false;
 
         TradingPostBlockEntity post = findNearbyTradingPost();
         if (post == null) return false;
@@ -428,8 +485,6 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
         if (town == null) return false;
 
         List<com.offtomarket.mod.data.Shipment.ShipmentItem> shipmentItems = new ArrayList<>();
-        com.offtomarket.mod.data.TownDepotManager depot = (level instanceof net.minecraft.server.level.ServerLevel sl)
-                ? com.offtomarket.mod.data.TradingData.get(sl).getDepotManager() : null;
 
         for (com.offtomarket.mod.data.CustomTradeOrder.OrderItem req : order.getItems()) {
             int needed = req.getTargetQuantity();
@@ -441,7 +496,8 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
                 ItemStack st = items.get(i);
                 if (!st.isEmpty() && ForgeRegistries.ITEMS.getKey(st.getItem()).equals(req.getItemId())) {
                     VirtualSource vs = slotToVirtualSource.get(i);
-                    if (vs != null && depot != null) {
+                    if (vs == null) continue;
+                    if (depot != null) {
                         String assignedTown = depot.getAssignedTown(vs.sourcePos);
                         if (assignedTown != null && !assignedTown.equalsIgnoreCase(order.getTownId())) {
                             continue;
@@ -453,9 +509,13 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
                         if (!cStack.isEmpty() && ForgeRegistries.ITEMS.getKey(cStack.getItem()).equals(req.getItemId())) {
                             int take = Math.min(needed - gathered, cStack.getCount());
                             cStack.shrink(take);
-                            st.shrink(take);
-                            gathered += take;
+                            c.setItem(vs.sourceSlot, cStack.isEmpty() ? ItemStack.EMPTY : cStack);
                             c.setChanged();
+                            st.shrink(take);
+                            if (st.isEmpty()) {
+                                items.set(i, ItemStack.EMPTY);
+                            }
+                            gathered += take;
                         }
                     }
                 }
@@ -468,13 +528,19 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
                 if (!st.isEmpty() && ForgeRegistries.ITEMS.getKey(st.getItem()).equals(req.getItemId())) {
                     int take = Math.min(needed - gathered, st.getCount());
                     st.shrink(take);
+                    if (st.isEmpty()) {
+                        items.set(i, ItemStack.EMPTY);
+                        slotPrices.remove(i);
+                    }
                     gathered += take;
                 }
             }
 
             if (gathered > 0) {
                 net.minecraft.world.item.Item it = ForgeRegistries.ITEMS.getValue(req.getItemId());
-                int price = PriceCalculator.getBaseValue(new ItemStack(it));
+                ItemStack sampleStack = new ItemStack(it);
+                int remembered = getRememberedPrice(sampleStack);
+                int price = getEffectivePrice(sampleStack, remembered > 0 ? remembered : PriceCalculator.getBaseValue(sampleStack));
                 shipmentItems.add(new com.offtomarket.mod.data.Shipment.ShipmentItem(
                         req.getItemId(), gathered, price, req.getDisplayName(), null
                 ));
@@ -492,20 +558,28 @@ public class TradingLedgerBlockEntity extends BlockEntity implements Container, 
                 java.util.UUID.randomUUID(), town.getId(), shipmentItems, gameTime, arrivalTime
         );
         post.getActiveShipments().add(shipment);
-        post.setChanged();
+        for (com.offtomarket.mod.data.Shipment.ShipmentItem si : shipmentItems) {
+            post.getDemandTracker().recordSupply(town.getId(), si.getItemId().toString(), si.getCount());
+        }
+        post.syncToClient();
 
-        recordShipment(
-                gameTime, town.getDisplayName(),
-                shipmentItems.stream().mapToInt(com.offtomarket.mod.data.Shipment.ShipmentItem::getCount).sum(),
-                shipment.getTotalEarnings()
-        );
+        int totalShipItems = shipmentItems.stream().mapToInt(com.offtomarket.mod.data.Shipment.ShipmentItem::getCount).sum();
+        int totalShipValue = shipmentItems.stream().mapToInt(com.offtomarket.mod.data.Shipment.ShipmentItem::getTotalPrice).sum();
+        recordShipment(gameTime, town.getDisplayName(), totalShipItems, totalShipValue);
 
-        customOrders.remove(order);
+        if (order.recordCycleAndCheckShouldKeep()) {
+            for (com.offtomarket.mod.data.CustomTradeOrder.OrderItem item : order.getItems()) {
+                int remaining = countItemAvailableForTown(order.getTownId(), item.getItemId(), depot);
+                item.setCurrentFilled(remaining);
+            }
+        } else {
+            customOrders.remove(order);
+        }
         setChanged();
         syncToClient();
 
         com.offtomarket.mod.util.SoundHelper.playShipmentSend(level, worldPosition);
-        com.offtomarket.mod.util.ToastHelper.notifyOrderComplete(level, worldPosition, town.getDisplayName(), shipment.getTotalEarnings());
+        com.offtomarket.mod.util.ToastHelper.notifyOrderComplete(level, worldPosition, town.getDisplayName(), totalShipValue);
         return true;
     }
 

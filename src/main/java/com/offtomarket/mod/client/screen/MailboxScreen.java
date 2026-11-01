@@ -8,6 +8,7 @@ import com.offtomarket.mod.network.DeleteAllReadNotesPacket;
 import com.offtomarket.mod.network.DeleteNotePacket;
 import com.offtomarket.mod.network.MarkNoteReadPacket;
 import com.offtomarket.mod.network.ModNetwork;
+import com.offtomarket.mod.network.ReplyMailNotePacket;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -49,6 +50,8 @@ public class MailboxScreen extends AbstractContainerScreen<MailboxMenu> {
     private Button scrollDownBtn;
     private Button deleteBtn;
     private Button deleteAllReadBtn;
+    private Button replyWarmBtn;
+    private Button replyPersuadeBtn;
 
     private int scrollOffset = 0;
     private int selectedIndex = -1;
@@ -110,6 +113,34 @@ public class MailboxScreen extends AbstractContainerScreen<MailboxMenu> {
                                 new DeleteAllReadNotesPacket(be.getBlockPos()));
                         selectedIndex = -1;
                         selectedNoteId = null;
+                    }
+                }));
+
+        // Interactive Dialogue: Warm Reply
+        replyWarmBtn = addRenderableWidget(new Button(
+                x + CONTENT_X + 4, y + CONTENT_Y + CONTENT_H - 18, 96, 14,
+                Component.literal("\u2709 Warm Thanks"),
+                btn -> {
+                    if (selectedNoteId != null) {
+                        MailboxBlockEntity be = menu.getBlockEntity();
+                        if (be != null) {
+                            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                    new ReplyMailNotePacket(be.getBlockPos(), selectedNoteId, 0));
+                        }
+                    }
+                }));
+
+        // Interactive Dialogue: Persuade for Better Terms
+        replyPersuadeBtn = addRenderableWidget(new Button(
+                x + CONTENT_X + 104, y + CONTENT_Y + CONTENT_H - 18, 110, 14,
+                Component.literal("\u2696 Persuade Terms"),
+                btn -> {
+                    if (selectedNoteId != null) {
+                        MailboxBlockEntity be = menu.getBlockEntity();
+                        if (be != null) {
+                            ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
+                                    new ReplyMailNotePacket(be.getBlockPos(), selectedNoteId, 1));
+                        }
                     }
                 }));
     }
@@ -291,17 +322,32 @@ public class MailboxScreen extends AbstractContainerScreen<MailboxMenu> {
         fill(ps, CONTENT_X + 5, lineY, CONTENT_X + CONTENT_W - 5, lineY + 1, 0xFF5C4A32);
         lineY += 5;
 
-        // Body text — word-wrap
+        // Body text — word-wrap (reserve bottom 22px for reply buttons/status)
         List<FormattedCharSequence> bodyLines = this.font.split(
                 Component.literal(note.getBody()), CONTENT_W - 10);
-        int bodyAreaHeight = CONTENT_Y + CONTENT_H - lineY - 2;
-        int maxBodyLines = bodyAreaHeight / 10;
+        int bodyAreaHeight = CONTENT_Y + CONTENT_H - lineY - 24;
+        int maxBodyLines = Math.max(1, bodyAreaHeight / 10);
         for (int i = 0; i < Math.min(bodyLines.size(), maxBodyLines); i++) {
             this.font.draw(ps, bodyLines.get(i), CONTENT_X + 5, lineY, 0xDDDDDD);
             lineY += 10;
         }
         if (bodyLines.size() > maxBodyLines) {
             this.font.draw(ps, "...", CONTENT_X + 5, lineY, 0x888888);
+        }
+
+        // If already replied, show the diplomatic reply outcome at the bottom of the note panel
+        if (note.isReplied()) {
+            int replyY = CONTENT_Y + CONTENT_H - 16;
+            fill(ps, CONTENT_X + 4, replyY - 2, CONTENT_X + CONTENT_W - 4, CONTENT_Y + CONTENT_H - 3, 0xFF282018);
+            String summary = "\u21AA " + note.getReplySummary();
+            if (this.font.width(summary) > CONTENT_W - 12) {
+                while (this.font.width(summary + "..") > CONTENT_W - 12 && summary.length() > 4) {
+                    summary = summary.substring(0, summary.length() - 1);
+                }
+                summary += "..";
+            }
+            int col = note.getReplySummary().contains("Declined") ? 0xFFCC66 : 0x66FF88;
+            this.font.draw(ps, summary, CONTENT_X + 6, replyY, col);
         }
     }
 
@@ -346,6 +392,17 @@ public class MailboxScreen extends AbstractContainerScreen<MailboxMenu> {
         deleteBtn.active = selectedNoteId != null;
         MailboxBlockEntity be = menu.getBlockEntity();
         deleteAllReadBtn.active = be != null && be.getNotes().stream().anyMatch(MailNote::isRead);
+        MailNote selectedNote = (be != null && selectedIndex >= 0 && selectedIndex < be.getNotes().size())
+                ? be.getNotes().get(selectedIndex) : null;
+        boolean canReply = selectedNote != null && !selectedNote.isReplied();
+        if (replyWarmBtn != null) {
+            replyWarmBtn.visible = canReply;
+            replyWarmBtn.active = canReply;
+        }
+        if (replyPersuadeBtn != null) {
+            replyPersuadeBtn.visible = canReply;
+            replyPersuadeBtn.active = canReply;
+        }
     }
 
     // ==================== Mouse Handling ====================

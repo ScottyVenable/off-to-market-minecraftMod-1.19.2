@@ -15,6 +15,7 @@ import com.offtomarket.mod.registry.ModBlockEntities;
 import com.offtomarket.mod.registry.ModBlocks;
 import com.offtomarket.mod.registry.ModItems;
 import com.offtomarket.mod.registry.ModMenuTypes;
+import com.offtomarket.mod.registry.ModSounds;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -43,6 +44,7 @@ public class OffToMarket {
         ModItems.ITEMS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModMenuTypes.MENUS.register(modEventBus);
+        ModSounds.SOUNDS.register(modEventBus);
 
         // Lifecycle events
         modEventBus.addListener(this::commonSetup);
