@@ -229,5 +229,10 @@ public class ModNetwork {
                 DispatchCustomOrderPacket::encode, DispatchCustomOrderPacket::decode,
                 DispatchCustomOrderPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        CHANNEL.registerMessage(id++, CartCheckoutResultPacket.class,
+                CartCheckoutResultPacket::encode, CartCheckoutResultPacket::new,
+                CartCheckoutResultPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 }

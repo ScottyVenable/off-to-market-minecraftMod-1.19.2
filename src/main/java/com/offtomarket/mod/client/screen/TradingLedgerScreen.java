@@ -205,18 +205,18 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }));
 
-        orderQtyInput = new EditBox(this.font, x + 208, y + 50, 26, 12, Component.literal("Qty"));
+        orderQtyInput = new EditBox(this.font, x + 206, y + 50, 34, 12, Component.literal("Qty"));
         orderQtyInput.setMaxLength(4);
         orderQtyInput.setFilter(s -> s.isEmpty() || s.matches("\\d+"));
         orderQtyInput.setValue("16");
         this.addWidget(orderQtyInput);
 
-        orderQtyPlus1Btn = addRenderableWidget(new Button(x + 236, y + 49, 18, 14, Component.literal("+1"), btn -> adjustOrderQty(1)));
-        orderQtyPlus16Btn = addRenderableWidget(new Button(x + 256, y + 49, 22, 14, Component.literal("+16"), btn -> adjustOrderQty(16)));
-        orderQtyPlus64Btn = addRenderableWidget(new Button(x + 280, y + 49, 22, 14, Component.literal("+64"), btn -> adjustOrderQty(64)));
-        orderQtyMaxBtn = addRenderableWidget(new Button(x + 304, y + 49, 24, 14, Component.literal("Max"), btn -> setOrderQtyMax()));
+        orderQtyPlus1Btn = addRenderableWidget(new Button(x + 242, y + 49, 16, 14, Component.literal("+1"), btn -> adjustOrderQty(1)));
+        orderQtyPlus16Btn = addRenderableWidget(new Button(x + 260, y + 49, 20, 14, Component.literal("+16"), btn -> adjustOrderQty(16)));
+        orderQtyPlus64Btn = addRenderableWidget(new Button(x + 282, y + 49, 20, 14, Component.literal("+64"), btn -> adjustOrderQty(64)));
+        orderQtyMaxBtn = addRenderableWidget(new Button(x + 304, y + 49, 22, 14, Component.literal("Max"), btn -> setOrderQtyMax()));
 
-        orderAddItemBtn = addRenderableWidget(new Button(x + 330, y + 49, 44, 14, Component.literal("+ Item"), btn -> {
+        orderAddItemBtn = addRenderableWidget(new Button(x + 328, y + 49, 46, 14, Component.literal("+ Item"), btn -> {
             stageSelectedItem();
         }));
 
@@ -345,6 +345,11 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         historyScrollOffset = 0;
         incomeScrollOffset = 0;
         ordersScrollOffset = 0;
+        if (orderQtyInput != null) orderQtyInput.setFocus(false);
+        if (priceInput != null) priceInput.setFocus(false);
+        if (taxInput != null) taxInput.setFocus(false);
+        if (markupInput != null) markupInput.setFocus(false);
+        setFocused(null);
         updateTabVisibility();
     }
 
@@ -1168,8 +1173,16 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
             }
         }
 
-        // Orders tab click handling (Ship Now, Cancel)
+        // Orders tab click handling (Ship Now, Cancel, Qty input focus)
         if (button == 0 && activeTab == 4) {
+            if (orderQtyInput != null && orderQtyInput.visible) {
+                if (orderQtyInput.mouseClicked(mouseX, mouseY, button)) {
+                    this.setFocused(orderQtyInput);
+                    orderQtyInput.setFocus(true);
+                    return true;
+                }
+            }
+
             TradingLedgerBlockEntity be = menu.getBlockEntity();
             if (be != null) {
                 int startY = this.topPos + 100;
@@ -1304,6 +1317,26 @@ public class TradingLedgerScreen extends AbstractContainerScreen<TradingLedgerMe
         }
 
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (orderQtyInput != null && orderQtyInput.isFocused()) {
+            return orderQtyInput.charTyped(codePoint, modifiers);
+        }
+        if (priceInput != null && priceInput.isFocused()) {
+            return priceInput.charTyped(codePoint, modifiers);
+        }
+        if (searchInput != null && searchInput.isFocused()) {
+            return searchInput.charTyped(codePoint, modifiers);
+        }
+        if (taxInput != null && taxInput.isFocused()) {
+            return taxInput.charTyped(codePoint, modifiers);
+        }
+        if (markupInput != null && markupInput.isFocused()) {
+            return markupInput.charTyped(codePoint, modifiers);
+        }
+        return super.charTyped(codePoint, modifiers);
     }
 
     // ==================== Render Overlays ====================

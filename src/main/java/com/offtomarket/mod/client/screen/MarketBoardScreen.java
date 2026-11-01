@@ -101,6 +101,7 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     private Button scrollUpBtn, scrollDownBtn;
     private Button checkoutBtn, clearCartBtn;
     private Button cartScrollUpBtn, cartScrollDownBtn;
+    private boolean checkoutPending = false;
 
     // Quantity overlay buttons (only visible during selection)
     private Button qtyMinusBtn, qtyPlusBtn, qtyMinus10Btn, qtyPlus10Btn;
@@ -238,8 +239,18 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
 
         // cartToggleBtn not a widget; visibility tracked via selectedListingIndex check in mouseClicked
 
+        boolean canAfford = getPlayerCoinBalance() >= getCartTotal();
         checkoutBtn.visible = cartView && !cart.isEmpty();
+        checkoutBtn.active = cartView && !cart.isEmpty() && !checkoutPending && canAfford;
+        if (checkoutPending) {
+            checkoutBtn.setMessage(Component.literal("Checking out..."));
+        } else if (!canAfford && !cart.isEmpty()) {
+            checkoutBtn.setMessage(Component.literal("Can't Afford"));
+        } else {
+            checkoutBtn.setMessage(Component.literal("Checkout"));
+        }
         clearCartBtn.visible = cartView && !cart.isEmpty();
+        clearCartBtn.active = !checkoutPending;
         cartScrollUpBtn.visible = cartView;
         cartScrollDownBtn.visible = cartView;
 
@@ -286,13 +297,21 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
     }
 
     private void doCheckout() {
-        if (cart.isEmpty()) return;
+        if (cart.isEmpty() || checkoutPending) return;
         MarketBoardBlockEntity be = menu.getBlockEntity();
         if (be == null) return;
 
         int balance = getPlayerCoinBalance();
         int total = getCartTotal();
-        if (balance < total) return;
+        if (balance < total) {
+            if (minecraft != null && minecraft.player != null) {
+                minecraft.player.playSound(net.minecraft.sounds.SoundEvents.VILLAGER_NO, 1.0f, 1.0f);
+                minecraft.player.displayClientMessage(
+                        Component.literal("Not enough coins for checkout! (Need " + formatCoinText(total) + ", have " + formatCoinText(balance) + ")")
+                                .withStyle(net.minecraft.ChatFormatting.RED), true);
+            }
+            return;
+        }
 
         // Build packet entries
         List<CartCheckoutPacket.CartEntry> entries = new ArrayList<>();
@@ -300,13 +319,45 @@ public class MarketBoardScreen extends AbstractContainerScreen<MarketBoardMenu> 
             entries.add(new CartCheckoutPacket.CartEntry(ce.listingIndex, ce.quantity));
         }
 
+        checkoutPending = true;
+        updateButtonVisibility();
+
         ModNetwork.CHANNEL.send(PacketDistributor.SERVER.noArg(),
                 new CartCheckoutPacket(be.getBlockPos(), entries));
+        // Cart is NOT cleared here! It is only cleared upon server confirmation in handleCheckoutResult().
+        // If checkout fails or cannot be made, the cart is safely retained.
+    }
 
-        cart.clear();
-        SAVED_CARTS.remove(be.getBlockPos()); // cart fulfilled, remove persistence
-        showingCart = false;
-        updateButtonVisibility();
+    /**
+     * Called when server responds with the outcome of a cart checkout.
+     */
+    public static void handleCheckoutResult(BlockPos marketBoardPos, boolean success, String message) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (success) {
+            SAVED_CARTS.remove(marketBoardPos);
+            if (mc.screen instanceof MarketBoardScreen screen) {
+                if (screen.menu.getBlockEntity() != null && screen.menu.getBlockEntity().getBlockPos().equals(marketBoardPos)) {
+                    screen.cart.clear();
+                    screen.showingCart = false;
+                    screen.checkoutPending = false;
+                    screen.updateButtonVisibility();
+                    if (mc.player != null) {
+                        mc.player.playSound(net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP, 0.8f, 1.0f);
+                    }
+                }
+            }
+        } else {
+            // Purchase failed or cannot be made: retain cart completely!
+            if (mc.screen instanceof MarketBoardScreen screen) {
+                if (screen.menu.getBlockEntity() != null && screen.menu.getBlockEntity().getBlockPos().equals(marketBoardPos)) {
+                    screen.checkoutPending = false;
+                    screen.updateButtonVisibility();
+                    if (mc.player != null) {
+                        mc.player.playSound(net.minecraft.sounds.SoundEvents.VILLAGER_NO, 1.0f, 1.0f);
+                    }
+                }
+            }
+        }
     }
 
     // ==================== Coin Helpers ====================

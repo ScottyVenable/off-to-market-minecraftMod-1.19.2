@@ -20,11 +20,17 @@ import net.minecraft.world.item.alchemy.PotionUtils;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.Ingredient;
 import org.slf4j.Logger;
 
+import javax.annotation.Nullable;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
@@ -117,6 +123,7 @@ public class PriceCalculator {
         put(Items.SNOWBALL,           TIER_JUNK);
         put(Items.ROTTEN_FLESH,       TIER_JUNK);
         put(Items.STICK,              TIER_JUNK);
+        put(Items.BAMBOO,             TIER_JUNK);
 
         // ---- Basic resources ----
         put(Items.OAK_LOG,            TIER_BASIC);
@@ -431,6 +438,26 @@ public class PriceCalculator {
         }
 
         int price = Math.max(1, (int) (baseCost * CRAFTING_PREMIUM));
+
+        // Enforce baseline economic floors so finished tools/weapons are never priced
+        // as low as raw junk items like bamboo or sticks.
+        int minBase;
+        if (tool instanceof SwordItem) {
+            minBase = 18; // Any sword is at least 18 CP fair value
+        } else if (tool instanceof PickaxeItem || tool instanceof AxeItem) {
+            minBase = 15;
+        } else {
+            minBase = 12;
+        }
+
+        // Vanilla tier baseline floors
+        if (tier == Tiers.STONE)          minBase = Math.max(minBase, 24);
+        else if (tier == Tiers.IRON)      minBase = Math.max(minBase, 65);
+        else if (tier == Tiers.GOLD)      minBase = Math.max(minBase, 90);
+        else if (tier == Tiers.DIAMOND)   minBase = Math.max(minBase, 220);
+        else if (tier == Tiers.NETHERITE) minBase = Math.max(minBase, 1200);
+
+        price = Math.max(minBase, price);
         return new ValueTier(price, price * 3);
     }
 
@@ -453,6 +480,22 @@ public class PriceCalculator {
         }
 
         int price = Math.max(1, (int) (baseCost * CRAFTING_PREMIUM));
+
+        int minBase = switch (armor.getSlot()) {
+            case CHEST -> 32;
+            case LEGS  -> 28;
+            case HEAD  -> 22;
+            case FEET  -> 16;
+            default    -> 20;
+        };
+
+        if (mat == ArmorMaterials.CHAIN)          minBase = Math.max(minBase, 45);
+        else if (mat == ArmorMaterials.IRON)      minBase = Math.max(minBase, 65);
+        else if (mat == ArmorMaterials.GOLD)      minBase = Math.max(minBase, 90);
+        else if (mat == ArmorMaterials.DIAMOND)   minBase = Math.max(minBase, 240);
+        else if (mat == ArmorMaterials.NETHERITE) minBase = Math.max(minBase, 1200);
+
+        price = Math.max(minBase, price);
         return new ValueTier(price, price * 3);
     }
 
@@ -480,8 +523,18 @@ public class PriceCalculator {
             LOGGER.debug("[OTM] Failed to read repair ingredient for modded tool tier: {}", e.getMessage());
         }
 
-        // Fallback: interpolate from durability
-        return estimateFromDurability(tier.getUses());
+        // Fallback: estimate from tier stats (level, damage, durability)
+        int level = tier.getLevel();
+        int baseFromLevel = switch (level) {
+            case 0 -> 4;
+            case 1 -> 8;
+            case 2 -> 40;
+            case 3 -> 160;
+            default -> 500;
+        };
+        int damageBonusVal = (int) Math.max(0, tier.getAttackDamageBonus() * 6);
+        int durabilityVal = estimateFromDurability(tier.getUses());
+        return Math.max(baseFromLevel, Math.max(damageBonusVal, durabilityVal));
     }
 
     /**
@@ -509,9 +562,11 @@ public class PriceCalculator {
             LOGGER.debug("[OTM] Failed to read repair ingredient for modded armor material: {}", e.getMessage());
         }
 
-        // Fallback: estimate from chest-slot durability
+        // Fallback: estimate from chest-slot durability and defense
         int durability = mat.getDurabilityForSlot(EquipmentSlot.CHEST);
-        return estimateFromDurability(durability);
+        int defense = mat.getDefenseForSlot(EquipmentSlot.CHEST);
+        int baseFromDefense = defense >= 8 ? 200 : defense >= 6 ? 40 : defense >= 4 ? 15 : 4;
+        return Math.max(baseFromDefense, estimateFromDurability(durability));
     }
 
     /**
@@ -980,7 +1035,103 @@ public class PriceCalculator {
             }
         }
 
+        // Dynamic recipe cost floor: an item must never sell for less than its ingredient cost + crafting margin
+        ensureRecipesIndexed();
+        Integer recipeFloor = RECIPE_COST_FLOOR_CACHE.get(stack.getItem());
+        if (recipeFloor != null && recipeFloor > tier.basePrice()) {
+            tier = new ValueTier(recipeFloor, Math.max(tier.maxPrice(), recipeFloor * 3));
+        }
+
         return tier;
+    }
+
+    // ===================== Dynamic Recipe Cost Floor =====================
+
+    /** Cache of recipe-derived minimum base costs in CP. */
+    private static final Map<Item, Integer> RECIPE_COST_FLOOR_CACHE = new ConcurrentHashMap<>();
+    private static volatile boolean recipesIndexed = false;
+
+    /**
+     * Clear recipe cache (e.g. on datapack reload).
+     */
+    public static void invalidateRecipeCache() {
+        RECIPE_COST_FLOOR_CACHE.clear();
+        recipesIndexed = false;
+        BASE_TIER_CACHE.clear();
+    }
+
+    /**
+     * Attempts to find the current active RecipeManager from server or client.
+     */
+    @Nullable
+    public static RecipeManager getActiveRecipeManager() {
+        try {
+            net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server != null) {
+                return server.getRecipeManager();
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            if (net.minecraftforge.fml.loading.FMLEnvironment.dist == net.minecraftforge.api.distmarker.Dist.CLIENT) {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc != null && mc.level != null) {
+                    return mc.level.getRecipeManager();
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    /**
+     * Lazily indexes recipes from the active RecipeManager to compute ingredient cost floors.
+     */
+    public static void ensureRecipesIndexed() {
+        if (recipesIndexed) return;
+        RecipeManager rm = getActiveRecipeManager();
+        if (rm == null) return;
+
+        synchronized (RECIPE_COST_FLOOR_CACHE) {
+            if (recipesIndexed) return;
+            try {
+                Collection<Recipe<?>> recipes = rm.getRecipes();
+                for (Recipe<?> r : recipes) {
+                    ItemStack result = r.getResultItem();
+                    if (result.isEmpty()) continue;
+                    Item resultItem = result.getItem();
+                    int count = Math.max(1, result.getCount());
+
+                    int ingCostSum = 0;
+                    boolean hasIngredients = false;
+                    for (Ingredient ing : r.getIngredients()) {
+                        if (ing.isEmpty()) continue;
+                        ItemStack[] matching = ing.getItems();
+                        if (matching.length == 0) continue;
+                        hasIngredients = true;
+                        int minVal = Integer.MAX_VALUE;
+                        for (ItemStack s : matching) {
+                            if (s.isEmpty()) continue;
+                            int v = MaterialValues.getValue(s.getItem());
+                            if (v > 0 && v < minVal) {
+                                minVal = v;
+                            }
+                        }
+                        if (minVal == Integer.MAX_VALUE) minVal = 2; // fallback
+                        ingCostSum += minVal;
+                    }
+
+                    if (hasIngredients && ingCostSum > 0) {
+                        // 20% crafting labour premium
+                        int unitPrice = (int) Math.ceil((ingCostSum / (double) count) * 1.20);
+                        RECIPE_COST_FLOOR_CACHE.merge(resultItem, unitPrice, Math::max);
+                    }
+                }
+                recipesIndexed = true;
+                LOGGER.debug("[OTM] Successfully indexed {} recipe cost floors.", RECIPE_COST_FLOOR_CACHE.size());
+            } catch (Exception e) {
+                LOGGER.debug("[OTM] Failed to index recipes: {}", e.getMessage());
+            }
+        }
     }
 
     /** Enchanted items and enchanted books get enhanced base and max ceiling based on enchants and levels. */

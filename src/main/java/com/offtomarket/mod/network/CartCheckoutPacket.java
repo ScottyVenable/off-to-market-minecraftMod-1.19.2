@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -82,9 +83,11 @@ public class CartCheckoutPacket {
             TradingPostBlockEntity tradingPost = findNearbyTradingPost(
                     player.level, msg.marketBoardPos);
             if (tradingPost == null) {
+                String err = "No Trading Post found nearby! Place one within 8 blocks.";
                 player.displayClientMessage(
-                        Component.literal("No Trading Post found nearby! Place one within 8 blocks.")
-                                .withStyle(ChatFormatting.RED), true);
+                        Component.literal(err).withStyle(ChatFormatting.RED), true);
+                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new CartCheckoutResultPacket(msg.marketBoardPos, false, err));
                 return;
             }
 
@@ -108,16 +111,20 @@ public class CartCheckoutPacket {
             }
 
             if (validated.isEmpty()) {
+                String err = "No valid items in cart!";
                 player.displayClientMessage(
-                        Component.literal("No valid items in cart!")
-                                .withStyle(ChatFormatting.RED), true);
+                        Component.literal(err).withStyle(ChatFormatting.RED), true);
+                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new CartCheckoutResultPacket(msg.marketBoardPos, false, err));
                 return;
             }
 
             if (!TradingPostBlockEntity.hasEnoughCoins(player, totalCost, financeTable)) {
+                String err = "Not enough coins for this purchase!";
                 player.displayClientMessage(
-                        Component.literal("Not enough coins for this purchase!")
-                                .withStyle(ChatFormatting.RED), true);
+                        Component.literal(err).withStyle(ChatFormatting.RED), true);
+                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new CartCheckoutResultPacket(msg.marketBoardPos, false, err));
                 return;
             }
 
@@ -173,9 +180,11 @@ public class CartCheckoutPacket {
             tradingPost.syncToClient();
             player.inventoryMenu.broadcastChanges();
 
+            String successMsg = orderCount + " order(s) placed! Check Trading Post for delivery.";
             player.displayClientMessage(
-                    Component.literal(orderCount + " order(s) placed! Check Trading Post for delivery.")
-                            .withStyle(ChatFormatting.GREEN), true);
+                    Component.literal(successMsg).withStyle(ChatFormatting.GREEN), true);
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new CartCheckoutResultPacket(msg.marketBoardPos, true, successMsg));
         });
         ctx.get().setPacketHandled(true);
     }

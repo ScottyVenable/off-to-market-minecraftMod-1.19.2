@@ -63,6 +63,7 @@ public final class MaterialValues {
         put(Items.SUGAR,               2);
         put(Items.MELON_SLICE,         2);
         put(Items.BOWL,                2);
+        put(Items.BAMBOO,              2);
 
         // ─── Planks (2 CP each — logs give 4) ───
         put(Items.OAK_PLANKS,          2);

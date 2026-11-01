@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Minecraft-1.19.2-green" alt="Minecraft 1.19.2">
   <img src="https://img.shields.io/badge/Forge-43.5.0-orange" alt="Forge 43.5.0">
-  <img src="https://img.shields.io/badge/Version-0.6.6-blue" alt="Version 0.6.6">
+  <img src="https://img.shields.io/badge/Version-0.6.7-blue" alt="Version 0.6.7">
   <img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red" alt="License">
 </p>
 
@@ -116,7 +116,7 @@ Towns dynamically adjust pricing according to local needs:
 ## ⚙️ Installation & Requirements
 
 1. Install **Minecraft Forge 1.19.2** (version `43.2.0` or higher, tested on `43.5.0`).
-2. Download the latest **`offtomarket-v0.6.6-Forge-1.19.2.jar`**.
+2. Download the latest **`offtomarket-v0.6.7-Forge-1.19.2.jar`**.
 3. Place into your Minecraft instance's `.minecraft/mods` folder.
 4. Launch and start building your merchant empire!
 
